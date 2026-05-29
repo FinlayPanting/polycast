@@ -19,15 +19,13 @@ const FADE_MS = 400
 
 export class AudioEngine {
   private audio: HTMLAudioElement
-  private ctx: AudioContext
-  private summaryBuffers: (AudioBuffer | null)[] = []
+  private episodeUrl: string
   private processed: ProcessedEpisode
   private cb: AudioEngineCallbacks
+  private summaryBlobUrls: (string | null)[]
   private summaryPlayed: boolean[]
-  private summarySource: AudioBufferSourceNode | null = null
   private inSummary = false
   private tickInterval: ReturnType<typeof setInterval> | null = null
-  private onVisibilityChange: () => void
 
   constructor(
     processed: ProcessedEpisode,
@@ -37,13 +35,23 @@ export class AudioEngine {
   ) {
     this.processed = processed
     this.cb = cb
+    this.episodeUrl = processed.enclosureUrl
     this.summaryPlayed = new Array(processed.summaries.length).fill(false)
 
-    this.ctx = new AudioContext()
+    // Pre-build blob URLs for all summary clips so they can play via <audio> in background
+    this.summaryBlobUrls = processed.summaries.map((s) => {
+      try {
+        const buf = base64ToArrayBuffer(s.audioBase64)
+        const blob = new Blob([buf], { type: 'audio/mpeg' })
+        return URL.createObjectURL(blob)
+      } catch {
+        return null
+      }
+    })
 
     this.audio = new Audio()
     this.audio.preload = 'auto'
-    this.audio.src = processed.enclosureUrl
+    this.audio.src = this.episodeUrl
 
     if (initialPosition > 0) {
       this.audio.addEventListener('loadedmetadata', () => {
@@ -52,86 +60,83 @@ export class AudioEngine {
       }, { once: true })
     }
 
-    this.audio.addEventListener('durationchange', () => cb.onDurationChange(this.audio.duration))
+    this.audio.addEventListener('durationchange', () => {
+      if (!this.inSummary) cb.onDurationChange(this.audio.duration)
+    })
     this.audio.addEventListener('ended', () => {
-      cb.onPlayStateChange(false)
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
+      if (!this.inSummary) {
+        cb.onPlayStateChange(false)
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
+      }
     })
 
-    // Resume AudioContext when screen unlocks so future summaries can play
-    this.onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && this.ctx.state === 'suspended') {
-        this.ctx.resume().catch(() => {})
-      }
-    }
-    document.addEventListener('visibilitychange', this.onVisibilityChange)
-
-    this.decodeSummaries()
     this.tickInterval = setInterval(() => this.tick(), 250)
     this.setupMediaSession(meta)
   }
 
-  private async decodeSummaries() {
-    this.summaryBuffers = await Promise.all(
-      this.processed.summaries.map(async (s) => {
-        try {
-          return await this.ctx.decodeAudioData(base64ToArrayBuffer(s.audioBase64))
-        } catch {
-          return null
-        }
-      }),
-    )
-  }
-
   private tick() {
-    if (this.inSummary) return
+    if (this.inSummary || this.audio.paused) {
+      if (!this.inSummary) this.cb.onTimeUpdate(this.audio.currentTime)
+      return
+    }
     const t = this.audio.currentTime
     this.cb.onTimeUpdate(t)
 
     const idx = this.processed.summaries.findIndex(
       (s, i) => !this.summaryPlayed[i] && t >= s.timestamp && t < s.timestamp + 1,
     )
-    if (idx !== -1 && this.summaryBuffers[idx]) {
+    if (idx !== -1 && this.summaryBlobUrls[idx]) {
       this.playSummary(idx)
     }
   }
 
   private async playSummary(idx: number) {
     if (this.inSummary) return
-
-    // Screen is locked — AudioContext can't resume without user gesture, skip gracefully
-    if (document.visibilityState === 'hidden') {
-      this.summaryPlayed[idx] = true
-      return
-    }
-
     this.inSummary = true
     this.summaryPlayed[idx] = true
 
-    await this.fadeVolume(1, 0, FADE_MS)
-    this.audio.pause()
-    this.audio.volume = 1
+    const summaryUrl = this.summaryBlobUrls[idx]!
+    const resumeAt = this.audio.currentTime
 
+    // Fade out episode, then swap src to summary — same audio element, same iOS audio session
+    await this.fadeVolume(1, 0, FADE_MS)
     this.cb.onSummaryStart(idx)
 
-    if (this.ctx.state === 'suspended') await this.ctx.resume()
+    this.audio.src = summaryUrl
+    this.audio.volume = 1
 
-    const source = this.ctx.createBufferSource()
-    source.buffer = this.summaryBuffers[idx]!
-    source.connect(this.ctx.destination)
-    source.start()
-    this.summarySource = source
+    try {
+      await this.audio.play()
+      await new Promise<void>((resolve) => {
+        const done = () => resolve()
+        this.audio.addEventListener('ended', done, { once: true })
+        this.audio.addEventListener('error', done, { once: true })
+      })
+    } catch { /* failed to play — continue to restore */ }
 
-    source.addEventListener('ended', () => {
-      this.inSummary = false
-      this.summarySource = null
-      this.cb.onSummaryEnd()
-      this.audio.volume = 0
-      this.audio.play().catch(() => {})
-      this.cb.onPlayStateChange(true)
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
-      this.fadeVolume(0, 1, FADE_MS)
+    // Restore episode src and seek to where we left off
+    this.audio.src = this.episodeUrl
+    this.audio.volume = 0
+    this.cb.onSummaryEnd()
+
+    await new Promise<void>((resolve) => {
+      if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        this.audio.currentTime = resumeAt
+        resolve()
+      } else {
+        this.audio.addEventListener('loadedmetadata', () => {
+          this.audio.currentTime = resumeAt
+          resolve()
+        }, { once: true })
+      }
     })
+
+    await this.audio.play().catch(() => {})
+    this.cb.onPlayStateChange(true)
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
+    this.fadeVolume(0, 1, FADE_MS)
+
+    this.inSummary = false
   }
 
   private fadeVolume(from: number, to: number, ms: number): Promise<void> {
@@ -170,11 +175,11 @@ export class AudioEngine {
 
   seek(to: number) {
     if (this.inSummary) {
-      this.summarySource?.stop()
-      this.summarySource = null
+      // Interrupt summary: restore episode src immediately
+      this.audio.src = this.episodeUrl
+      this.audio.volume = 1
       this.inSummary = false
       this.cb.onSummaryEnd()
-      this.audio.volume = 1
     }
     this.audio.currentTime = to
     this.summaryPlayed = this.processed.summaries.map((s) => s.timestamp < to)
@@ -216,9 +221,7 @@ export class AudioEngine {
 
   destroy() {
     if (this.tickInterval) clearInterval(this.tickInterval)
-    document.removeEventListener('visibilitychange', this.onVisibilityChange)
-    this.summarySource?.stop()
     this.audio.pause()
-    this.ctx.close()
+    this.summaryBlobUrls.forEach((url) => { if (url) URL.revokeObjectURL(url) })
   }
 }
