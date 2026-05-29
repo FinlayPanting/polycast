@@ -37,7 +37,7 @@ export interface ProcessedEpisode {
   titleTranslation?: string
   transcriptLines?: TranscriptLine[]
   summaries: SummaryPoint[]
-  episodeAudioBase64: string
+  enclosureUrl: string
 }
 
 // ─── localStorage ─────────────────────────────────────────────────────────────

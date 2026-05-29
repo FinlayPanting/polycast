@@ -22,6 +22,7 @@ export class AudioEngine {
   private summarySource: AudioBufferSourceNode | null = null
   private inSummary = false
   private tickInterval: ReturnType<typeof setInterval> | null = null
+  private fadeEnabled = false
 
   constructor(processed: ProcessedEpisode, cb: AudioEngineCallbacks) {
     this.processed = processed
@@ -33,13 +34,18 @@ export class AudioEngine {
     this.gainNode.connect(this.ctx.destination)
 
     this.audio = new Audio()
+    this.audio.crossOrigin = 'anonymous'
     this.audio.preload = 'auto'
-    const blob = new Blob([base64ToArrayBuffer(processed.episodeAudioBase64)], { type: 'audio/mpeg' })
-    this.audio.src = URL.createObjectURL(blob)
+    this.audio.src = processed.enclosureUrl
 
-    // Route episode audio through gain node for fade control
-    const mediaSource = this.ctx.createMediaElementSource(this.audio)
-    mediaSource.connect(this.gainNode)
+    // Route through gain node for fade control if CDN allows CORS
+    try {
+      const mediaSource = this.ctx.createMediaElementSource(this.audio)
+      mediaSource.connect(this.gainNode)
+      this.fadeEnabled = true
+    } catch {
+      // CDN doesn't send CORS headers — audio plays fine, fades are skipped
+    }
 
     this.audio.addEventListener('durationchange', () => cb.onDurationChange(this.audio.duration))
     this.audio.addEventListener('ended', () => cb.onPlayStateChange(false))
@@ -80,7 +86,7 @@ export class AudioEngine {
     this.summaryPlayed[idx] = true
 
     // Fade out episode audio, then pause
-    await this.fade(1, 0, FADE_MS)
+    if (this.fadeEnabled) await this.fade(1, 0, FADE_MS)
     this.audio.pause()
     this.gainNode.gain.setValueAtTime(1, this.ctx.currentTime) // reset for later
 
@@ -99,10 +105,10 @@ export class AudioEngine {
       this.summarySource = null
       this.cb.onSummaryEnd()
       // Fade episode back in
-      this.gainNode.gain.setValueAtTime(0, this.ctx.currentTime)
+      this.gainNode.gain.setValueAtTime(this.fadeEnabled ? 0 : 1, this.ctx.currentTime)
       this.audio.play().catch(() => {})
       this.cb.onPlayStateChange(true)
-      this.fade(0, 1, FADE_MS)
+      if (this.fadeEnabled) this.fade(0, 1, FADE_MS)
     })
   }
 
@@ -159,7 +165,6 @@ export class AudioEngine {
     if (this.tickInterval) clearInterval(this.tickInterval)
     this.summarySource?.stop()
     this.audio.pause()
-    URL.revokeObjectURL(this.audio.src)
     this.ctx.close()
   }
 }

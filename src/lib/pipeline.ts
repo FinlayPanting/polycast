@@ -89,7 +89,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
   let off = 0
   for (const chunk of chunks) { audioBuffer.set(chunk, off); off += chunk.length }
   const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' })
-  const episodeAudioBase64 = arrayBufferToBase64(audioBuffer.buffer)
   console.log('[polycast] downloaded:', (audioBuffer.length / 1e6).toFixed(1), 'MB')
   emit('download', 1)
 
@@ -189,7 +188,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
     titleTranslation,
     transcriptLines,
     summaries,
-    episodeAudioBase64,
+    enclosureUrl: episode.enclosureUrl,
   }
   emit('build', 0.5)
   await cacheEpisode(processed)
