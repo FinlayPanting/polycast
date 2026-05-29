@@ -39,8 +39,10 @@ async function translateChunk(lines: string[], language: string, apiKey: string)
     const match = res.match(/\[[\s\S]*\]/)
     if (match) {
       const parsed: unknown = JSON.parse(match[0])
-      if (Array.isArray(parsed) && parsed.length === lines.length) {
-        return parsed.map(String)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const result = parsed.map(String)
+        while (result.length < lines.length) result.push('')
+        return result.slice(0, lines.length)
       }
     }
   } catch { /* fall through */ }

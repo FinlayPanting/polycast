@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { getApiKeys, getPreferences, getCachedEpisodeAsync, type ProcessedEpisode, type TranscriptLine } from '../lib/storage'
 import { runPipeline, type PipelineStage, type PipelineProgress } from '../lib/pipeline'
-import { AudioEngine } from '../lib/audio-engine'
+import { AudioEngine, type AudioEngineMeta } from '../lib/audio-engine'
 import { getEpisodeNav } from '../lib/nav-state'
 import type { Episode } from '../lib/rss'
 import type { ItunesResult } from '../lib/itunes'
@@ -366,7 +366,12 @@ function PlayerScreen({
   const [showTranscript, setShowTranscript] = useState(false)
 
   useEffect(() => {
-    const engine = new AudioEngine(processed, {
+    const meta: AudioEngineMeta = {
+      title: episode.title,
+      artist: podcast.collectionName,
+      artwork: podcast.artworkUrl100,
+    }
+    const engine = new AudioEngine(processed, meta, {
       onTimeUpdate: (t) => {
         setCurrentTime(t)
         const upcoming = processed.summaries.find((s) => s.timestamp > t)
@@ -517,6 +522,22 @@ function TranscriptView({ lines, controls, onClose }: {
   const lineRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [autoScroll, setAutoScroll] = useState(true)
   const autoScrollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // Keep screen on while transcript is visible
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return
+    let lock: WakeLockSentinel | null = null
+    const acquire = () => {
+      (navigator.wakeLock as WakeLock).request('screen').then((l) => { lock = l }).catch(() => {})
+    }
+    acquire()
+    const onVisible = () => { if (document.visibilityState === 'visible') acquire() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      lock?.release()
+    }
+  }, [])
 
   const activeIdx = lines.reduce((best, line, i) => line.start <= currentTime ? i : best, -1)
 

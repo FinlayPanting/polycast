@@ -1,6 +1,12 @@
 import type { ProcessedEpisode } from './storage'
 import { base64ToArrayBuffer } from './tts'
 
+export interface AudioEngineMeta {
+  title: string
+  artist: string
+  artwork?: string
+}
+
 interface AudioEngineCallbacks {
   onTimeUpdate: (t: number) => void
   onDurationChange: (d: number) => void
@@ -14,7 +20,6 @@ const FADE_MS = 400
 export class AudioEngine {
   private audio: HTMLAudioElement
   private ctx: AudioContext
-  private gainNode: GainNode
   private summaryBuffers: (AudioBuffer | null)[] = []
   private processed: ProcessedEpisode
   private cb: AudioEngineCallbacks
@@ -22,37 +27,25 @@ export class AudioEngine {
   private summarySource: AudioBufferSourceNode | null = null
   private inSummary = false
   private tickInterval: ReturnType<typeof setInterval> | null = null
-  private fadeEnabled = false
 
-  constructor(processed: ProcessedEpisode, cb: AudioEngineCallbacks) {
+  constructor(processed: ProcessedEpisode, meta: AudioEngineMeta, cb: AudioEngineCallbacks) {
     this.processed = processed
     this.cb = cb
     this.summaryPlayed = new Array(processed.summaries.length).fill(false)
 
+    // AudioContext is used only for summary audio playback (base64 buffers, no CORS issue)
     this.ctx = new AudioContext()
-    this.gainNode = this.ctx.createGain()
-    this.gainNode.connect(this.ctx.destination)
 
     this.audio = new Audio()
-    this.audio.crossOrigin = 'anonymous'
     this.audio.preload = 'auto'
     this.audio.src = processed.enclosureUrl
-
-    // Route through gain node for fade control if CDN allows CORS
-    try {
-      const mediaSource = this.ctx.createMediaElementSource(this.audio)
-      mediaSource.connect(this.gainNode)
-      this.fadeEnabled = true
-    } catch {
-      // CDN doesn't send CORS headers — audio plays fine, fades are skipped
-    }
 
     this.audio.addEventListener('durationchange', () => cb.onDurationChange(this.audio.duration))
     this.audio.addEventListener('ended', () => cb.onPlayStateChange(false))
 
     this.decodeSummaries()
     this.tickInterval = setInterval(() => this.tick(), 250)
-    this.setupMediaSession()
+    this.setupMediaSession(meta)
   }
 
   private async decodeSummaries() {
@@ -85,10 +78,9 @@ export class AudioEngine {
     this.inSummary = true
     this.summaryPlayed[idx] = true
 
-    // Fade out episode audio, then pause
-    if (this.fadeEnabled) await this.fade(1, 0, FADE_MS)
+    await this.fadeVolume(1, 0, FADE_MS)
     this.audio.pause()
-    this.gainNode.gain.setValueAtTime(1, this.ctx.currentTime) // reset for later
+    this.audio.volume = 1
 
     this.cb.onSummaryStart(idx)
 
@@ -96,7 +88,7 @@ export class AudioEngine {
 
     const source = this.ctx.createBufferSource()
     source.buffer = this.summaryBuffers[idx]!
-    source.connect(this.ctx.destination) // bypass gain node so summary is always at full vol
+    source.connect(this.ctx.destination)
     source.start()
     this.summarySource = source
 
@@ -104,32 +96,44 @@ export class AudioEngine {
       this.inSummary = false
       this.summarySource = null
       this.cb.onSummaryEnd()
-      // Fade episode back in
-      this.gainNode.gain.setValueAtTime(this.fadeEnabled ? 0 : 1, this.ctx.currentTime)
+      this.audio.volume = 0
       this.audio.play().catch(() => {})
       this.cb.onPlayStateChange(true)
-      if (this.fadeEnabled) this.fade(0, 1, FADE_MS)
+      this.fadeVolume(0, 1, FADE_MS)
     })
   }
 
-  private fade(from: number, to: number, ms: number): Promise<void> {
+  private fadeVolume(from: number, to: number, ms: number): Promise<void> {
+    const steps = 16
+    const dt = ms / steps
+    const dv = (to - from) / steps
+    let v = from
+    this.audio.volume = v
     return new Promise((resolve) => {
-      const now = this.ctx.currentTime
-      this.gainNode.gain.setValueAtTime(from, now)
-      this.gainNode.gain.linearRampToValueAtTime(to, now + ms / 1000)
-      setTimeout(resolve, ms)
+      const tick = () => {
+        v += dv
+        this.audio.volume = Math.max(0, Math.min(1, v))
+        if ((dv > 0 && v >= to) || (dv <= 0 && v <= to)) {
+          this.audio.volume = to
+          resolve()
+          return
+        }
+        setTimeout(tick, dt)
+      }
+      setTimeout(tick, dt)
     })
   }
 
   togglePlay() {
     if (this.inSummary) return
-    if (this.ctx.state === 'suspended') this.ctx.resume()
     if (this.audio.paused) {
       this.audio.play().catch(() => {})
       this.cb.onPlayStateChange(true)
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
     } else {
       this.audio.pause()
       this.cb.onPlayStateChange(false)
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
     }
   }
 
@@ -139,7 +143,7 @@ export class AudioEngine {
       this.summarySource = null
       this.inSummary = false
       this.cb.onSummaryEnd()
-      this.gainNode.gain.setValueAtTime(1, this.ctx.currentTime)
+      this.audio.volume = 1
     }
     this.audio.currentTime = to
     this.summaryPlayed = this.processed.summaries.map((s) => s.timestamp < to)
@@ -153,10 +157,28 @@ export class AudioEngine {
     this.audio.playbackRate = s
   }
 
-  private setupMediaSession() {
+  private setupMediaSession(meta: AudioEngineMeta) {
     if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.setActionHandler('play', () => this.togglePlay())
-    navigator.mediaSession.setActionHandler('pause', () => this.togglePlay())
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: meta.title,
+      artist: meta.artist,
+      artwork: meta.artwork
+        ? [{ src: meta.artwork, sizes: '100x100', type: 'image/jpeg' }]
+        : [],
+    })
+    navigator.mediaSession.playbackState = 'paused'
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      this.audio.play().catch(() => {})
+      this.cb.onPlayStateChange(true)
+      navigator.mediaSession.playbackState = 'playing'
+    })
+    navigator.mediaSession.setActionHandler('pause', () => {
+      this.audio.pause()
+      this.cb.onPlayStateChange(false)
+      navigator.mediaSession.playbackState = 'paused'
+    })
     navigator.mediaSession.setActionHandler('seekbackward', () => this.skip(-15))
     navigator.mediaSession.setActionHandler('seekforward', () => this.skip(15))
   }
