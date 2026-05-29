@@ -127,7 +127,7 @@ function SetupScreen({
   }
 
   return (
-    <div className="flex flex-col px-5 pt-6 pb-8 gap-6">
+    <div className="flex flex-col px-5 pt-safe pb-8 gap-6">
       <button
         onClick={() => navigate({ to: '/podcast/$id', params: { id: String(podcast.collectionId) } })}
         className="flex items-center gap-1 text-amber-400 text-sm"
@@ -283,7 +283,7 @@ function ProcessingScreen({
   }, [])
 
   return (
-    <div className="flex flex-col px-5 pt-12 pb-8 gap-8">
+    <div className="flex flex-col px-5 pt-safe pb-8 gap-8">
       <div>
         <h1 className="text-xl font-bold text-white">Processing</h1>
         <p className="text-sm text-zinc-500 mt-1 line-clamp-1">{podcast.collectionName} — {episode.title}</p>
@@ -364,8 +364,11 @@ function PlayerScreen({
   const [summaryOverlay, setSummaryOverlay] = useState<{ text: string } | null>(null)
   const [nextSummaryIn, setNextSummaryIn] = useState<number | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
+  const currentTimeRef = useRef(0)
+  const posKey = `polycast:pos:${processed.guid}`
 
   useEffect(() => {
+    const initialPosition = Number(localStorage.getItem(posKey) ?? 0)
     const meta: AudioEngineMeta = {
       title: episode.title,
       artist: podcast.collectionName,
@@ -374,6 +377,11 @@ function PlayerScreen({
     const engine = new AudioEngine(processed, meta, {
       onTimeUpdate: (t) => {
         setCurrentTime(t)
+        currentTimeRef.current = t
+        // Save position every ~10 seconds
+        if (Math.floor(t / 10) > Math.floor(currentTimeRef.current / 10) || t === 0) {
+          localStorage.setItem(posKey, String(Math.floor(t)))
+        }
         const upcoming = processed.summaries.find((s) => s.timestamp > t)
         setNextSummaryIn(upcoming ? upcoming.timestamp - t : null)
         const lastPast = [...processed.summaries].reverse().find((s) => s.timestamp <= t)
@@ -386,9 +394,12 @@ function PlayerScreen({
       },
       onSummaryEnd: () => setSummaryOverlay(null),
       onPlayStateChange: setPlaying,
-    })
+    }, initialPosition)
     engineRef.current = engine
-    return () => engine.destroy()
+    return () => {
+      localStorage.setItem(posKey, String(Math.floor(currentTimeRef.current)))
+      engine.destroy()
+    }
   }, [processed])
 
   const controls = {
@@ -555,7 +566,7 @@ function TranscriptView({ lines, controls, onClose }: {
   return (
     <div className="flex flex-col h-svh bg-[#0d0d0f]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-12 pb-3 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 pt-safe pb-3 flex-shrink-0">
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Transcript</p>
         <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors p-1">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -641,8 +652,8 @@ function TranscriptView({ lines, controls, onClose }: {
 function SummaryOverlay({ text }: { text: string }) {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-end z-40">
-      <div className="w-full max-w-[480px] mx-auto bg-[#1a1a1c] rounded-t-3xl p-6 pb-10">
-        <div className="flex items-center gap-2 mb-4">
+      <div className="w-full max-w-[480px] mx-auto bg-[#1a1a1c] rounded-t-3xl p-6 pb-10 max-h-[70vh] flex flex-col">
+        <div className="flex items-center gap-2 mb-4 flex-shrink-0">
           <span className="bg-amber-400 text-black text-xs font-bold px-2.5 py-1 rounded-full">Summary</span>
           <div className="flex gap-0.5 items-end h-4">
             {[1, 2, 3].map((i) => (
@@ -651,7 +662,7 @@ function SummaryOverlay({ text }: { text: string }) {
             ))}
           </div>
         </div>
-        <p className="text-white text-base leading-relaxed">{text}</p>
+        <p className="text-white text-base leading-relaxed overflow-y-auto">{text}</p>
       </div>
     </div>
   )

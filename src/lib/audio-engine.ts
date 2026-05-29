@@ -27,21 +27,44 @@ export class AudioEngine {
   private summarySource: AudioBufferSourceNode | null = null
   private inSummary = false
   private tickInterval: ReturnType<typeof setInterval> | null = null
+  private onVisibilityChange: () => void
 
-  constructor(processed: ProcessedEpisode, meta: AudioEngineMeta, cb: AudioEngineCallbacks) {
+  constructor(
+    processed: ProcessedEpisode,
+    meta: AudioEngineMeta,
+    cb: AudioEngineCallbacks,
+    initialPosition = 0,
+  ) {
     this.processed = processed
     this.cb = cb
     this.summaryPlayed = new Array(processed.summaries.length).fill(false)
 
-    // AudioContext is used only for summary audio playback (base64 buffers, no CORS issue)
     this.ctx = new AudioContext()
 
     this.audio = new Audio()
     this.audio.preload = 'auto'
     this.audio.src = processed.enclosureUrl
 
+    if (initialPosition > 0) {
+      this.audio.addEventListener('loadedmetadata', () => {
+        this.audio.currentTime = initialPosition
+        this.summaryPlayed = this.processed.summaries.map((s) => s.timestamp < initialPosition)
+      }, { once: true })
+    }
+
     this.audio.addEventListener('durationchange', () => cb.onDurationChange(this.audio.duration))
-    this.audio.addEventListener('ended', () => cb.onPlayStateChange(false))
+    this.audio.addEventListener('ended', () => {
+      cb.onPlayStateChange(false)
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
+    })
+
+    // Resume AudioContext when screen unlocks so future summaries can play
+    this.onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
 
     this.decodeSummaries()
     this.tickInterval = setInterval(() => this.tick(), 250)
@@ -75,6 +98,13 @@ export class AudioEngine {
 
   private async playSummary(idx: number) {
     if (this.inSummary) return
+
+    // Screen is locked — AudioContext can't resume without user gesture, skip gracefully
+    if (document.visibilityState === 'hidden') {
+      this.summaryPlayed[idx] = true
+      return
+    }
+
     this.inSummary = true
     this.summaryPlayed[idx] = true
 
@@ -99,6 +129,7 @@ export class AudioEngine {
       this.audio.volume = 0
       this.audio.play().catch(() => {})
       this.cb.onPlayStateChange(true)
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
       this.fadeVolume(0, 1, FADE_MS)
     })
   }
@@ -185,6 +216,7 @@ export class AudioEngine {
 
   destroy() {
     if (this.tickInterval) clearInterval(this.tickInterval)
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
     this.summarySource?.stop()
     this.audio.pause()
     this.ctx.close()

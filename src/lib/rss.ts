@@ -11,6 +11,7 @@ export interface Episode {
 const PROXIES = [
   (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
 ]
 
 export async function fetchFeed(feedUrl: string, signal?: AbortSignal): Promise<Episode[]> {

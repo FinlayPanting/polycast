@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@layer utilities {
+  .pt-safe {
+    padding-top: max(3rem, calc(env(safe-area-inset-top) + 0.75rem));
+  }
+}
+
 @layer base {
   :root {
     color-scheme: dark;
