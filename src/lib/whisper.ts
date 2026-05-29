@@ -18,8 +18,8 @@ export interface WhisperResponse {
   language: string
 }
 
-const WHISPER_MAX_BYTES = 24 * 1024 * 1024 // 24 MB — stay comfortably under the 25 MB API limit
-const CHUNK_DURATION_SECS = 9 * 60          // 9-minute chunks → ~17 MB WAV each
+const WHISPER_MAX_BYTES = 24 * 1024 * 1024  // stay under 25MB API limit
+const CHUNK_BYTES = 20 * 1024 * 1024         // 20MB chunks
 
 export async function transcribeAudio(
   audioBlob: Blob,
@@ -34,39 +34,40 @@ export async function transcribeAudio(
     return result
   }
 
-  // Decode full audio once, then process in time-sliced chunks
+  // Get duration for timestamp offset estimation (no decoding — just metadata)
   onProgress?.(0.05)
-  const arrayBuffer = await audioBlob.arrayBuffer()
-  const tempCtx = new AudioContext()
-  const decoded = await tempCtx.decodeAudioData(arrayBuffer)
-  await tempCtx.close()
+  const duration = await getAudioDuration(audioBlob)
+  console.log('[polycast] audio duration:', duration.toFixed(1), 's, size:', (audioBlob.size / 1e6).toFixed(1), 'MB')
   onProgress?.(0.1)
 
-  const numChunks = Math.ceil(decoded.duration / CHUNK_DURATION_SECS)
+  const totalBytes = audioBlob.size
+  const numChunks = Math.ceil(totalBytes / CHUNK_BYTES)
   const allSegments: WhisperSegment[] = []
   let fullText = ''
   let detectedLanguage = ''
 
   for (let i = 0; i < numChunks; i++) {
-    const startSec = i * CHUNK_DURATION_SECS
-    const endSec = Math.min((i + 1) * CHUNK_DURATION_SECS, decoded.duration)
+    const startByte = i * CHUNK_BYTES
+    const endByte = Math.min((i + 1) * CHUNK_BYTES, totalBytes)
+    const chunk = audioBlob.slice(startByte, endByte, audioBlob.type)
 
-    const samples = await resampleMono16k(decoded, startSec, endSec)
-    const wav = encodeWav(samples, 16_000)
+    // Estimate time offset from byte position — accurate for CBR, approximate for VBR
+    const timeOffset = duration > 0 ? (startByte / totalBytes) * duration : 0
+    console.log(`[polycast] whisper chunk ${i + 1}/${numChunks}: bytes ${startByte}–${endByte}, timeOffset ${timeOffset.toFixed(1)}s`)
 
-    const chunkResult = await callWhisper(wav, language, apiKey)
-    console.log(`[polycast] chunk ${i + 1}/${numChunks} — segments:`, chunkResult.segments?.length ?? 'none', '| text length:', chunkResult.text?.length ?? 0)
+    const chunkResult = await callWhisper(chunk, language, apiKey)
+    console.log(`[polycast] chunk ${i + 1} done — segments: ${chunkResult.segments?.length ?? 0}, text: ${chunkResult.text?.length ?? 0} chars`)
 
     ;(chunkResult.segments ?? []).forEach((seg) => {
       allSegments.push({
         ...seg,
         id: allSegments.length,
-        start: seg.start + startSec,
-        end: seg.end + startSec,
+        start: seg.start + timeOffset,
+        end: seg.end + timeOffset,
         words: seg.words?.map((w) => ({
           ...w,
-          start: w.start + startSec,
-          end: w.end + startSec,
+          start: w.start + timeOffset,
+          end: w.end + timeOffset,
         })),
       })
     })
@@ -79,45 +80,14 @@ export async function transcribeAudio(
   return { text: fullText, segments: allSegments, language: detectedLanguage }
 }
 
-// Resample a time slice of the decoded buffer to 16 kHz mono using OfflineAudioContext
-async function resampleMono16k(buffer: AudioBuffer, startSec: number, endSec: number): Promise<Float32Array> {
-  const duration = endSec - startSec
-  const frameCount = Math.ceil(duration * 16_000)
-  const offlineCtx = new OfflineAudioContext(1, frameCount, 16_000)
-  const source = offlineCtx.createBufferSource()
-  source.buffer = buffer
-  source.connect(offlineCtx.destination)
-  source.start(0, startSec, duration)
-  const rendered = await offlineCtx.startRendering()
-  return rendered.getChannelData(0)
-}
-
-// Minimal WAV encoder — mono 16-bit PCM
-function encodeWav(samples: Float32Array, sampleRate: number): Blob {
-  const dataBytes = samples.length * 2
-  const buf = new ArrayBuffer(44 + dataBytes)
-  const view = new DataView(buf)
-  const str = (off: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)) }
-
-  str(0, 'RIFF');  view.setUint32(4, 36 + dataBytes, true)
-  str(8, 'WAVE'); str(12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, 1, true)             // PCM
-  view.setUint16(22, 1, true)             // mono
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * 2, true)
-  view.setUint16(32, 2, true)
-  view.setUint16(34, 16, true)
-  str(36, 'data'); view.setUint32(40, dataBytes, true)
-
-  let off = 44
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]))
-    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
-    off += 2
-  }
-
-  return new Blob([buf], { type: 'audio/wav' })
+function getAudioDuration(blob: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    const audio = new Audio()
+    const url = URL.createObjectURL(blob)
+    audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration) }
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(0) }
+    audio.src = url
+  })
 }
 
 async function callWhisper(audio: Blob, language: string, apiKey: string): Promise<WhisperResponse> {
@@ -136,8 +106,10 @@ async function callWhisper(audio: Blob, language: string, apiKey: string): Promi
   })
 
   if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Whisper error ${res.status}: ${err}`)
+    const body = await res.text()
+    const msg = `Whisper ${res.status}: ${body}`
+    console.error('[polycast]', msg)
+    throw new Error(msg)
   }
 
   return res.json() as Promise<WhisperResponse>

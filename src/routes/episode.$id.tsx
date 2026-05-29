@@ -303,7 +303,8 @@ function ProcessingScreen({
 
       {errorMsg && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex flex-col gap-3">
-          <p className="text-red-400 text-sm">{errorMsg}</p>
+          <p className="text-red-400 text-sm font-semibold">Error</p>
+          <p className="text-red-300 text-xs font-mono break-all whitespace-pre-wrap">{errorMsg}</p>
           <button onClick={onBack} className="text-amber-400 text-sm text-left">← Back to setup</button>
         </div>
       )}
