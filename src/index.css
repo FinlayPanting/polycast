@@ -20,7 +20,8 @@
     overscroll-behavior: none;
   }
   #root {
-    min-height: 100svh;
+    height: 100dvh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     max-width: 480px;
