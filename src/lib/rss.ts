@@ -68,20 +68,27 @@ export async function fetchFeed(feedUrl: string, signal?: AbortSignal): Promise<
 }
 
 function parseFeed(xml: string): Episode[] {
+  // Reject non-RSS responses (proxy error pages, captcha HTML, etc.) before parsing
+  const trimmed = xml.trimStart()
+  if (!trimmed.startsWith('<?xml') && !trimmed.startsWith('<rss') && !trimmed.startsWith('<feed') && !trimmed.startsWith('<channel')) {
+    throw new Error('Response is not an RSS feed')
+  }
+
   const parser = new DOMParser()
   const doc = parser.parseFromString(xml, 'application/xml')
 
-  // Detect parse error
   if (doc.querySelector('parsererror')) {
-    // Try text/html fallback (some proxies return mangled content-type)
-    const doc2 = parser.parseFromString(xml, 'text/html')
-    const items2 = Array.from(doc2.querySelectorAll('item'))
-    if (items2.length === 0) throw new Error('Failed to parse RSS feed')
-    return items2.map(parseItem)
+    throw new Error('Failed to parse RSS feed')
   }
 
   const items = Array.from(doc.querySelectorAll('item'))
-  return items.map(parseItem)
+  if (items.length > 0) return items.map(parseItem)
+
+  // Atom feed fallback
+  const entries = Array.from(doc.querySelectorAll('entry'))
+  if (entries.length > 0) return entries.map(parseItem)
+
+  throw new Error('Feed contains no episodes')
 }
 
 function parseItem(item: Element): Episode {

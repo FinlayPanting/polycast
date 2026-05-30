@@ -427,7 +427,7 @@ function PlayerScreen({
   }
 
   return (
-    <div className="flex flex-col min-h-svh">
+    <div className="flex flex-col min-h-full">
       <div className="relative">
         <img
           src={podcast.artworkUrl600 || podcast.artworkUrl100}
@@ -564,7 +564,7 @@ function TranscriptView({ lines, controls, onClose }: {
   }
 
   return (
-    <div className="flex flex-col h-svh bg-[#13101f]">
+    <div className="flex flex-col h-full bg-[#13101f]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Transcript</p>
