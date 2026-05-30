@@ -26,6 +26,7 @@ export class AudioEngine {
   private summaryBlobUrls: (string | null)[]
   private summaryPlayed: boolean[]
   private inSummary = false
+  private pendingIntro: number | null = null // t=0 summary waiting for priming
   private tickInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(
@@ -77,9 +78,11 @@ export class AudioEngine {
     this.setupMediaSession(meta)
   }
 
-  // Called once during first togglePlay() user gesture to let iOS allow background playback
+  // Called once during first togglePlay() user gesture to let iOS allow background playback.
+  // Primes using a non-intro blob so playSummary(0) always sets a fresh src.
   private primeSummaryAudio() {
-    const url = this.summaryBlobUrls.find((u) => u !== null)
+    // Prefer any summary after the first so the t=0 blob stays untouched
+    const url = this.summaryBlobUrls.slice(1).find((u) => u !== null) ?? this.summaryBlobUrls[0]
     if (!url) return
     this.summaryAudio.volume = 0
     this.summaryAudio.src = url
@@ -89,6 +92,14 @@ export class AudioEngine {
   }
 
   private tick() {
+    // Handle a pending intro (t=0 summary) — fires before episode starts, once primed
+    if (this.pendingIntro !== null && this.summaryAudioPrimed && !this.inSummary) {
+      const idx = this.pendingIntro
+      this.pendingIntro = null
+      this.playSummary(idx) // async; will start episodeAudio when done
+      return
+    }
+
     if (this.inSummary || this.episodeAudio.paused) {
       if (!this.inSummary) this.cb.onTimeUpdate(this.episodeAudio.currentTime)
       return
@@ -113,16 +124,19 @@ export class AudioEngine {
 
     const locked = document.visibilityState === 'hidden'
 
-    // Fade out episode (skip fade if screen is locked — setTimeout won't run)
-    if (!locked) {
-      await this.fadeVolume(this.episodeAudio, 1, 0, FADE_MS)
-    } else {
-      this.episodeAudio.volume = 0
+    // Only fade/pause if episode is currently playing (intro at t=0 may not have started)
+    if (!this.episodeAudio.paused) {
+      if (!locked) {
+        await this.fadeVolume(this.episodeAudio, 1, 0, FADE_MS)
+      } else {
+        this.episodeAudio.volume = 0
+      }
+      this.episodeAudio.pause()
     }
-    this.episodeAudio.pause()
     this.cb.onSummaryStart(idx)
 
-    // Play summary via its own primed audio element
+    // Fully stop and reset summaryAudio before starting new clip (avoids src-conflict with priming)
+    this.summaryAudio.pause()
     this.summaryAudio.src = this.summaryBlobUrls[idx]!
     this.summaryAudio.currentTime = 0
     this.summaryAudio.volume = 1
@@ -172,12 +186,26 @@ export class AudioEngine {
   togglePlay() {
     if (this.inSummary) return
     if (this.episodeAudio.paused) {
-      this.episodeAudio.play().catch(() => {})
+      // Prime summary audio during user gesture (required by iOS for background playback)
       if (!this.summaryAudioPrimed) this.primeSummaryAudio()
+
+      // If there's an unplayed intro summary at t=0, play it before starting the episode.
+      // We defer to the tick so priming can complete first; the episode won't start until after.
+      const introIdx = this.processed.summaries.findIndex(
+        (s, i) => !this.summaryPlayed[i] && s.timestamp === 0 && this.summaryBlobUrls[i] !== null,
+      )
+      if (introIdx !== -1) {
+        this.pendingIntro = introIdx
+        // Don't start episodeAudio yet — playSummary will call play() after the intro
+      } else {
+        this.episodeAudio.play().catch(() => {})
+      }
+
       this.cb.onPlayStateChange(true)
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
     } else {
       this.episodeAudio.pause()
+      this.pendingIntro = null
       this.cb.onPlayStateChange(false)
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
     }
@@ -190,6 +218,7 @@ export class AudioEngine {
       this.cb.onSummaryEnd()
       this.episodeAudio.volume = 1
     }
+    this.pendingIntro = null
     this.episodeAudio.currentTime = to
     this.summaryPlayed = this.processed.summaries.map((s) => s.timestamp < to)
   }

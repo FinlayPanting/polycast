@@ -449,23 +449,12 @@ function PlayerScreen({
       </div>
 
       <div className="flex-1 flex flex-col px-5 py-6 gap-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs text-zinc-500">{podcast.collectionName}</p>
-            <h1 className="text-base font-semibold text-white mt-1 line-clamp-2 leading-snug">{episode.title}</h1>
-            {processed.titleTranslation && (
-              <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1 italic">{processed.titleTranslation}</p>
-            )}
-          </div>
-          {processed.transcriptLines?.length ? (
-            <button
-              onClick={() => setShowTranscript(true)}
-              className="flex-shrink-0 flex items-center gap-1.5 bg-white/8 hover:bg-white/12 text-zinc-300 hover:text-white rounded-full px-3 py-1.5 transition-all text-xs font-medium"
-            >
-              <TranscriptIcon />
-              Transcript
-            </button>
-          ) : null}
+        <div className="min-w-0">
+          <p className="text-xs text-zinc-500">{podcast.collectionName}</p>
+          <h1 className="text-base font-semibold text-white mt-1 line-clamp-2 leading-snug">{episode.title}</h1>
+          {processed.titleTranslation && (
+            <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1 italic">{processed.titleTranslation}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -514,6 +503,16 @@ function PlayerScreen({
               }`}>{s}×</button>
           ))}
         </div>
+
+        {processed.transcriptLines?.length ? (
+          <button
+            onClick={() => setShowTranscript(true)}
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-all text-sm font-medium"
+          >
+            <TranscriptIcon />
+            View transcript
+          </button>
+        ) : null}
       </div>
 
       {summaryOverlay && <SummaryOverlay text={summaryOverlay.text} />}
