@@ -13,7 +13,7 @@ function HomeScreen() {
 
   return (
     <div className="flex flex-col h-full">
-      <header className="px-5 pt-12 pb-4">
+      <header className="px-5 pb-4" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
         <h1 className="text-2xl font-bold text-white tracking-tight">Polycast</h1>
         <p className="text-sm text-zinc-500 mt-0.5">Deep immersion without losing the thread</p>
       </header>

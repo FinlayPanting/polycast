@@ -40,7 +40,7 @@ function SettingsScreen() {
   }
 
   return (
-    <div className="flex flex-col px-5 pt-12 pb-8 gap-8">
+    <div className="flex flex-col px-5 pb-8 gap-8" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight">Settings</h1>
         <p className="text-sm text-zinc-500 mt-0.5">Keys are stored locally on your device only.</p>
