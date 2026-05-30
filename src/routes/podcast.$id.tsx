@@ -95,7 +95,8 @@ function PodcastScreen() {
       <div className="relative">
         <button
           onClick={() => navigate({ to: '/' })}
-          className="absolute top-4 left-4 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
+          className="absolute left-4 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
         >
           <BackIcon />
         </button>

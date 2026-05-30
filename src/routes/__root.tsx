@@ -7,7 +7,7 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <div className="flex flex-col min-h-svh bg-[#13101f]">
-      <main className="flex-1 pb-20">
+      <main className="flex-1" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
         <Outlet />
       </main>
       <BottomNav />
@@ -17,9 +17,11 @@ function RootLayout() {
 
 function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] h-16 bg-[#1c1930] border-t border-white/8 flex items-center px-2 z-50">
-      <NavItem to="/" label="Home" icon={<HomeIcon />} />
-      <NavItem to="/settings" label="Settings" icon={<SettingsIcon />} />
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-[#1c1930] border-t border-white/8 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="h-16 flex items-center px-2">
+        <NavItem to="/" label="Home" icon={<HomeIcon />} />
+        <NavItem to="/settings" label="Settings" icon={<SettingsIcon />} />
+      </div>
     </nav>
   )
 }
