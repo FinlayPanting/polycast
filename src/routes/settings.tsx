@@ -47,9 +47,9 @@ function SettingsScreen() {
       </div>
 
       {missing && (
-        <div className="bg-amber-400/10 border border-amber-400/30 rounded-xl px-4 py-3">
-          <p className="text-amber-400 text-sm font-medium">API keys required</p>
-          <p className="text-amber-400/70 text-xs mt-0.5">Add your OpenAI and ElevenLabs keys below to generate summaries.</p>
+        <div className="bg-brand/10 border border-brand/30 rounded-xl px-4 py-3">
+          <p className="text-brand text-sm font-medium">API keys required</p>
+          <p className="text-brand/70 text-xs mt-0.5">Add your OpenAI and ElevenLabs keys below to generate summaries.</p>
         </div>
       )}
 
@@ -81,7 +81,7 @@ function SettingsScreen() {
                   onClick={() => setPrefs({ ...prefs, summaryMin: opt.value, summaryMax: Math.max(prefs.summaryMax, opt.value + 30) })}
                   className={`py-2 rounded-xl text-sm font-medium border transition-all ${
                     prefs.summaryMin === opt.value
-                      ? 'bg-amber-400/15 border-amber-400 text-amber-400'
+                      ? 'bg-brand/15 border-brand text-brand'
                       : 'bg-white/4 border-white/10 text-zinc-400 hover:border-white/20'
                   }`}
                 >
@@ -100,7 +100,7 @@ function SettingsScreen() {
                   onClick={() => setPrefs({ ...prefs, summaryMax: opt.value })}
                   className={`py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
                     prefs.summaryMax === opt.value
-                      ? 'bg-amber-400/15 border-amber-400 text-amber-400'
+                      ? 'bg-brand/15 border-brand text-brand'
                       : 'bg-white/4 border-white/10 text-zinc-400 hover:border-white/20'
                   }`}
                 >
@@ -115,7 +115,7 @@ function SettingsScreen() {
 
       <button
         onClick={handleSave}
-        className="w-full py-3.5 bg-amber-400 text-black font-semibold rounded-xl transition-all active:scale-[0.98]"
+        className="w-full py-3.5 bg-brand text-black font-semibold rounded-xl transition-all active:scale-[0.98]"
       >
         {saved ? 'Saved!' : 'Save Settings'}
       </button>
@@ -147,7 +147,7 @@ function KeyField({
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-zinc-600 outline-none focus:border-amber-400/50 transition-colors font-mono"
+          className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-zinc-600 outline-none focus:border-brand/50 transition-colors font-mono"
         />
         <button
           type="button"

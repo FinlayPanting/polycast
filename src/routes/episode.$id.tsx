@@ -58,7 +58,7 @@ function EpisodeScreen() {
     return (
       <div className="flex flex-col items-center justify-center h-64 px-8 text-center gap-4">
         <p className="text-zinc-400 text-sm">Episode data missing. Go back and try again.</p>
-        <button onClick={() => navigate({ to: '/' })} className="text-amber-400 text-sm">Go home</button>
+        <button onClick={() => navigate({ to: '/' })} className="text-brand text-sm">Go home</button>
       </div>
     )
   }
@@ -130,7 +130,7 @@ function SetupScreen({
     <div className="flex flex-col px-5 pb-8 gap-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
       <button
         onClick={() => navigate({ to: '/podcast/$id', params: { id: String(podcast.collectionId) } })}
-        className="flex items-center gap-1 text-amber-400 text-sm"
+        className="flex items-center gap-1 text-brand text-sm"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -161,7 +161,7 @@ function SetupScreen({
         <select
           value={language}
           onChange={(e) => onLanguageChange(e.target.value)}
-          className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-amber-400/50 transition-colors appearance-none"
+          className="w-full bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-brand/50 transition-colors appearance-none"
         >
           {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
@@ -178,7 +178,7 @@ function SetupScreen({
                 onClick={() => { onSummaryMinChange(opt.value); if (summaryMax <= opt.value) onSummaryMaxChange(opt.value + 60) }}
                 className={`py-2 rounded-xl text-sm font-medium border transition-all ${
                   summaryMin === opt.value
-                    ? 'bg-amber-400/15 border-amber-400 text-amber-400'
+                    ? 'bg-brand/15 border-brand text-brand'
                     : 'bg-white/4 border-white/10 text-zinc-400'
                 }`}
               >
@@ -197,7 +197,7 @@ function SetupScreen({
                 onClick={() => onSummaryMaxChange(opt.value)}
                 className={`py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
                   summaryMax === opt.value
-                    ? 'bg-amber-400/15 border-amber-400 text-amber-400'
+                    ? 'bg-brand/15 border-brand text-brand'
                     : 'bg-white/4 border-white/10 text-zinc-400'
                 }`}
               >
@@ -211,7 +211,7 @@ function SetupScreen({
 
       <button
         onClick={handleGenerate}
-        className="w-full py-3.5 bg-amber-400 text-black font-semibold rounded-xl transition-all active:scale-[0.98] mt-auto"
+        className="w-full py-3.5 bg-brand text-black font-semibold rounded-xl transition-all active:scale-[0.98] mt-auto"
       >
         Generate &amp; Listen
       </button>
@@ -305,7 +305,7 @@ function ProcessingScreen({
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex flex-col gap-3">
           <p className="text-red-400 text-sm font-semibold">Error</p>
           <p className="text-red-300 text-xs font-mono break-all whitespace-pre-wrap">{errorMsg}</p>
-          <button onClick={onBack} className="text-amber-400 text-sm text-left">← Back to setup</button>
+          <button onClick={onBack} className="text-brand text-sm text-left">← Back to setup</button>
         </div>
       )}
     </div>
@@ -331,7 +331,7 @@ function StageRow({ label, status, progress, detail }: { label: string; status: 
       <div className="h-0.5 bg-white/6 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-300 ${
-            status === 'done' ? 'bg-green-500' : status === 'active' ? 'bg-amber-400' : 'bg-transparent'
+            status === 'done' ? 'bg-green-500' : status === 'active' ? 'bg-brand' : 'bg-transparent'
           }`}
           style={{ width: `${status === 'done' ? 100 : Math.round(progress * 100)}%` }}
         />
@@ -434,7 +434,7 @@ function PlayerScreen({
           alt={podcast.collectionName}
           className="w-full aspect-square object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0f] via-[#0d0d0f]/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#13101f] via-[#13101f]/20" />
       </div>
 
       <div className="flex-1 flex flex-col px-5 py-6 gap-6">
@@ -450,7 +450,7 @@ function PlayerScreen({
             <button
               onClick={() => setShowTranscript(true)}
               title="Show transcript"
-              className="flex-shrink-0 mt-1 text-zinc-500 hover:text-amber-400 transition-colors"
+              className="flex-shrink-0 mt-1 text-zinc-500 hover:text-brand transition-colors"
             >
               <TranscriptIcon />
             </button>
@@ -460,7 +460,7 @@ function PlayerScreen({
         <div className="flex flex-col gap-2">
           <input type="range" min={0} max={duration || 1} value={currentTime}
             onChange={(e) => engineRef.current?.seek(Number(e.target.value))}
-            className="w-full h-1 accent-amber-400 rounded-full" />
+            className="w-full h-1 accent-brand rounded-full" />
           <div className="flex justify-between text-xs font-mono text-zinc-500">
             <span>{fmt(currentTime)}</span>
             <span>{fmt(duration)}</span>
@@ -471,7 +471,7 @@ function PlayerScreen({
           <div className="flex items-center justify-between">
             <p className="text-xs text-zinc-600 uppercase tracking-wider">Summaries</p>
             {nextSummaryIn !== null && (
-              <p className="text-xs font-mono text-amber-400">Next in {fmt(nextSummaryIn)}</p>
+              <p className="text-xs font-mono text-brand">Next in {fmt(nextSummaryIn)}</p>
             )}
           </div>
           <div className="flex gap-1.5 flex-wrap">
@@ -479,8 +479,8 @@ function PlayerScreen({
               <button key={i} onClick={() => engineRef.current?.seek(s.timestamp)}
                 title={`${fmt(s.timestamp)}: ${s.text.slice(0, 60)}…`}
                 className={`w-2 h-2 rounded-full transition-all ${
-                  i === activeSummaryIdx ? 'bg-amber-400 scale-125'
-                    : currentTime > s.timestamp ? 'bg-amber-400/30' : 'bg-white/15'
+                  i === activeSummaryIdx ? 'bg-brand scale-125'
+                    : currentTime > s.timestamp ? 'bg-brand/30' : 'bg-white/15'
                 }`} />
             ))}
           </div>
@@ -489,7 +489,7 @@ function PlayerScreen({
         <div className="flex items-center justify-center gap-8">
           <button onClick={() => engineRef.current?.skip(-15)} className="text-zinc-400 hover:text-white transition-colors"><SkipBackIcon /></button>
           <button onClick={() => engineRef.current?.togglePlay()}
-            className="w-16 h-16 rounded-full bg-amber-400 flex items-center justify-center text-black shadow-lg active:scale-95 transition-transform">
+            className="w-16 h-16 rounded-full bg-brand flex items-center justify-center text-black shadow-lg active:scale-95 transition-transform">
             {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
           <button onClick={() => engineRef.current?.skip(15)} className="text-zinc-400 hover:text-white transition-colors"><SkipFwdIcon /></button>
@@ -499,7 +499,7 @@ function PlayerScreen({
           {SPEEDS.map((s) => (
             <button key={s} onClick={() => { setSpeed(s); engineRef.current?.setSpeed(s) }}
               className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold transition-all ${
-                speed === s ? 'bg-amber-400/20 text-amber-400' : 'text-zinc-600 hover:text-zinc-400'
+                speed === s ? 'bg-brand/20 text-brand' : 'text-zinc-600 hover:text-zinc-400'
               }`}>{s}×</button>
           ))}
         </div>
@@ -564,7 +564,7 @@ function TranscriptView({ lines, controls, onClose }: {
   }
 
   return (
-    <div className="flex flex-col h-svh bg-[#0d0d0f]">
+    <div className="flex flex-col h-svh bg-[#13101f]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Transcript</p>
@@ -597,7 +597,7 @@ function TranscriptView({ lines, controls, onClose }: {
               >
                 <p
                   className={`text-lg font-medium leading-snug transition-all ${
-                    isActive ? 'text-amber-400' : 'text-white'
+                    isActive ? 'text-brand' : 'text-white'
                   }`}
                   style={{ opacity: originalOpacity }}
                 >
@@ -618,10 +618,10 @@ function TranscriptView({ lines, controls, onClose }: {
       </div>
 
       {/* Compact controls */}
-      <div className="flex-shrink-0 px-5 pt-3 pb-8 bg-gradient-to-t from-[#0d0d0f] to-transparent">
+      <div className="flex-shrink-0 px-5 pt-3 pb-8 bg-gradient-to-t from-[#13101f] to-transparent">
         <input type="range" min={0} max={duration || 1} value={currentTime}
           onChange={(e) => onSeek(Number(e.target.value))}
-          className="w-full h-1 accent-amber-400 rounded-full" />
+          className="w-full h-1 accent-brand rounded-full" />
         <div className="flex justify-between text-xs font-mono text-zinc-600 mt-1 mb-4">
           <span>{fmt(currentTime)}</span>
           <span>{fmt(duration)}</span>
@@ -629,7 +629,7 @@ function TranscriptView({ lines, controls, onClose }: {
         <div className="flex items-center justify-center gap-8 mb-4">
           <button onClick={() => onSkip(-15)} className="text-zinc-400"><SkipBackIcon /></button>
           <button onClick={onTogglePlay}
-            className="w-14 h-14 rounded-full bg-amber-400 flex items-center justify-center text-black active:scale-95 transition-transform">
+            className="w-14 h-14 rounded-full bg-brand flex items-center justify-center text-black active:scale-95 transition-transform">
             {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
           <button onClick={() => onSkip(15)} className="text-zinc-400"><SkipFwdIcon /></button>
@@ -638,7 +638,7 @@ function TranscriptView({ lines, controls, onClose }: {
           {SPEEDS.map((s) => (
             <button key={s} onClick={() => onSetSpeed(s)}
               className={`px-3 py-1 rounded-lg text-xs font-mono font-semibold transition-all ${
-                speed === s ? 'bg-amber-400/20 text-amber-400' : 'text-zinc-600 hover:text-zinc-400'
+                speed === s ? 'bg-brand/20 text-brand' : 'text-zinc-600 hover:text-zinc-400'
               }`}>{s}×</button>
           ))}
         </div>
@@ -655,12 +655,12 @@ function SummaryOverlay({ text }: { text: string }) {
       className="fixed inset-0 bg-black/80 flex items-end z-40"
       onTouchMove={(e) => e.stopPropagation()}
     >
-      <div className="w-full max-w-[480px] mx-auto bg-[#1a1a1c] rounded-t-3xl p-6 pb-10 max-h-[70vh] flex flex-col">
+      <div className="w-full max-w-[480px] mx-auto bg-[#242138] rounded-t-3xl p-6 pb-10 max-h-[70vh] flex flex-col">
         <div className="flex items-center gap-2 mb-4 flex-shrink-0">
-          <span className="bg-amber-400 text-black text-xs font-bold px-2.5 py-1 rounded-full">Summary</span>
+          <span className="bg-brand text-black text-xs font-bold px-2.5 py-1 rounded-full">Summary</span>
           <div className="flex gap-0.5 items-end h-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="w-0.5 bg-amber-400 rounded-full animate-pulse"
+              <div key={i} className="w-0.5 bg-brand rounded-full animate-pulse"
                 style={{ height: `${8 + i * 4}px`, animationDelay: `${i * 100}ms` }} />
             ))}
           </div>

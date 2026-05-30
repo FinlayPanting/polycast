@@ -104,7 +104,7 @@ function PodcastScreen() {
           alt={podcast.collectionName}
           className="w-full aspect-square object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0f] via-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#13101f] via-transparent" />
       </div>
 
       <div className="px-5 -mt-16 relative z-10">
@@ -115,7 +115,7 @@ function PodcastScreen() {
           className={`mt-3 px-5 py-2 rounded-full text-sm font-semibold border transition-all ${
             followed
               ? 'bg-transparent border-zinc-600 text-zinc-400'
-              : 'bg-amber-400 border-amber-400 text-black'
+              : 'bg-brand border-brand text-black'
           }`}
         >
           {followed ? 'Following' : 'Follow'}
@@ -163,7 +163,7 @@ function PodcastScreen() {
 function Spinner({ small }: { small?: boolean }) {
   const size = small ? 'w-4 h-4' : 'w-8 h-8'
   return (
-    <svg className={`${size} animate-spin text-amber-400`} fill="none" viewBox="0 0 24 24">
+    <svg className={`${size} animate-spin text-brand`} fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>

@@ -1,6 +1,6 @@
 # Polycast
 
-**Immersion with a safety net.**
+**Deep immersion without losing the thread.**
 
 Polycast is a mobile-first progressive web app for language learners who want to follow foreign-language podcasts without losing comprehension. It processes podcast episodes through an AI pipeline that inserts brief, natural-sounding English summaries at strategic pauses — so you stay immersed in the target language while still understanding what's being said.
 
