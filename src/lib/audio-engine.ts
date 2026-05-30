@@ -26,8 +26,8 @@ export class AudioEngine {
   private summaryBlobUrls: (string | null)[]
   private summaryPlayed: boolean[]
   private inSummary = false
-  private summaryInterrupted = false   // user paused mid-summary
-  private pendingIntro: number | null = null // t=0 summary deferred until primed
+  private summaryInterrupted = false
+  private pendingIntro: number | null = null
   private tickInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(
@@ -39,10 +39,9 @@ export class AudioEngine {
     this.processed = processed
     this.cb = cb
 
-    // Set summaryPlayed immediately (not via loadedmetadata) so togglePlay() sees correct state
+    // Set summaryPlayed synchronously so togglePlay() sees the correct state immediately
     this.summaryPlayed = processed.summaries.map((s) => s.timestamp < initialPosition)
 
-    // Pre-build blob URLs so summaryAudio can change src without new fetches
     this.summaryBlobUrls = processed.summaries.map((s) => {
       try {
         return URL.createObjectURL(new Blob([base64ToArrayBuffer(s.audioBase64)], { type: 'audio/mpeg' }))
@@ -51,7 +50,6 @@ export class AudioEngine {
       }
     })
 
-    // Episode audio — src never changes, position is always preserved
     this.episodeAudio = new Audio()
     this.episodeAudio.preload = 'auto'
     this.episodeAudio.src = processed.enclosureUrl
@@ -72,7 +70,6 @@ export class AudioEngine {
       }
     })
 
-    // Summary audio — kept as a separate element so episode position is never lost
     this.summaryAudio = new Audio()
     this.summaryAudio.preload = 'none'
 
@@ -80,8 +77,7 @@ export class AudioEngine {
     this.setupMediaSession(meta)
   }
 
-  // Called once during first togglePlay() user gesture to unlock iOS background audio.
-  // Uses a non-intro blob so playSummary(0) always sets a fresh src (avoids state conflict).
+  // Uses a non-intro blob for priming so playSummary(0) always sets a fresh src
   private primeSummaryAudio() {
     const url = this.summaryBlobUrls.slice(1).find((u) => u !== null) ?? this.summaryBlobUrls[0]
     if (!url) return
@@ -93,11 +89,10 @@ export class AudioEngine {
   }
 
   private tick() {
-    // Handle pending intro (t=0 summary) once priming is complete
     if (this.pendingIntro !== null && this.summaryAudioPrimed && !this.inSummary) {
       const idx = this.pendingIntro
       this.pendingIntro = null
-      this.playSummary(idx) // async — will call episodeAudio.play() when done
+      this.playSummary(idx)
       return
     }
 
@@ -114,7 +109,7 @@ export class AudioEngine {
     if (idx !== -1 && this.summaryBlobUrls[idx] && this.summaryAudioPrimed) {
       this.playSummary(idx)
     } else if (idx !== -1 && !this.summaryAudioPrimed) {
-      this.summaryPlayed[idx] = true // not primed yet, skip gracefully
+      this.summaryPlayed[idx] = true
     }
   }
 
@@ -123,20 +118,13 @@ export class AudioEngine {
     this.inSummary = true
     this.summaryPlayed[idx] = true
 
-    const locked = document.visibilityState === 'hidden'
-
-    // Only fade/pause if the episode is currently playing (intro at t=0 may not have started)
+    // Only fade/pause if episode is currently playing (intro at t=0 may not have started)
     if (!this.episodeAudio.paused) {
-      if (!locked) {
-        await this.fadeVolume(this.episodeAudio, 1, 0, FADE_MS)
-      } else {
-        this.episodeAudio.volume = 0
-      }
+      await this.fadeVolume(this.episodeAudio, 1, 0, FADE_MS)
       this.episodeAudio.pause()
     }
     this.cb.onSummaryStart(idx)
 
-    // Fully stop and reset summaryAudio before starting new clip
     this.summaryAudio.pause()
     this.summaryAudio.src = this.summaryBlobUrls[idx]!
     this.summaryAudio.currentTime = 0
@@ -157,45 +145,66 @@ export class AudioEngine {
     this.cb.onSummaryEnd()
 
     if (!interrupted) {
-      // Normal completion: resume episode
       this.episodeAudio.volume = 0
       this.episodeAudio.play().catch(() => {})
       this.cb.onPlayStateChange(true)
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'
-      if (!locked) {
-        this.fadeVolume(this.episodeAudio, 0, 1, FADE_MS)
-      } else {
-        this.episodeAudio.volume = 1
-      }
+      await this.fadeVolume(this.episodeAudio, 0, 1, FADE_MS)
     } else {
-      // User paused mid-summary — keep episode paused, restore volume for next play
       this.episodeAudio.volume = 1
     }
   }
 
+  // Fade with lock-screen safety: if visibilityState becomes 'hidden' mid-fade,
+  // immediately jump to the target volume so the Promise always resolves.
   private fadeVolume(el: HTMLAudioElement, from: number, to: number, ms: number): Promise<void> {
+    // Already locked — skip animation entirely
+    if (document.visibilityState === 'hidden') {
+      el.volume = to
+      return Promise.resolve()
+    }
+
     const steps = 16
     const dt = ms / steps
     const dv = (to - from) / steps
     let v = from
     el.volume = v
+    let done = false
+
     return new Promise((resolve) => {
-      const tick = () => {
+      const finish = () => {
+        if (done) return
+        done = true
+        el.volume = to
+        document.removeEventListener('visibilitychange', onHidden)
+        resolve()
+      }
+
+      // If screen locks during the fade, jump to target immediately
+      const onHidden = () => {
+        if (document.visibilityState === 'hidden') finish()
+      }
+      document.addEventListener('visibilitychange', onHidden)
+
+      const step = () => {
+        if (done) return
         v += dv
         el.volume = Math.max(0, Math.min(1, v))
-        if ((dv > 0 && v >= to) || (dv <= 0 && v <= to)) { el.volume = to; resolve(); return }
-        setTimeout(tick, dt)
+        if ((dv > 0 && v >= to) || (dv <= 0 && v <= to)) {
+          finish()
+        } else {
+          setTimeout(step, dt)
+        }
       }
-      setTimeout(tick, dt)
+      setTimeout(step, dt)
     })
   }
 
   togglePlay() {
     if (this.inSummary) {
-      // User paused mid-summary — interrupt it cleanly
+      // Interrupt summary cleanly — dispatch 'ended' to unblock the playSummary Promise
       this.summaryInterrupted = true
       this.summaryAudio.pause()
-      // Dispatch 'ended' to resolve the waiting Promise inside playSummary
       this.summaryAudio.dispatchEvent(new Event('ended'))
       this.cb.onPlayStateChange(false)
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'
@@ -205,14 +214,15 @@ export class AudioEngine {
     if (this.episodeAudio.paused) {
       if (!this.summaryAudioPrimed) this.primeSummaryAudio()
 
-      // If there's an unplayed intro (t=0), play it before starting the episode
+      // Play intro summary before starting episode (avoids overlap at t=0)
       const introIdx = this.processed.summaries.findIndex(
         (s, i) => !this.summaryPlayed[i] && s.timestamp === 0 && this.summaryBlobUrls[i] !== null,
       )
       if (introIdx !== -1) {
         this.pendingIntro = introIdx
-        // Episode will start inside playSummary() once the intro finishes
       } else {
+        // Safety: ensure volume is 1 in case it was left at 0 by a failed/interrupted fade
+        this.episodeAudio.volume = 1
         this.episodeAudio.play().catch(() => {})
       }
 
@@ -259,6 +269,7 @@ export class AudioEngine {
     navigator.mediaSession.playbackState = 'paused'
 
     navigator.mediaSession.setActionHandler('play', () => {
+      this.episodeAudio.volume = 1
       this.episodeAudio.play().catch(() => {})
       this.cb.onPlayStateChange(true)
       navigator.mediaSession.playbackState = 'playing'
