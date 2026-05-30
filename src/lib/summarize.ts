@@ -1,39 +1,69 @@
 const GPT_URL = 'https://api.openai.com/v1/chat/completions'
+const MAX_RETRIES = 4
 
-async function gpt(system: string, user: string, apiKey: string, maxTokens = 180): Promise<string> {
-  const res = await fetch(GPT_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-      max_tokens: maxTokens,
-      temperature: 0.5,
-    }),
-  })
-  if (!res.ok) throw new Error(`GPT-4o error ${res.status}: ${await res.text()}`)
-  const data = await res.json()
-  return (data.choices[0].message.content as string).trim()
+async function gpt(system: string, user: string, apiKey: string, maxTokens = 180, signal?: AbortSignal): Promise<string> {
+  let lastErr: Error = new Error('GPT request failed')
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    signal?.throwIfAborted()
+    try {
+      const res = await fetch(GPT_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+          max_tokens: maxTokens,
+          temperature: 0.5,
+        }),
+        signal,
+      })
+      if (!res.ok) {
+        const body = await res.text()
+        if (res.status === 429 || res.status >= 500) {
+          lastErr = new Error(`GPT-4o error ${res.status}: ${body}`)
+          console.warn(`[polycast] gpt attempt ${attempt + 1} failed (${res.status}), retrying…`)
+        } else {
+          throw new Error(`GPT-4o error ${res.status}: ${body}`)
+        }
+      } else {
+        const data = await res.json()
+        return (data.choices[0].message.content as string).trim()
+      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e
+      lastErr = e instanceof Error ? e : new Error(String(e))
+      console.warn(`[polycast] gpt attempt ${attempt + 1} network error:`, lastErr.message)
+    }
+
+    if (attempt < MAX_RETRIES - 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 1500 * (attempt + 1)))
+    }
+  }
+
+  throw lastErr
 }
 
 // Translate an episode title into English
-export async function translateTitle(title: string, language: string, apiKey: string): Promise<string> {
+export async function translateTitle(title: string, language: string, apiKey: string, signal?: AbortSignal): Promise<string> {
   return gpt(
     `Translate this ${language} podcast episode title to English. Return only the translated title, nothing else.`,
     title,
     apiKey,
     80,
+    signal,
   )
 }
 
 const TRANSLATE_CHUNK = 80
 
-async function translateChunk(lines: string[], language: string, apiKey: string): Promise<string[]> {
+async function translateChunk(lines: string[], language: string, apiKey: string, signal?: AbortSignal): Promise<string[]> {
   const res = await gpt(
     `Translate each of these ${language} podcast transcript lines to natural English. Return ONLY a valid JSON array of strings in exactly the same order. No extra text.`,
     JSON.stringify(lines),
     apiKey,
     lines.length * 50 + 200,
+    signal,
   )
   try {
     const match = res.match(/\[[\s\S]*\]/)
@@ -50,12 +80,12 @@ async function translateChunk(lines: string[], language: string, apiKey: string)
 }
 
 // Translate transcript lines in chunks to stay within token limits.
-export async function translateBatch(lines: string[], language: string, apiKey: string): Promise<string[]> {
+export async function translateBatch(lines: string[], language: string, apiKey: string, signal?: AbortSignal): Promise<string[]> {
   if (lines.length === 0) return []
   const results: string[] = []
   for (let i = 0; i < lines.length; i += TRANSLATE_CHUNK) {
     const chunk = lines.slice(i, i + TRANSLATE_CHUNK)
-    const translated = await translateChunk(chunk, language, apiKey)
+    const translated = await translateChunk(chunk, language, apiKey, signal)
     results.push(...translated)
   }
   return results
@@ -67,6 +97,7 @@ export async function generateIntro(
   firstSectionTranscript: string,
   language: string,
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   return gpt(
     `You are a friendly audio companion helping someone learn ${language} by listening to podcasts.
@@ -75,6 +106,7 @@ Speak naturally, as if you're a helpful host. No bullet points or headers.`,
     `Full episode transcript (for overview):\n${fullTranscript.slice(0, 4000)}\n\nOpening section transcript (for preview):\n${firstSectionTranscript}`,
     apiKey,
     220,
+    signal,
   )
 }
 
@@ -83,6 +115,7 @@ export async function generatePreview(
   nextSectionTranscript: string,
   language: string,
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   return gpt(
     `You are a friendly audio companion helping someone learn ${language} by listening to podcasts.
@@ -91,6 +124,7 @@ Start naturally — e.g. "Coming up...", "Next, you'll hear...", or "In a moment
     nextSectionTranscript,
     apiKey,
     160,
+    signal,
   )
 }
 

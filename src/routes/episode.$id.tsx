@@ -249,6 +249,14 @@ function ProcessingScreen({
   const [stageDetail, setStageDetail] = useState<string>('')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  // Keep screen awake during processing so iOS doesn't throttle network
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return
+    let lock: WakeLockSentinel | null = null
+    navigator.wakeLock.request('screen').then((l) => { lock = l }).catch(() => {})
+    return () => { lock?.release().catch(() => {}) }
+  }, [])
+
   useEffect(() => {
     const keys = getApiKeys()
     const prefs = getPreferences()

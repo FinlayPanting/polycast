@@ -103,6 +103,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
     language,
     openaiKey,
     (pct) => emit('transcribe', pct),
+    signal,
   )
   console.log('[polycast] transcript length:', whisperResult.text.length, 'chars,', whisperResult.segments.length, 'segments')
   emit('transcribe', 1)
@@ -114,8 +115,8 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
   const segs = whisperResult.segments ?? []
   const originalLines = segs.map((s) => s.text.trim()).filter(Boolean)
   const [titleTranslation, translations] = await Promise.all([
-    translateTitle(episode.title, language, openaiKey),
-    translateBatch(originalLines, language, openaiKey),
+    translateTitle(episode.title, language, openaiKey, signal),
+    translateBatch(originalLines, language, openaiKey, signal),
   ])
   const transcriptLines: TranscriptLine[] = segs
     .filter((s) => s.text.trim())
@@ -145,7 +146,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
   emit('summarize', 0, 'Intro')
   const firstSectionEnd = breakpoints[0] ?? totalDuration
   const firstSection = sliceTranscriptByTime(segs, 0, firstSectionEnd)
-  const introText = await generateIntro(whisperResult.text, firstSection, language, openaiKey)
+  const introText = await generateIntro(whisperResult.text, firstSection, language, openaiKey, signal)
   console.log('[polycast] intro:', introText.slice(0, 80))
   summaryTexts.push({ timestamp: 0, text: introText })
 
@@ -157,7 +158,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
     const nextChunk = sliceTranscriptByTime(segs, nextFrom, nextTo)
     if (!nextChunk.trim()) continue
     emit('summarize', (i + 1) / totalJobs, `Preview ${i + 1}/${breakpoints.length}`)
-    const text = await generatePreview(nextChunk, language, openaiKey)
+    const text = await generatePreview(nextChunk, language, openaiKey, signal)
     console.log(`[polycast] preview ${i + 1} @${Math.round(nextFrom)}s:`, text.slice(0, 80))
     summaryTexts.push({ timestamp: nextFrom, text })
   }
@@ -170,7 +171,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
   for (let i = 0; i < summaryTexts.length; i++) {
     signal?.throwIfAborted()
     emit('tts', i / summaryTexts.length, `Clip ${i + 1}/${summaryTexts.length}`)
-    const audioBuf = await synthesise(summaryTexts[i].text, elevenlabsKey)
+    const audioBuf = await synthesise(summaryTexts[i].text, elevenlabsKey, signal)
     console.log(`[polycast] tts clip ${i + 1}: ${(audioBuf.byteLength / 1024).toFixed(0)} KB`)
     summaries.push({
       timestamp: summaryTexts[i].timestamp,

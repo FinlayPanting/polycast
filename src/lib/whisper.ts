@@ -26,10 +26,11 @@ export async function transcribeAudio(
   language: string,
   apiKey: string,
   onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
 ): Promise<WhisperResponse> {
   if (audioBlob.size <= WHISPER_MAX_BYTES) {
     onProgress?.(0.1)
-    const result = await callWhisper(audioBlob, language, apiKey)
+    const result = await callWhisper(audioBlob, language, apiKey, signal)
     onProgress?.(1)
     return result
   }
@@ -55,7 +56,7 @@ export async function transcribeAudio(
     const timeOffset = duration > 0 ? (startByte / totalBytes) * duration : 0
     console.log(`[polycast] whisper chunk ${i + 1}/${numChunks}: bytes ${startByte}–${endByte}, timeOffset ${timeOffset.toFixed(1)}s`)
 
-    const chunkResult = await callWhisper(chunk, language, apiKey)
+    const chunkResult = await callWhisper(chunk, language, apiKey, signal)
     console.log(`[polycast] chunk ${i + 1} done — segments: ${chunkResult.segments?.length ?? 0}, text: ${chunkResult.text?.length ?? 0} chars`)
 
     ;(chunkResult.segments ?? []).forEach((seg) => {
@@ -90,29 +91,54 @@ function getAudioDuration(blob: Blob): Promise<number> {
   })
 }
 
-async function callWhisper(audio: Blob, language: string, apiKey: string): Promise<WhisperResponse> {
-  const form = new FormData()
-  form.append('file', audio, audio.type === 'audio/wav' ? 'chunk.wav' : 'episode.mp3')
-  form.append('model', 'whisper-1')
-  form.append('response_format', 'verbose_json')
-  form.append('timestamp_granularities[]', 'segment')
-  form.append('timestamp_granularities[]', 'word')
-  form.append('language', languageCode(language))
+async function callWhisper(audio: Blob, language: string, apiKey: string, signal?: AbortSignal): Promise<WhisperResponse> {
+  const MAX_RETRIES = 4
+  let lastErr: Error = new Error('Whisper failed')
 
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
-  })
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    signal?.throwIfAborted()
+    try {
+      const form = new FormData()
+      form.append('file', audio, audio.type === 'audio/wav' ? 'chunk.wav' : 'episode.mp3')
+      form.append('model', 'whisper-1')
+      form.append('response_format', 'verbose_json')
+      form.append('timestamp_granularities[]', 'segment')
+      form.append('timestamp_granularities[]', 'word')
+      form.append('language', languageCode(language))
 
-  if (!res.ok) {
-    const body = await res.text()
-    const msg = `Whisper ${res.status}: ${body}`
-    console.error('[polycast]', msg)
-    throw new Error(msg)
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+        signal,
+      })
+
+      if (!res.ok) {
+        const body = await res.text()
+        // 429 rate limit or 5xx server errors — retry; 4xx auth errors — don't
+        if (res.status === 429 || res.status >= 500) {
+          lastErr = new Error(`Whisper ${res.status}: ${body}`)
+          console.warn(`[polycast] whisper attempt ${attempt + 1} failed (${res.status}), retrying…`)
+        } else {
+          const msg = `Whisper ${res.status}: ${body}`
+          console.error('[polycast]', msg)
+          throw new Error(msg)
+        }
+      } else {
+        return res.json() as Promise<WhisperResponse>
+      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e
+      lastErr = e instanceof Error ? e : new Error(String(e))
+      console.warn(`[polycast] whisper attempt ${attempt + 1} network error:`, lastErr.message)
+    }
+
+    if (attempt < MAX_RETRIES - 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 2000 * (attempt + 1)))
+    }
   }
 
-  return res.json() as Promise<WhisperResponse>
+  throw lastErr
 }
 
 function languageCode(name: string): string {
