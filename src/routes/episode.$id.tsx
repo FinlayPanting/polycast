@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
-import { getApiKeys, getPreferences, getCachedEpisodeAsync, type ProcessedEpisode, type TranscriptLine } from '../lib/storage'
+import { getApiKeys, getPreferences, savePreferences, getCachedEpisodeAsync, type ProcessedEpisode, type TranscriptLine } from '../lib/storage'
 import { runPipeline, type PipelineStage, type PipelineProgress } from '../lib/pipeline'
 import { AudioEngine, type AudioEngineMeta } from '../lib/audio-engine'
 import { getEpisodeNav } from '../lib/nav-state'
@@ -251,10 +251,13 @@ function ProcessingScreen({
 
   useEffect(() => {
     const keys = getApiKeys()
+    const prefs = getPreferences()
+    savePreferences({ ...prefs, defaultLanguage: language })
     const controller = new AbortController()
 
     runPipeline({
       episode,
+      podcast,
       language,
       summaryMin,
       summaryMax,
@@ -449,10 +452,10 @@ function PlayerScreen({
           {processed.transcriptLines?.length ? (
             <button
               onClick={() => setShowTranscript(true)}
-              title="Show transcript"
-              className="flex-shrink-0 mt-1 text-zinc-500 hover:text-brand transition-colors"
+              className="flex-shrink-0 flex items-center gap-1.5 bg-white/8 hover:bg-white/12 text-zinc-300 hover:text-white rounded-full px-3 py-1.5 transition-all text-xs font-medium"
             >
               <TranscriptIcon />
+              Transcript
             </button>
           ) : null}
         </div>

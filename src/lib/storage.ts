@@ -8,6 +8,7 @@ export interface ApiKeys {
 export interface Preferences {
   summaryMin: number
   summaryMax: number
+  defaultLanguage: string
 }
 
 export interface FollowedPodcast {
@@ -38,6 +39,13 @@ export interface ProcessedEpisode {
   transcriptLines?: TranscriptLine[]
   summaries: SummaryPoint[]
   enclosureUrl: string
+  // Episode/podcast metadata stored so the Episodes tab can display and navigate
+  episodeTitle?: string
+  episodePubDate?: string
+  episodeDuration?: string
+  podcastId?: string
+  podcastName?: string
+  podcastArtwork?: string
 }
 
 // ─── localStorage ─────────────────────────────────────────────────────────────
@@ -60,9 +68,10 @@ export function getPreferences(): Preferences {
     return {
       summaryMin: p.summaryMin ?? 60,
       summaryMax: p.summaryMax ?? 120,
+      defaultLanguage: p.defaultLanguage ?? 'Swedish',
     }
   } catch {
-    return { summaryMin: 60, summaryMax: 120 }
+    return { summaryMin: 60, summaryMax: 120, defaultLanguage: 'Swedish' }
   }
 }
 
@@ -109,4 +118,20 @@ export async function cacheEpisode(episode: ProcessedEpisode): Promise<void> {
 export async function getCachedEpisodeAsync(guid: string): Promise<ProcessedEpisode | null> {
   const db = await getDb()
   return (await db.get(STORE, guid)) ?? null
+}
+
+export async function getAllCachedEpisodes(): Promise<ProcessedEpisode[]> {
+  const db = await getDb()
+  return db.getAll(STORE)
+}
+
+export async function getAllCachedGuids(): Promise<Set<string>> {
+  const db = await getDb()
+  const all = await db.getAll(STORE)
+  return new Set(all.map((e) => e.guid))
+}
+
+export async function deleteCachedEpisode(guid: string): Promise<void> {
+  const db = await getDb()
+  await db.delete(STORE, guid)
 }

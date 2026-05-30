@@ -1,4 +1,5 @@
 import type { Episode } from './rss'
+import type { ItunesResult } from './itunes'
 import type { ProcessedEpisode } from './storage'
 import { transcribeAudio } from './whisper'
 import { generateIntro, generatePreview, sliceTranscriptByTime, findNaturalBreakpoints, translateBatch, translateTitle } from './summarize'
@@ -16,6 +17,7 @@ export interface PipelineProgress {
 
 interface PipelineOptions {
   episode: Episode
+  podcast: ItunesResult
   language: string
   summaryMin: number
   summaryMax: number
@@ -56,7 +58,7 @@ async function fetchWithFallback(url: string, signal?: AbortSignal): Promise<Res
 }
 
 export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpisode> {
-  const { episode, language, summaryMin, summaryMax, openaiKey, elevenlabsKey, onProgress, signal } = opts
+  const { episode, podcast, language, summaryMin, summaryMax, openaiKey, elevenlabsKey, onProgress, signal } = opts
 
   const emit = (stage: PipelineStage, progress: number, detail?: string) => {
     console.log(`[polycast] ${stage} ${Math.round(progress * 100)}%`, detail ?? '')
@@ -189,6 +191,12 @@ export async function runPipeline(opts: PipelineOptions): Promise<ProcessedEpiso
     transcriptLines,
     summaries,
     enclosureUrl: episode.enclosureUrl,
+    episodeTitle: episode.title,
+    episodePubDate: episode.pubDate,
+    episodeDuration: episode.duration,
+    podcastId: String(podcast.collectionId),
+    podcastName: podcast.collectionName,
+    podcastArtwork: podcast.artworkUrl600 || podcast.artworkUrl100,
   }
   emit('build', 0.5)
   await cacheEpisode(processed)

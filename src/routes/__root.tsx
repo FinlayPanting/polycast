@@ -20,6 +20,7 @@ function BottomNav() {
     <nav className="flex-shrink-0 bg-[#1c1930] border-t border-white/8" style={{ paddingBottom: 'min(env(safe-area-inset-bottom, 0px), 40px)' }}>
       <div className="h-16 flex items-center px-2">
         <NavItem to="/" label="Home" icon={<HomeIcon />} />
+        <NavItem to="/episodes" label="Episodes" icon={<EpisodesIcon />} />
         <NavItem to="/settings" label="Settings" icon={<SettingsIcon />} />
       </div>
     </nav>
@@ -44,6 +45,16 @@ function HomeIcon() {
     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
       <path strokeLinecap="round" strokeLinejoin="round" d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <polyline strokeLinecap="round" strokeLinejoin="round" points="9 22 9 12 15 12 15 22" />
+    </svg>
+  )
+}
+
+function EpisodesIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-3.5-3.5M12 15l3.5-3.5" />
+      <circle cx="12" cy="19" r="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 8a7 7 0 0114 0" />
     </svg>
   )
 }

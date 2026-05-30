@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as EpisodesRouteImport } from './routes/episodes'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PodcastIdRouteImport } from './routes/podcast.$id'
 import { Route as EpisodeIdRouteImport } from './routes/episode.$id'
@@ -17,6 +18,11 @@ import { Route as EpisodeIdRouteImport } from './routes/episode.$id'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EpisodesRoute = EpisodesRouteImport.update({
+  id: '/episodes',
+  path: '/episodes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,12 +43,14 @@ const EpisodeIdRoute = EpisodeIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/episodes': typeof EpisodesRoute
   '/settings': typeof SettingsRoute
   '/episode/$id': typeof EpisodeIdRoute
   '/podcast/$id': typeof PodcastIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/episodes': typeof EpisodesRoute
   '/settings': typeof SettingsRoute
   '/episode/$id': typeof EpisodeIdRoute
   '/podcast/$id': typeof PodcastIdRoute
@@ -50,20 +58,28 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/episodes': typeof EpisodesRoute
   '/settings': typeof SettingsRoute
   '/episode/$id': typeof EpisodeIdRoute
   '/podcast/$id': typeof PodcastIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/episode/$id' | '/podcast/$id'
+  fullPaths: '/' | '/episodes' | '/settings' | '/episode/$id' | '/podcast/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/episode/$id' | '/podcast/$id'
-  id: '__root__' | '/' | '/settings' | '/episode/$id' | '/podcast/$id'
+  to: '/' | '/episodes' | '/settings' | '/episode/$id' | '/podcast/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/episodes'
+    | '/settings'
+    | '/episode/$id'
+    | '/podcast/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EpisodesRoute: typeof EpisodesRoute
   SettingsRoute: typeof SettingsRoute
   EpisodeIdRoute: typeof EpisodeIdRoute
   PodcastIdRoute: typeof PodcastIdRoute
@@ -76,6 +92,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/episodes': {
+      id: '/episodes'
+      path: '/episodes'
+      fullPath: '/episodes'
+      preLoaderRoute: typeof EpisodesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -104,6 +127,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EpisodesRoute: EpisodesRoute,
   SettingsRoute: SettingsRoute,
   EpisodeIdRoute: EpisodeIdRoute,
   PodcastIdRoute: PodcastIdRoute,

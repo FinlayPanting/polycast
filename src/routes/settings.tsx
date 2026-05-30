@@ -24,7 +24,7 @@ const MAX_OPTIONS = [
 function SettingsScreen() {
   const { missing } = useSearch({ from: '/settings' })
   const [keys, setKeys] = useState<ApiKeys>({ openai: '', elevenlabs: '' })
-  const [prefs, setPrefs] = useState<Preferences>({ summaryMin: 60, summaryMax: 120 })
+  const [prefs, setPrefs] = useState<Preferences>({ summaryMin: 60, summaryMax: 120, defaultLanguage: 'Swedish' })
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
