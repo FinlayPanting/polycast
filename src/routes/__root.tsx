@@ -6,7 +6,7 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <div className="flex flex-col min-h-svh bg-[#0d0d0f]">
+    <div className="flex flex-col min-h-svh bg-[#13101f]">
       <main className="flex-1 pb-20">
         <Outlet />
       </main>
@@ -17,7 +17,7 @@ function RootLayout() {
 
 function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] h-16 bg-[#131315] border-t border-white/8 flex items-center px-2 z-50">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] h-16 bg-[#1c1930] border-t border-white/8 flex items-center px-2 z-50">
       <NavItem to="/" label="Home" icon={<HomeIcon />} />
       <NavItem to="/settings" label="Settings" icon={<SettingsIcon />} />
     </nav>
@@ -28,7 +28,7 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: React.R
   return (
     <Link
       to={to}
-      className="flex-1 flex flex-col items-center gap-1 py-2 text-zinc-500 [&.active]:text-amber-400 transition-colors"
+      className="flex-1 flex flex-col items-center gap-1 py-2 text-zinc-500 [&.active]:text-brand transition-colors"
       activeOptions={to === '/' ? { exact: true } : undefined}
     >
       {icon}

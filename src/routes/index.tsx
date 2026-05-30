@@ -15,7 +15,7 @@ function HomeScreen() {
     <div className="flex flex-col h-full">
       <header className="px-5 pt-12 pb-4">
         <h1 className="text-2xl font-bold text-white tracking-tight">Polycast</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Immersion with a safety net</p>
+        <p className="text-sm text-zinc-500 mt-0.5">Deep immersion without losing the thread</p>
       </header>
 
       <div className="flex border-b border-white/8 px-5">
@@ -36,7 +36,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       onClick={onClick}
       className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
         active
-          ? 'border-amber-400 text-amber-400'
+          ? 'border-brand text-brand'
           : 'border-transparent text-zinc-500 hover:text-zinc-300'
       }`}
     >
@@ -74,7 +74,7 @@ function FollowingTab() {
           <img
             src={p.artwork}
             alt={p.title}
-            className="w-full aspect-square rounded-xl object-cover shadow-lg group-hover:ring-2 ring-amber-400 transition-all"
+            className="w-full aspect-square rounded-xl object-cover shadow-lg group-hover:ring-2 ring-brand transition-all"
           />
           <span className="text-xs text-zinc-400 text-center line-clamp-2 leading-tight">{p.title}</span>
         </button>
@@ -113,12 +113,12 @@ function SearchTab() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && search()}
-          className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none focus:border-amber-400/50 transition-colors"
+          className="flex-1 bg-white/6 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none focus:border-brand/50 transition-colors"
         />
         <button
           onClick={search}
           disabled={loading}
-          className="px-4 py-3 bg-amber-400 text-black text-sm font-semibold rounded-xl disabled:opacity-50 transition-opacity"
+          className="px-4 py-3 bg-brand text-black text-sm font-semibold rounded-xl disabled:opacity-50 transition-opacity"
         >
           {loading ? '…' : 'Search'}
         </button>

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand: #f5a020;
+}
+
 @layer base {
   :root {
     color-scheme: dark;
@@ -8,7 +12,7 @@
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    background: #0d0d0f;
+    background: #13101f;
     color: #e5e7eb;
     font-family: system-ui, -apple-system, sans-serif;
     margin: 0;
