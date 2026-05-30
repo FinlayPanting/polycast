@@ -12,7 +12,7 @@ export const Route = createFileRoute('/podcast/$id')({
 
 const LANGUAGES = [
   'Swedish', 'Spanish', 'German', 'French', 'Italian', 'Portuguese',
-  'Dutch', 'Norwegian', 'Danish', 'Polish', 'Japanese', 'Mandarin', 'Korean',
+  'Dutch', 'Norwegian', 'Danish', 'Polish', 'Ukrainian', 'Japanese', 'Mandarin', 'Korean',
 ]
 
 const MIN_OPTIONS = [

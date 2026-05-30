@@ -145,7 +145,7 @@ function languageCode(name: string): string {
   const map: Record<string, string> = {
     Swedish: 'sv', Spanish: 'es', German: 'de', French: 'fr',
     Italian: 'it', Portuguese: 'pt', Dutch: 'nl', Norwegian: 'no',
-    Danish: 'da', Polish: 'pl', Japanese: 'ja', Mandarin: 'zh', Korean: 'ko',
+    Danish: 'da', Polish: 'pl', Ukrainian: 'uk', Japanese: 'ja', Mandarin: 'zh', Korean: 'ko',
   }
   return map[name] ?? 'sv'
 }
