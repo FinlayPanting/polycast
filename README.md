@@ -22,9 +22,9 @@ Polycast now appears on your home screen with its icon and runs fullscreen. You'
 
 ## Screenshots
 
-| Home | Episodes | Setup | Processing |
+| Home | Episodes | Download Options | Processing |
 |:---:|:---:|:---:|:---:|
-| ![Home](screenshots/home.png) | ![Episodes](screenshots/episodes.png) | ![Setup](screenshots/setup.png) | ![Processing](screenshots/processing.png) |
+| ![Home](screenshots/homescreen.png) | ![Episodes](screenshots/episodes.png) | ![Download Options](screenshots/download_options.png) | ![Processing](screenshots/download_processing.png) |
 
 | Player | Summary | Transcript | Settings |
 |:---:|:---:|:---:|:---:|
