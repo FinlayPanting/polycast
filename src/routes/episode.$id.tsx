@@ -469,10 +469,21 @@ function PlayerScreen({
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-zinc-600 uppercase tracking-wider">Summaries</p>
-            {nextSummaryIn !== null && (
-              <p className="text-xs font-mono text-brand">Next in {fmt(nextSummaryIn)}</p>
-            )}
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-zinc-600 uppercase tracking-wider">Summaries</p>
+              {nextSummaryIn !== null && (
+                <p className="text-xs font-mono text-brand">Next in {fmt(nextSummaryIn)}</p>
+              )}
+            </div>
+            {processed.transcriptLines?.length ? (
+              <button
+                onClick={() => setShowTranscript(true)}
+                className="flex items-center gap-1.5 text-zinc-500 hover:text-white transition-colors text-xs font-medium"
+              >
+                <TranscriptIcon />
+                Transcript
+              </button>
+            ) : null}
           </div>
           <div className="flex gap-1.5 flex-wrap">
             {processed.summaries.map((s, i) => (
@@ -504,15 +515,6 @@ function PlayerScreen({
           ))}
         </div>
 
-        {processed.transcriptLines?.length ? (
-          <button
-            onClick={() => setShowTranscript(true)}
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-all text-sm font-medium"
-          >
-            <TranscriptIcon />
-            View transcript
-          </button>
-        ) : null}
       </div>
 
       {summaryOverlay && <SummaryOverlay text={summaryOverlay.text} />}
