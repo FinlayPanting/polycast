@@ -127,7 +127,7 @@ function SetupScreen({
   }
 
   return (
-    <div className="flex flex-col px-5 pt-safe pb-8 gap-6">
+    <div className="flex flex-col px-5 pb-8 gap-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
       <button
         onClick={() => navigate({ to: '/podcast/$id', params: { id: String(podcast.collectionId) } })}
         className="flex items-center gap-1 text-amber-400 text-sm"
@@ -283,7 +283,7 @@ function ProcessingScreen({
   }, [])
 
   return (
-    <div className="flex flex-col px-5 pt-safe pb-8 gap-8">
+    <div className="flex flex-col px-5 pb-8 gap-8" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
       <div>
         <h1 className="text-xl font-bold text-white">Processing</h1>
         <p className="text-sm text-zinc-500 mt-1 line-clamp-1">{podcast.collectionName} — {episode.title}</p>
@@ -566,7 +566,7 @@ function TranscriptView({ lines, controls, onClose }: {
   return (
     <div className="flex flex-col h-svh bg-[#0d0d0f]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-safe pb-3 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
         <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Transcript</p>
         <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors p-1">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -651,7 +651,10 @@ function TranscriptView({ lines, controls, onClose }: {
 
 function SummaryOverlay({ text }: { text: string }) {
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-end z-40">
+    <div
+      className="fixed inset-0 bg-black/80 flex items-end z-40"
+      onTouchMove={(e) => e.stopPropagation()}
+    >
       <div className="w-full max-w-[480px] mx-auto bg-[#1a1a1c] rounded-t-3xl p-6 pb-10 max-h-[70vh] flex flex-col">
         <div className="flex items-center gap-2 mb-4 flex-shrink-0">
           <span className="bg-amber-400 text-black text-xs font-bold px-2.5 py-1 rounded-full">Summary</span>
@@ -662,7 +665,12 @@ function SummaryOverlay({ text }: { text: string }) {
             ))}
           </div>
         </div>
-        <p className="text-white text-base leading-relaxed overflow-y-auto">{text}</p>
+        <div
+          className="text-white text-base leading-relaxed overflow-y-auto flex-1 min-h-0"
+          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+        >
+          {text}
+        </div>
       </div>
     </div>
   )

@@ -14,7 +14,7 @@ const PROXIES = [
   (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
 ]
 
-export async function fetchFeed(feedUrl: string, signal?: AbortSignal): Promise<Episode[]> {
+async function attemptFetch(feedUrl: string, signal?: AbortSignal): Promise<Episode[]> {
   let lastErr: Error = new Error('All feed fetch attempts failed')
 
   // Try direct first (works if the RSS server sends CORS headers)
@@ -46,6 +46,24 @@ export async function fetchFeed(feedUrl: string, signal?: AbortSignal): Promise<
     }
   }
 
+  throw lastErr
+}
+
+export async function fetchFeed(feedUrl: string, signal?: AbortSignal): Promise<Episode[]> {
+  const MAX_RETRIES = 2
+  let lastErr: Error = new Error('All feed fetch attempts failed')
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await attemptFetch(feedUrl, signal)
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e
+      lastErr = e instanceof Error ? e : new Error(String(e))
+      if (attempt < MAX_RETRIES - 1) {
+        console.log('[polycast] rss retry', attempt + 1)
+        await new Promise((r) => setTimeout(r, 800))
+      }
+    }
+  }
   throw lastErr
 }
 
