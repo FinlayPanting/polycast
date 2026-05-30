@@ -13,9 +13,12 @@ function HomeScreen() {
 
   return (
     <div className="flex flex-col">
-      <header className="px-5 pb-4" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Polycast</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Deep immersion without losing the thread</p>
+      <header className="px-5 pb-4 flex items-center gap-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
+        <img src="/favicon.svg" alt="Polycast" className="w-10 h-10 flex-shrink-0" />
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Polycast</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Learn language through your favourite podcasts!</p>
+        </div>
       </header>
 
       <div className="flex border-b border-white/8 px-5">
