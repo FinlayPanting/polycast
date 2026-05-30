@@ -12,7 +12,7 @@ function HomeScreen() {
   const [tab, setTab] = useState<'following' | 'search'>('following')
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       <header className="px-5 pb-4" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
         <h1 className="text-2xl font-bold text-white tracking-tight">Polycast</h1>
         <p className="text-sm text-zinc-500 mt-0.5">Deep immersion without losing the thread</p>
@@ -23,7 +23,7 @@ function HomeScreen() {
         <TabBtn active={tab === 'search'} onClick={() => setTab('search')}>Search</TabBtn>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div>
         {tab === 'following' ? <FollowingTab /> : <SearchTab />}
       </div>
     </div>

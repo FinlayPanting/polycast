@@ -127,7 +127,7 @@ function SetupScreen({
   }
 
   return (
-    <div className="flex flex-col px-5 pb-8 gap-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
+    <div className="flex flex-col px-5 gap-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
       <button
         onClick={() => navigate({ to: '/podcast/$id', params: { id: String(podcast.collectionId) } })}
         className="flex items-center gap-1 text-brand text-sm"
@@ -283,7 +283,7 @@ function ProcessingScreen({
   }, [])
 
   return (
-    <div className="flex flex-col px-5 pb-8 gap-8" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
+    <div className="flex flex-col px-5 gap-8" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
       <div>
         <h1 className="text-xl font-bold text-white">Processing</h1>
         <p className="text-sm text-zinc-500 mt-1 line-clamp-1">{podcast.collectionName} — {episode.title}</p>
