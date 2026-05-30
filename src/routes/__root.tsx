@@ -6,8 +6,8 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <div className="flex flex-col flex-1 bg-[#13101f]">
-      <main className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'none' }}>
+    <div className="flex flex-col bg-[#13101f]" style={{ height: '100dvh' }}>
+      <main className="flex-1 overflow-y-auto min-h-0">
         <Outlet />
       </main>
       <BottomNav />
