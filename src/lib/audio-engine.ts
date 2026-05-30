@@ -40,8 +40,12 @@ export class AudioEngine {
     this.cb = cb
 
     // Set summaryPlayed synchronously so togglePlay() sees the correct state immediately.
-    // Use <= so a summary exactly at the resume position isn't replayed.
-    this.summaryPlayed = processed.summaries.map((s) => s.timestamp <= initialPosition)
+    // When resuming (initialPosition > 0), use <= so a summary at exactly the saved
+    // position is treated as already heard. When starting fresh (0), use < so the
+    // t=0 intro is not skipped.
+    this.summaryPlayed = processed.summaries.map((s) =>
+      initialPosition > 0 ? s.timestamp <= initialPosition : s.timestamp < initialPosition,
+    )
 
     this.summaryBlobUrls = processed.summaries.map((s) => {
       try {
@@ -78,16 +82,29 @@ export class AudioEngine {
     this.setupMediaSession(meta)
   }
 
-  // Uses a non-intro blob for priming so playSummary(0) always sets a fresh src.
-  // Uses muted (not volume=0) because iOS ignores JS volume control.
+  // Prime using a programmatically generated silent WAV so no audible content
+  // can ever leak — iOS ignores audio.volume=0 and muted can misbehave.
   private primeSummaryAudio() {
-    const url = this.summaryBlobUrls.slice(1).find((u) => u !== null) ?? this.summaryBlobUrls[0]
-    if (!url) return
-    this.summaryAudio.muted = true
+    const url = AudioEngine.silentWavUrl()
     this.summaryAudio.src = url
     this.summaryAudio.play()
-      .then(() => { this.summaryAudio.pause(); this.summaryAudio.muted = false; this.summaryAudioPrimed = true })
-      .catch(() => {})
+      .then(() => { this.summaryAudio.pause(); URL.revokeObjectURL(url); this.summaryAudioPrimed = true })
+      .catch(() => URL.revokeObjectURL(url))
+  }
+
+  private static silentWavUrl(): string {
+    const sr = 8000
+    const frames = sr / 5 // 200 ms — enough for iOS to register the play()
+    const data = frames * 2  // 16-bit mono
+    const buf = new ArrayBuffer(44 + data)
+    const dv = new DataView(buf)
+    const cc = (o: number, s: string) => { for (let i = 0; i < 4; i++) dv.setUint8(o + i, s.charCodeAt(i)) }
+    cc(0, 'RIFF'); dv.setUint32(4, 36 + data, true); cc(8, 'WAVE')
+    cc(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true)
+    dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true)
+    cc(36, 'data'); dv.setUint32(40, data, true)
+    // ArrayBuffer is zero-initialised → pure silence
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }))
   }
 
   private tick() {
