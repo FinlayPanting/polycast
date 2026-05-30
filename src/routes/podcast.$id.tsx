@@ -90,7 +90,7 @@ function PodcastScreen() {
   }
 
   return (
-    <div className="flex flex-col pb-24">
+    <div className="flex flex-col">
       {/* Artwork header */}
       <div className="relative">
         <button
