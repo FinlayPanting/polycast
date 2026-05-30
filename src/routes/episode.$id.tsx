@@ -432,7 +432,9 @@ function PlayerScreen({
           controls={controls}
           onClose={() => setShowTranscript(false)}
         />
-        {summaryOverlay && <SummaryOverlay text={summaryOverlay.text} />}
+        {summaryOverlay && (
+          <SummaryOverlay text={summaryOverlay.text} onSkip={() => engineRef.current?.skipSummary()} />
+        )}
       </>
     )
   }
@@ -517,7 +519,9 @@ function PlayerScreen({
 
       </div>
 
-      {summaryOverlay && <SummaryOverlay text={summaryOverlay.text} />}
+      {summaryOverlay && (
+        <SummaryOverlay text={summaryOverlay.text} onSkip={() => engineRef.current?.skipSummary()} />
+      )}
     </div>
   )
 }
@@ -661,21 +665,32 @@ function TranscriptView({ lines, controls, onClose }: {
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
-function SummaryOverlay({ text }: { text: string }) {
+function SummaryOverlay({ text, onSkip }: { text: string; onSkip: () => void }) {
   return (
     <div
       className="fixed inset-0 bg-black/80 flex items-end z-40"
       onTouchMove={(e) => e.stopPropagation()}
     >
       <div className="w-full max-w-[480px] mx-auto bg-[#242138] rounded-t-3xl p-6 pb-10 max-h-[70vh] flex flex-col">
-        <div className="flex items-center gap-2 mb-4 flex-shrink-0">
-          <span className="bg-brand text-black text-xs font-bold px-2.5 py-1 rounded-full">Summary</span>
-          <div className="flex gap-0.5 items-end h-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="w-0.5 bg-brand rounded-full animate-pulse"
-                style={{ height: `${8 + i * 4}px`, animationDelay: `${i * 100}ms` }} />
-            ))}
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="bg-brand text-black text-xs font-bold px-2.5 py-1 rounded-full">Summary</span>
+            <div className="flex gap-0.5 items-end h-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="w-0.5 bg-brand rounded-full animate-pulse"
+                  style={{ height: `${8 + i * 4}px`, animationDelay: `${i * 100}ms` }} />
+              ))}
+            </div>
           </div>
+          <button
+            onClick={onSkip}
+            className="flex items-center gap-1 text-zinc-400 hover:text-white transition-colors text-xs font-medium active:scale-95"
+          >
+            Skip
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
         <div
           className="text-white text-base leading-relaxed overflow-y-auto flex-1 min-h-0"

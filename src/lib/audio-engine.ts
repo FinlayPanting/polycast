@@ -254,6 +254,13 @@ export class AudioEngine {
     this.seek(Math.max(0, this.episodeAudio.currentTime + delta))
   }
 
+  skipSummary() {
+    if (!this.inSummary) return
+    // Don't set summaryInterrupted — episode resumes after summary is skipped
+    this.summaryAudio.pause()
+    this.summaryAudio.dispatchEvent(new Event('ended'))
+  }
+
   setSpeed(s: number) {
     this.episodeAudio.playbackRate = s
   }
