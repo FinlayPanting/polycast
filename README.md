@@ -22,15 +22,13 @@ Polycast now appears on your home screen with its icon and runs fullscreen. You'
 
 ## Screenshots
 
-| Home | Podcast | Download options |
-|---|---|---|
-| ![Home screen](screenshots/home.png) | ![Podcast episodes](screenshots/podcast.png) | ![Download options](screenshots/download-options.png) |
+| Home | Episodes | Setup | Processing |
+|:---:|:---:|:---:|:---:|
+| ![Home](screenshots/home.png) | ![Episodes](screenshots/episodes.png) | ![Setup](screenshots/setup.png) | ![Processing](screenshots/processing.png) |
 
-| Processing | Player | Transcript |
-|---|---|---|
-| ![Processing](screenshots/processing.png) | ![Player](screenshots/player.png) | ![Transcript](screenshots/transcript.png) |
-
-> Add your own screenshots to a `screenshots/` folder in the repo to populate the table above.
+| Player | Summary | Transcript | Settings |
+|:---:|:---:|:---:|:---:|
+| ![Player](screenshots/player.png) | ![Summary](screenshots/summary.png) | ![Transcript](screenshots/transcript.png) | ![Settings](screenshots/settings.png) |
 
 ---
 
