@@ -387,10 +387,11 @@ function PlayerScreen({
     }
     const engine = new AudioEngine(processed, meta, {
       onTimeUpdate: (t) => {
+        const prev = currentTimeRef.current
         setCurrentTime(t)
         currentTimeRef.current = t
-        // Save position every ~10 seconds
-        if (Math.floor(t / 10) > Math.floor(currentTimeRef.current / 10) || t === 0) {
+        // Save position every ~10 seconds (capture prev before updating ref)
+        if (t > 0 && Math.floor(t / 10) > Math.floor(prev / 10)) {
           localStorage.setItem(posKey, String(Math.floor(t)))
         }
         const upcoming = processed.summaries.find((s) => s.timestamp > t)

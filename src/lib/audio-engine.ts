@@ -39,8 +39,9 @@ export class AudioEngine {
     this.processed = processed
     this.cb = cb
 
-    // Set summaryPlayed synchronously so togglePlay() sees the correct state immediately
-    this.summaryPlayed = processed.summaries.map((s) => s.timestamp < initialPosition)
+    // Set summaryPlayed synchronously so togglePlay() sees the correct state immediately.
+    // Use <= so a summary exactly at the resume position isn't replayed.
+    this.summaryPlayed = processed.summaries.map((s) => s.timestamp <= initialPosition)
 
     this.summaryBlobUrls = processed.summaries.map((s) => {
       try {
@@ -77,14 +78,15 @@ export class AudioEngine {
     this.setupMediaSession(meta)
   }
 
-  // Uses a non-intro blob for priming so playSummary(0) always sets a fresh src
+  // Uses a non-intro blob for priming so playSummary(0) always sets a fresh src.
+  // Uses muted (not volume=0) because iOS ignores JS volume control.
   private primeSummaryAudio() {
     const url = this.summaryBlobUrls.slice(1).find((u) => u !== null) ?? this.summaryBlobUrls[0]
     if (!url) return
-    this.summaryAudio.volume = 0
+    this.summaryAudio.muted = true
     this.summaryAudio.src = url
     this.summaryAudio.play()
-      .then(() => { this.summaryAudio.pause(); this.summaryAudioPrimed = true })
+      .then(() => { this.summaryAudio.pause(); this.summaryAudio.muted = false; this.summaryAudioPrimed = true })
       .catch(() => {})
   }
 
@@ -129,6 +131,7 @@ export class AudioEngine {
     this.summaryAudio.src = this.summaryBlobUrls[idx]!
     this.summaryAudio.currentTime = 0
     this.summaryAudio.volume = 1
+    this.summaryAudio.muted = false
 
     try {
       await this.summaryAudio.play()
