@@ -74,12 +74,18 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
 export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal?: AbortSignal } = {}): Promise<void> {
   const poll = opts.pollMs ?? 3000
   while (!opts.signal?.aborted) {
-    const job = await claimNextJob(deps.sql)
-    if (!job) {
-      await new Promise((r) => setTimeout(r, poll))
-      continue
+    try {
+      const job = await claimNextJob(deps.sql)
+      if (!job) {
+        await new Promise((r) => setTimeout(r, poll))
+        continue
+      }
+      const outcome = await runJob(deps, job)
+      console.log(`job ${job.id} (${job.kind}) → ${outcome}`)
+    } catch (err) {
+      // A database hiccup (or a database not yet set up) must not take the API down with it.
+      console.error('worker: could not claim or run a job, retrying shortly', err instanceof Error ? err.message : err)
+      await new Promise((r) => setTimeout(r, Math.max(poll, 10_000)))
     }
-    const outcome = await runJob(deps, job)
-    console.log(`job ${job.id} (${job.kind}) → ${outcome}`)
   }
 }
