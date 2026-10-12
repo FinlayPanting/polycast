@@ -1,0 +1,8 @@
+# Railway deploys the server (API + preparation worker) from this repo.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "server/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"
