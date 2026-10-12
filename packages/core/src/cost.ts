@@ -4,9 +4,12 @@
 export const PRICES = {
   /** ElevenLabs Scribe v2, per second of audio ($0.22 an hour). */
   transcriptionPerSec: 0.22 / 3600,
-  /** Gemini Flash via batch, per token (2026 batch rates for 3.6 Flash). */
-  textInPerToken: 0.375 / 1e6,
-  textOutPerToken: 1.875 / 1e6,
+  /**
+   * Gemini 3.8 Flash at the standard rate, per token (2026 price; Google lists a rise on 1 Jan 2027).
+   * Not batch: batch targets up to 24 hours, too slow for a learner waiting on their episode.
+   */
+  textInPerToken: 0.75 / 1e6,
+  textOutPerToken: 3.75 / 1e6,
   /** Gemini 3.8 Flash TTS, per audio second of output (25 tokens a second at $9 per million). */
   ttsPerAudioSec: (25 * 9) / 1e6,
 } as const

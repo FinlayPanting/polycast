@@ -85,8 +85,18 @@ export interface GuideMoment {
   question?: Question
   /** Hands-on quick questions wait for an answer before the episode resumes. */
   waits?: boolean
-  /** Filled in once the guide audio exists. */
-  audio?: { url: string; durationSec: number }
+  /** Filled in once the guide audio exists: guide speech and host clips, played in order. */
+  audio?: MomentAudio
+}
+
+export type AudioPart =
+  | { kind: 'speech'; url: string; durationSec: number }
+  | { kind: 'clip'; clipIndex: number }
+
+export interface MomentAudio {
+  parts: AudioPart[]
+  /** Total length including host clips. */
+  durationSec: number
 }
 
 export interface Host {
@@ -102,4 +112,6 @@ export interface LessonPlan {
   hosts: Host[]
   summary: string
   moments: GuideMoment[]
+  /** Questions on the wrap-up screen; tap to answer, or later from a notification. */
+  wrapUpQuestions: Question[]
 }

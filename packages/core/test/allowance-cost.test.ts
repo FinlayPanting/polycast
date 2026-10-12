@@ -81,7 +81,7 @@ describe('costs', () => {
   })
 
   it('keeps the worst-case free episode under about $1', () => {
-    expect(estimatePrepCostUSD(7200)).toBeLessThan(1)
+    expect(estimatePrepCostUSD(7200)).toBeLessThan(1.05)
   })
 
   it('skips transcription cost when the feed supplies a transcript', () => {

@@ -84,3 +84,27 @@ describe('Podcast Index trending', () => {
     expect(t[0]).toEqual({ podcastIndexId: 7, title: 'Skämt', author: 'A', artwork: 'i.jpg', feedUrl: 'https://f', language: 'sv', categories: ['Comedy'] })
   })
 })
+
+import { buildSegments, wordsFromPodcastJson } from '../src'
+import { wordsFrom } from './fixtures'
+
+describe('subtitle lines', () => {
+  it('splits at sentence ends and speaker changes, and breaks up long sentences', () => {
+    const a = wordsFrom('Hej och välkommen. Idag pratar vi om tåg', 0, {}, 'A')
+    const b = wordsFrom('Ja precis', a.at(-1)!.end + 0.5, {}, 'B')
+    const segs = buildSegments([...a, ...b])
+    expect(segs.map((s) => s.text)).toEqual(['Hej och välkommen.', 'Idag pratar vi om tåg', 'Ja precis'])
+    expect(segs[2]!.speaker).toBe('B')
+    const long = buildSegments(wordsFrom('ett två tre fyra fem sex sju åtta nio tio'), { maxWords: 4 })
+    expect(long.map((s) => s.wordEnd - s.wordStart)).toEqual([4, 4, 2])
+  })
+})
+
+describe('publisher JSON transcripts', () => {
+  it('uses word-timed files and rejects sentence-level ones', () => {
+    const wordLevel = { segments: [{ startTime: 0, endTime: 0.4, body: 'Hej' }, { startTime: 0.5, endTime: 0.9, body: 'där' }] }
+    expect(wordsFromPodcastJson(wordLevel)).toHaveLength(2)
+    const sentenceLevel = { segments: [{ startTime: 0, endTime: 4, body: 'Hej där, hur mår du?' }] }
+    expect(wordsFromPodcastJson(sentenceLevel)).toBeUndefined()
+  })
+})
