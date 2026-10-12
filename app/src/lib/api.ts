@@ -1,5 +1,6 @@
 import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
+import { demoCall } from '../demo/api'
 import { supabase } from './supabase'
 
 export class ApiError extends Error {
@@ -13,6 +14,7 @@ export class ApiError extends Error {
 }
 
 async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  if (config.demo) return demoCall<T>(method, path)
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   const res = await fetch(`${config.apiUrl}${path}`, {

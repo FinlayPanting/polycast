@@ -7,19 +7,9 @@ import { api, refusalOf } from '../../lib/api'
 import { guideName } from '../../lib/languages'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
-import { supabase } from '../../lib/supabase'
+import { getEpisode } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
-
-interface EpisodeDetail {
-  id: string
-  title: string
-  duration_sec: number
-  image: string | null
-  status: 'none' | 'preparing' | 'ready' | 'failed'
-  difficulty: { label: string } | null
-  podcasts: { title: string; artwork: string | null }
-}
 
 const STAGES: Record<string, string> = {
   transcribing: 'Listening to the episode',
@@ -39,14 +29,12 @@ export default function Episode() {
   const [message, setMessage] = useState<{ text: string; upgrade?: boolean }>()
 
   const { data: ep, reload } = useAsync(async () => {
-    const { data, error } = await supabase.from('episodes').select('id, title, duration_sec, image, status, difficulty, podcasts(title, artwork)').eq('id', id).single()
-    if (error) throw new Error('We couldn’t load this episode.')
-    const { data: job } = await supabase.from('prep_jobs').select('id, stage').eq('episode_id', id).in('status', ['queued', 'running']).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (job) {
-      setJobId(job.id)
-      setStage(job.stage ?? undefined)
+    const { episode, activeJob } = await getEpisode(id)
+    if (activeJob) {
+      setJobId(activeJob.id)
+      setStage(activeJob.stage ?? undefined)
     }
-    return data as unknown as EpisodeDetail
+    return episode
   }, [id])
 
   // Follow a preparation until it's done.

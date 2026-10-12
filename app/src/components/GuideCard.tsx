@@ -69,7 +69,7 @@ export function GuideCard({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <Mark height={28} flagId={flagId} speaking={!q || answer === undefined} accessibilityLabel={`${guideName} is speaking`} />
         <View style={{ flex: 1 }}>
-          <Text style={[type.smallStrong, { color: p.guide }]}>{guideName}</Text>
+          <Text style={[type.smallStrong, { color: p.guideText }]}>{guideName}</Text>
           <Text style={[type.small, { color: p.quiet }]}>{KIND_LABEL[moment.kind]}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Skip and go back to the episode" onPress={onSkip} hitSlop={12} style={{ minHeight: 44, justifyContent: 'center' }}>
@@ -86,7 +86,7 @@ export function GuideCard({
 
       <Text style={[type.body, { color: p.text }]}>
         {scriptText(moment, clipText).map((part, i) => (
-          <Text key={i} style={part.spoken ? { color: p.saved, fontFamily: type.bodyStrong.fontFamily } : undefined}>
+          <Text key={i} style={part.spoken ? { color: p.savedText, fontFamily: type.bodyStrong.fontFamily } : undefined}>
             {part.text}
           </Text>
         ))}
@@ -109,7 +109,7 @@ export function GuideCard({
             )
           })}
           {answer ? (
-            <Text style={[type.bodyStrong, { color: answer.correct ? p.play : p.saved }]}>
+            <Text style={[type.bodyStrong, { color: answer.correct ? p.playText : p.savedText }]}>
               {answer.correct ? 'That’s right.' : `Not quite: it was “${q.options[q.answerIndex]}”.`}
             </Text>
           ) : null}

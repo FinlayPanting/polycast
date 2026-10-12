@@ -1,5 +1,7 @@
 import { newReview, nextReview, normalizeToken, type Clip, type ReviewState, type SavedWord } from '@polycast/core'
+import { config } from './config'
 import { supabase } from './supabase'
+import { DEMO_WORDS } from '../demo/session'
 
 interface Row {
   language: string
@@ -27,6 +29,7 @@ export async function saveWord(
   userId: string,
   w: { lemma: string; form: string; meaning: string; language: string; episodeId: string; clip: Clip; sentence: string },
 ): Promise<void> {
+  if (config.demo) return
   const lemma = normalizeToken(w.lemma, w.language) || w.lemma
   const form = normalizeToken(w.form, w.language)
   const { data: existing } = await supabase.from('saved_words').select('forms').eq('user_id', userId).eq('language', w.language).eq('lemma', lemma).maybeSingle()
@@ -50,6 +53,7 @@ export async function saveWord(
 }
 
 export async function listWords(language: string): Promise<(SavedWord & { audioUrl?: string })[]> {
+  if (config.demo) return DEMO_WORDS
   const { data } = await supabase
     .from('saved_words')
     .select('language, lemma, forms, meaning, episode_id, clip, sentence, review, created_at, episodes(audio_url)')
@@ -59,6 +63,7 @@ export async function listWords(language: string): Promise<(SavedWord & { audioU
 }
 
 export async function recordReview(userId: string, word: SavedWord, result: 'gotIt' | 'again'): Promise<void> {
+  if (config.demo) return
   const review = nextReview(word.review, result, new Date().toISOString())
   await supabase.from('saved_words').update({ review }).eq('user_id', userId).eq('language', word.language).eq('lemma', word.lemma)
 }

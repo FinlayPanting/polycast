@@ -1,4 +1,4 @@
-import { findOldFriends, normalizeToken, selectMoments, wordClip, type Clip, type GuideMoment } from '@polycast/core'
+import { findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -9,9 +9,11 @@ import { Scrubber } from '../../components/Scrubber'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
 import { Artwork, Button, Screen, Txt } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
+import { config } from '../../lib/config'
+import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName } from '../../lib/languages'
 import { useSession } from '../../lib/session'
-import { supabase } from '../../lib/supabase'
+import { resumePosition, savePosition } from '../../lib/data'
 import { listWords, saveWord } from '../../lib/words'
 import { expoGuideVoice } from '../../player/expoGuideVoice'
 import { GuidedListen, type ListenState } from '../../player/GuidedListen'
@@ -146,17 +148,16 @@ export default function Listen() {
         setData(d)
         const level = d.guidanceLevel ?? 'standard'
         const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
-        const { data: row } = await supabase.from('listens').select('position_sec, finished_at').eq('episode_id', id).maybeSingle()
-        const startAt = row && !row.finished_at && row.position_sec > 5 ? row.position_sec - 3 : 0
+        const startAt = await resumePosition(id)
 
         const l = new GuidedListen({
-          audio: trackPlayerAudio(),
-          voice: expoGuideVoice(),
+          audio: config.demo ? demoAudio(d.episode.durationSec) : trackPlayerAudio(),
+          voice: config.demo ? demoVoice() : expoGuideVoice(),
           moments,
           segments: d.transcript.segments,
           onChange: setState,
           onSavePosition: (sec) => {
-            if (session) void supabase.from('listens').update({ position_sec: sec, updated_at: new Date().toISOString() }).eq('user_id', session.user.id).eq('episode_id', id)
+            if (session) void savePosition(session.user.id, id, sec)
           },
         })
         listen.current = l
@@ -187,7 +188,7 @@ export default function Listen() {
 
   // Finished: mark the listen done.
   useEffect(() => {
-    if (state.phase === 'finished' && session) void supabase.from('listens').update({ finished_at: new Date().toISOString() }).eq('user_id', session.user.id).eq('episode_id', id)
+    if (state.phase === 'finished' && session) void savePosition(session.user.id, id, state.position, true)
   }, [state.phase, session, id])
 
   const markers = useMemo(() => (data?.plan && data.guided ? selectMoments(data.plan.moments, data.guidanceLevel ?? 'standard').map((m) => m.at) : []), [data])
@@ -232,7 +233,12 @@ export default function Listen() {
         </Txt>
       ) : null}
 
-      <View style={{ flex: 1, justifyContent: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
+        {segmentAt(data.transcript.segments, state.position) < 0 ? (
+          <View style={{ alignItems: 'center' }}>
+            <Artwork uri={data.episode.image} size={guideOn ? 168 : 260} radius={22} />
+          </View>
+        ) : null}
         <Subtitles
           segments={data.transcript.segments}
           words={data.transcript.words}

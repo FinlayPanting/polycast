@@ -56,7 +56,7 @@ export function Subtitles({
               key={index}
               onPress={() => onWord(index)}
               suppressHighlighting={false}
-              style={{ color: speaking ? p.play : friend ? p.saved : p.text, textDecorationLine: friend ? 'underline' : 'none', textDecorationColor: p.saved }}
+              style={{ color: speaking ? p.playText : friend ? p.savedText : p.text, textDecorationLine: friend ? 'underline' : 'none', textDecorationColor: p.saved }}
             >
               {w.text}
               {k < lineWords.length - 1 ? ' ' : ''}

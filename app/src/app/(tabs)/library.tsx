@@ -3,29 +3,14 @@ import { router } from 'expo-router'
 import { useCallback } from 'react'
 import { FlatList, RefreshControl, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt, minutes } from '../../components/ui'
-import { supabase } from '../../lib/supabase'
+import { listListens } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
-
-interface ListenRow {
-  episode_id: string
-  position_sec: number
-  finished_at: string | null
-  updated_at: string
-  episodes: { title: string; duration_sec: number; image: string | null; podcasts: { title: string; artwork: string | null } }
-}
 
 /** Episodes started or finished, most recent first, with where the learner left off. */
 export default function Library() {
   const p = usePalette()
-  const { data, loading, reload } = useAsync(async () => {
-    const { data } = await supabase
-      .from('listens')
-      .select('episode_id, position_sec, finished_at, updated_at, episodes(title, duration_sec, image, podcasts(title, artwork))')
-      .order('updated_at', { ascending: false })
-      .limit(100)
-    return (data ?? []) as unknown as ListenRow[]
-  }, [])
+  const { data, loading, reload } = useAsync(listListens, [])
   useFocusEffect(useCallback(() => void reload(), [reload]))
 
   return (

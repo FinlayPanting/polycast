@@ -81,7 +81,7 @@ export default function Review() {
           ) : null}
           {word.audioUrl ? <Button kind="secondary" label="Hear it again" onPress={() => void play(word.audioUrl!, word.source.clip.start, word.source.clip.end)} style={{ alignSelf: 'flex-start' }} /> : null}
           {revealed ? (
-            <Txt variant="heading" style={{ color: p.saved }}>
+            <Txt variant="heading" style={{ color: p.savedText }}>
               {word.meaning}
             </Txt>
           ) : null}

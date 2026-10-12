@@ -1,0 +1,19 @@
+import { LISTEN, SHELVES, art } from './fixtures'
+
+/** Answers the app's API calls with sample data in demo mode. */
+export async function demoCall<T>(method: string, path: string): Promise<T> {
+  await new Promise((r) => setTimeout(r, 120))
+  if (path.startsWith('/v1/discover/')) return { shelves: SHELVES } as T
+  if (path.startsWith('/v1/episodes/') && path.endsWith('/listen')) return LISTEN as T
+  if (path === '/v1/podcasts/open')
+    return {
+      podcast: { id: 'p1', title: 'Svenska Samtal', author: 'Anna & Erik', artwork: art.samtal, language: 'sv' },
+      episodes: [
+        { id: 'ep1', title: 'Tåget till Göteborg', published: '2026-10-05T06:00:00Z', duration_sec: 1440, image: null, status: 'ready', difficulty: { label: 'A2–B1, relaxed pace' } },
+        { id: 'ep6', title: 'Vi bakar kanelbullar', published: '2026-09-28T06:00:00Z', duration_sec: 1920, image: null, status: 'none', difficulty: null },
+        { id: 'ep7', title: 'Allemansrätten', published: '2026-09-21T06:00:00Z', duration_sec: 2280, image: null, status: 'ready', difficulty: { label: 'B1–B2, natural pace' } },
+      ],
+    } as T
+  if (path.startsWith('/v1/search')) return { results: [] } as T
+  throw new Error(`Demo has no answer for ${method} ${path}`)
+}

@@ -6,7 +6,21 @@ import { useColorScheme } from 'react-native'
  * meaning: orange is play and progress, magenta only appears when the guide speaks, coral marks saved
  * words, violet marks levels.
  */
-type Base = { bg: string; raised: string; sunken: string; line: string; text: string; quiet: string; faint: string; onAccent: string }
+type Base = {
+  bg: string
+  raised: string
+  sunken: string
+  line: string
+  text: string
+  quiet: string
+  faint: string
+  onAccent: string
+  /** Brand colours adjusted so text in them meets WCAG AA (4.5:1) on this background. */
+  playText: string
+  guideText: string
+  savedText: string
+  levelText: string
+}
 
 const dark: Base = {
   bg: BRAND.ink,
@@ -15,8 +29,12 @@ const dark: Base = {
   line: '#2A2A31',
   text: '#EDEBE7',
   quiet: '#9A98A3',
-  faint: '#5E5C66',
+  faint: '#86848F',
   onAccent: BRAND.ink,
+  playText: BRAND.orange,
+  guideText: '#EE6FB8',
+  savedText: '#FC8A7A',
+  levelText: '#B3A7DD',
 }
 
 const light: Base = {
@@ -26,8 +44,12 @@ const light: Base = {
   line: '#DEDEE4',
   text: '#16151A',
   quiet: '#6A6873',
-  faint: '#A9A6AF',
+  faint: '#6E6B76',
   onAccent: BRAND.ink,
+  playText: '#A35400',
+  guideText: '#B0207A',
+  savedText: '#C23A27',
+  levelText: '#5E4E91',
 }
 
 export const accents = {

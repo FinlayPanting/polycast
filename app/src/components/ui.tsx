@@ -1,16 +1,19 @@
 import * as Haptics from 'expo-haptics'
 import { Image } from 'expo-image'
 import type { ReactNode } from 'react'
-import { ActivityIndicator, Pressable, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native'
+import { ActivityIndicator, Image as RNImage, Pressable, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { MIN_TAP, space, type, usePalette } from '../theme'
 
 type Variant = keyof typeof type
 type Tone = 'text' | 'quiet' | 'faint' | 'play' | 'guide' | 'saved' | 'level' | 'onAccent'
 
+const TEXT_TONE = { play: 'playText', guide: 'guideText', saved: 'savedText', level: 'levelText' } as const
+
 export function Txt({ variant = 'body', tone = 'text', style, ...rest }: TextProps & { variant?: Variant; tone?: Tone; style?: StyleProp<TextStyle> }) {
   const p = usePalette()
-  return <Text {...rest} style={[type[variant], { color: p[tone] }, style]} maxFontSizeMultiplier={1.6} />
+  const colour = tone in TEXT_TONE ? p[TEXT_TONE[tone as keyof typeof TEXT_TONE]] : p[tone as 'text']
+  return <Text {...rest} style={[type[variant], { color: colour }, style]} maxFontSizeMultiplier={1.6} />
 }
 
 export function Screen({ children, style, edges = ['top'] }: { children?: ReactNode; style?: StyleProp<ViewStyle>; edges?: ('top' | 'bottom')[] }) {
@@ -92,15 +95,19 @@ export function Row({ children, onPress, accessibilityLabel }: { children: React
   )
 }
 
-export function Artwork({ uri, size, radius = 10 }: { uri?: string | null; size: number; radius?: number }) {
+/** Show artwork from a URL (or, in demo mode, a bundled image). */
+export function Artwork({ uri, size, radius = 10 }: { uri?: string | number | null; size: number; radius?: number }) {
   const p = usePalette()
+  if (uri !== null && uri !== undefined && typeof uri !== 'string') {
+    return <RNImage source={uri as any} style={{ width: size, height: size, borderRadius: radius, backgroundColor: p.raised }} />
+  }
   return <Image source={uri ? { uri } : undefined} style={{ width: size, height: size, borderRadius: radius, backgroundColor: p.raised }} contentFit="cover" transition={150} accessibilityIgnoresInvertColors />
 }
 
 /** A small rounded label, e.g. "Ready" or a level. */
 export function Tag({ label, tone }: { label: string; tone: 'play' | 'level' | 'saved' | 'quiet' }) {
   const p = usePalette()
-  const colour = tone === 'quiet' ? p.quiet : p[tone]
+  const colour = tone === 'quiet' ? p.quiet : p[TEXT_TONE[tone]]
   return (
     <View style={{ borderRadius: 999, borderWidth: 1, borderColor: colour, paddingHorizontal: 8, paddingVertical: 2 }}>
       <Text style={[type.smallStrong, { color: colour, fontSize: 12, lineHeight: 16 }]}>{label}</Text>

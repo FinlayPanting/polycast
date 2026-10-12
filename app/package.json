@@ -1,7 +1,7 @@
 {
   "name": "@polycast/app",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "index",
   "dependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",
     "@polycast/core": "workspace:*",
@@ -13,6 +13,7 @@
     "expo-audio": "~57.0.5",
     "expo-constants": "~57.0.21",
     "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.20",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
@@ -26,6 +27,7 @@
     "expo-symbols": "~57.0.3",
     "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-purchases": "^10.12.2",
@@ -34,6 +36,7 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-track-player": "4.1.2",
+    "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
@@ -46,7 +49,8 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "preview:web": "EXPO_PUBLIC_DEMO=1 expo export --platform web --output-dir dist-preview"
   },
   "private": true
 }

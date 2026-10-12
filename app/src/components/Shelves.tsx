@@ -46,9 +46,9 @@ export function EpisodeCard({ e }: { e: ShelfEpisode }) {
       accessibilityRole="button"
       accessibilityLabel={`${e.title}, ${e.podcastTitle}, ${minutes(e.durationSec)}, ready now`}
       onPress={() => router.push(`/episode/${e.episodeId}`)}
-      style={({ pressed }) => ({ width: 260, gap: space.sm, opacity: pressed ? 0.75 : 1 })}
+      style={({ pressed }) => ({ width: 208, gap: space.sm, opacity: pressed ? 0.75 : 1 })}
     >
-      <Artwork uri={e.image} size={260} radius={16} />
+      <Artwork uri={e.image} size={208} radius={16} />
       <Txt variant="bodyStrong" numberOfLines={2}>
         {e.title}
       </Txt>

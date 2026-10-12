@@ -2,7 +2,9 @@ import type { Session } from '@supabase/supabase-js'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import * as Crypto from 'expo-crypto'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { config } from './config'
 import { supabase } from './supabase'
+import { DEMO_PROFILE, DEMO_SESSION } from '../demo/session'
 
 export interface Profile {
   id: string
@@ -47,6 +49,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (config.demo) {
+      if (!config.demoSignedOut) {
+        setSession(DEMO_SESSION)
+        setProfile(DEMO_PROFILE)
+      }
+      setReady(true)
+      return
+    }
     supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session)
       await loadProfile(data.session)
@@ -66,6 +76,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       profile,
       refreshProfile: () => loadProfile(session),
       async updatePrefs(prefs) {
+        if (config.demo) return setProfile((p) => (p ? { ...p, ...prefs } : p))
         if (!session) return
         setProfile((p) => (p ? { ...p, ...prefs } : p)) // feels instant; the server copy follows
         const { error } = await supabase.from('profiles').update(prefs).eq('id', session.user.id)
