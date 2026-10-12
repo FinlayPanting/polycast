@@ -19,3 +19,4 @@ Newest first. Each line: date, decision, why. Finlay can overrule any of these.
 - 2026-10-12: Lesson plans: the AI drafts content against subtitle-line ids; Polycast's own code places every moment on a natural break, cuts the host clips, sets levels by spacing, and drops anything it can't place. The AI never chooses timestamps.
 - 2026-10-12: May's web app moved to `legacy-web/` on the `rebuild-ios` branch; `main` and the live Vercel site are untouched until launch.
 - 2026-10-12: Open spec decisions defaulted while building: creators can ask for removal (no opt-in programme at launch); design direction as written in the spec; keep the name Polycast.
+- 2026-10-12: Name checked against rivals (PolyCast: Podcast Translator, Sep 2026; US filing POLYCAST BY UT, Mar 2026) and confirmed by Finlay: stay Polycast. Store name "Polycast: Learn with Podcasts". Domain polycast.app once it drops (about 18 Oct); getpolycast.app as fallback. Analysis in the spec's Naming tab.
