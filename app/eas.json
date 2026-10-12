@@ -1,9 +1,39 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
-  "build": {
-    "development": { "developmentClient": true, "distribution": "internal", "ios": { "simulator": false } },
-    "preview": { "distribution": "internal", "env": { "EXPO_PUBLIC_DEMO": "0" } },
-    "production": { "autoIncrement": true }
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
-  "submit": { "production": { "ios": {} } }
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "extends": "base"
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DEMO": "0"
+      },
+      "extends": "base"
+    },
+    "production": {
+      "autoIncrement": true,
+      "extends": "base"
+    },
+    "base": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://polycast-production.up.railway.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://usfdvpivogjtmrbwopzg.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_AoGtiBtbd9z_xFnR8SX-6Q_WQPA2xTI"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
+    }
+  }
 }
