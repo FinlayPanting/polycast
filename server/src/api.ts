@@ -103,7 +103,8 @@ export function createApi(deps: ApiDeps) {
   app.post('/v1/podcasts/open', async (c) => {
     const body = await c.req.json()
     let feedUrl: string | undefined = body.feedUrl
-    let apple = body.appleId ? await lookupApple(deps.fetch, String(body.appleId)) : undefined
+    if (!feedUrl && body.podcastId) feedUrl = (await sql`select feed_url from podcasts where id = ${body.podcastId}`)[0]?.feed_url
+    const apple = body.appleId ? await lookupApple(deps.fetch, String(body.appleId)) : undefined
     feedUrl ??= apple?.feedUrl
     if (!feedUrl) return c.json({ error: 'We couldn’t find this show’s feed.' }, 404)
     const [known] = await sql`select id, removed from podcasts where feed_url = ${feedUrl}`

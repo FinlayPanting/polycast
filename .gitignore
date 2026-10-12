@@ -28,3 +28,6 @@ dist-ssr
 !.env.example
 coverage
 prepared
+
+# App build output
+app/dist

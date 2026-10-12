@@ -13,7 +13,7 @@ export function Txt({ variant = 'body', tone = 'text', style, ...rest }: TextPro
   return <Text {...rest} style={[type[variant], { color: p[tone] }, style]} maxFontSizeMultiplier={1.6} />
 }
 
-export function Screen({ children, style, edges = ['top'] }: { children: ReactNode; style?: StyleProp<ViewStyle>; edges?: ('top' | 'bottom')[] }) {
+export function Screen({ children, style, edges = ['top'] }: { children?: ReactNode; style?: StyleProp<ViewStyle>; edges?: ('top' | 'bottom')[] }) {
   const p = usePalette()
   return (
     <SafeAreaView edges={edges} style={[{ flex: 1, backgroundColor: p.bg }, style]}>

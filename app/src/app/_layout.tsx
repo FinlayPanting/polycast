@@ -1,0 +1,70 @@
+import { Figtree_400Regular } from '@expo-google-fonts/figtree/400Regular'
+import { Figtree_500Medium } from '@expo-google-fonts/figtree/500Medium'
+import { Figtree_600SemiBold } from '@expo-google-fonts/figtree/600SemiBold'
+import { Figtree_700Bold } from '@expo-google-fonts/figtree/700Bold'
+import { useFonts } from 'expo-font'
+import { Stack } from 'expo-router'
+import * as SplashScreen from 'expo-splash-screen'
+import { StatusBar } from 'expo-status-bar'
+import { useEffect } from 'react'
+import { useColorScheme } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { configurePurchases } from '../lib/purchases'
+import { SessionProvider, useSession } from '../lib/session'
+import { usePalette } from '../theme'
+
+void SplashScreen.preventAutoHideAsync()
+
+function Routes() {
+  const { ready, session, profile } = useSession()
+  const p = usePalette()
+  const signedIn = Boolean(session)
+  const onboarded = Boolean(profile?.target_language)
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync()
+  }, [ready])
+  useEffect(() => {
+    if (session) configurePurchases(session.user.id)
+  }, [session])
+
+  if (!ready) return null
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
+      <Stack.Protected guard={!signedIn}>
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="email" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && !onboarded}>
+        <Stack.Screen name="onboarding/language" />
+        <Stack.Screen name="onboarding/guidance" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && onboarded}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="search" />
+        <Stack.Screen name="show" />
+        <Stack.Screen name="episode/[id]" />
+        <Stack.Screen name="listen/[id]" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="review" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="plus" options={{ presentation: 'modal' }} />
+      </Stack.Protected>
+    </Stack>
+  )
+}
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({ Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold })
+  const scheme = useColorScheme()
+  if (!fontsLoaded) return null
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <SessionProvider>
+          <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+          <Routes />
+        </SessionProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  )
+}

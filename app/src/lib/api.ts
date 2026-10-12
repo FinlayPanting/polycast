@@ -1,4 +1,4 @@
-import type { Difficulty, LessonPlan, PodcastSummary, Refusal, Segment, Word } from '@polycast/core'
+import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
 import { supabase } from './supabase'
 
@@ -63,7 +63,7 @@ export type PrepareResult =
 
 export interface ListenPayload {
   episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number }
-  transcript: { language: string; segments: Segment[]; words: Word[] }
+  transcript: { language: string; segments: Segment[]; words: Word[]; glossary?: Record<string, GlossEntry> }
   guided: boolean
   guidanceLevel: 'light' | 'standard' | 'handsOn' | null
   plan: LessonPlan | null
@@ -72,7 +72,7 @@ export interface ListenPayload {
 export const api = {
   discover: (language: string) => call<{ shelves: Shelf[] }>('GET', `/v1/discover/${language}`),
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
-  openShow: (show: { appleId?: string; feedUrl?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show),
+  openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show),
   prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
   listen: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, { guide }),
