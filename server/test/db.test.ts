@@ -1,0 +1,237 @@
+/**
+ * Runs against a real Postgres when PG_TEST_URL points at an empty server, e.g.
+ *   PG_TEST_URL=postgres://postgres@localhost:54329/postgres?host=/tmp
+ * Each run creates and drops its own database.
+ */
+import { randomUUID } from 'node:crypto'
+import type postgres from 'postgres'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import {
+  claimNextJob,
+  completePreparation,
+  failJob,
+  freeEpisodesClaimed,
+  pgSpendLedger,
+  requestPreparation,
+  startListen,
+  type Sql,
+} from '../src/db'
+import { freshDatabase, PG_TEST_URL } from './pg'
+
+const run = PG_TEST_URL ? describe : describe.skip
+
+run('database', () => {
+  let sql: Sql
+  let drop: () => Promise<void>
+
+  beforeAll(async () => {
+    ;({ sql, drop } = await freshDatabase())
+  })
+
+  afterAll(async () => {
+    await drop?.()
+  })
+
+  beforeEach(async () => {
+    await sql`truncate prep_jobs, spend_ledger, listens, saved_words, lesson_plans, transcripts, episodes, podcasts cascade`
+    await sql`update settings set value = '100' where key = 'free_cohort_size'`
+    await sql`update settings set value = '10' where key = 'daily_cap_usd'`
+  })
+
+  async function learner(): Promise<string> {
+    const id = randomUUID()
+    await sql`insert into auth.users (id) values (${id})`
+    return id
+  }
+
+  async function episode(durationSec = 1800): Promise<string> {
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values (${`https://f/${randomUUID()}`}, 'Svenska Samtal', 'sv') returning id`
+    const [e] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language)
+                          values (${p!.id}, ${randomUUID()}, 'Tåget', ${durationSec}, 'https://cdn/a.mp3', 'sv') returning id`
+    return e!.id as string
+  }
+
+  /** Runs queries as a signed-in learner, with row-level security on. */
+  function asLearner<T>(userId: string, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
+    return sql.begin(async (tx) => {
+      await tx`set local role authenticated`
+      await tx`select set_config('request.jwt.claim.sub', ${userId}, true)`
+      return fn(tx)
+    }) as Promise<T>
+  }
+
+  const fakeResult = (episodeId: string, guideId = 'mia') => ({
+    transcript: { language: 'sv', source: 'scribe' as const, words: [{ text: 'Hej', start: 0, end: 0.4 }], segments: [] },
+    plan: { episodeId, version: 1, targetLanguage: 'sv', nativeLanguage: 'en', hosts: [], summary: '', moments: [], wrapUpQuestions: [] },
+    difficulty: { wpm: 150, band: 'moderate' as const, label: 'B1–B2, natural pace' },
+    usage: { transcriptionSec: 1800, textInTokens: 1000, textOutTokens: 500, ttsAudioSec: 300 },
+    guideId,
+  })
+
+  describe('accounts', () => {
+    it('numbers learners in sign-up order', async () => {
+      const a = await learner()
+      const b = await learner()
+      const [ra] = await sql`select signup_rank from profiles where id = ${a}`
+      const [rb] = await sql`select signup_rank from profiles where id = ${b}`
+      expect(Number(rb!.signup_rank)).toBe(Number(ra!.signup_rank) + 1)
+    })
+  })
+
+  describe('row-level security', () => {
+    it('lets a learner change their own preferences but not their plan or allowances', async () => {
+      const a = await learner()
+      await asLearner(a, (tx) => tx`update profiles set guide_id = 'leo' where id = ${a}`)
+      const [p] = await sql`select guide_id from profiles where id = ${a}`
+      expect(p!.guide_id).toBe('leo')
+      await expect(asLearner(a, (tx) => tx`update profiles set plan = 'plus' where id = ${a}`)).rejects.toThrow(/permission denied/)
+      await expect(asLearner(a, (tx) => tx`update profiles set free_episode_used = false where id = ${a}`)).rejects.toThrow(/permission denied/)
+    })
+
+    it("keeps each learner's profile, words and listens private", async () => {
+      const a = await learner()
+      const b = await learner()
+      const ep = await episode()
+      await sql`insert into saved_words (user_id, language, lemma, meaning, clip, review) values (${b}, 'sv', 'fika', 'coffee break', '{}', '{}')`
+      const words = await asLearner(a, (tx) => tx`select * from saved_words`)
+      const profiles = await asLearner(a, (tx) => tx`select id from profiles`)
+      expect(words).toHaveLength(0)
+      expect(profiles.map((r) => r.id)).toEqual([a])
+      await expect(asLearner(a, (tx) => tx`insert into saved_words (user_id, language, lemma, meaning, clip, review) values (${b}, 'sv', 'x', 'x', '{}', '{}')`)).rejects.toThrow(/row-level security/)
+      await asLearner(a, (tx) => tx`insert into listens (user_id, episode_id) values (${a}, ${ep})`)
+    })
+
+    it('lets learners read the catalogue but never write it, and hides removed shows', async () => {
+      const a = await learner()
+      const ep = await episode()
+      expect(await asLearner(a, (tx) => tx`select id from episodes`)).toHaveLength(1)
+      await expect(asLearner(a, (tx) => tx`update episodes set status = 'ready' where id = ${ep}`)).rejects.toThrow(/permission denied/)
+      await sql`update podcasts set removed = true`
+      expect(await asLearner(a, (tx) => tx`select id from episodes`)).toHaveLength(0)
+    })
+
+    it('keeps settings and spending away from learners', async () => {
+      const a = await learner()
+      await expect(asLearner(a, (tx) => tx`select * from settings`)).rejects.toThrow(/permission denied/)
+      await expect(asLearner(a, (tx) => tx`select * from spend_ledger`)).rejects.toThrow(/permission denied/)
+    })
+  })
+
+  describe('requesting episodes', () => {
+    it('spends the free episode once, and only once even with two taps at the same moment', async () => {
+      const a = await learner()
+      const [e1, e2] = [await episode(), await episode()]
+      const results = await Promise.all([requestPreparation(sql, a, e1, 'mia'), requestPreparation(sql, a, e2, 'mia')])
+      expect(results.map((r) => r.status).sort()).toEqual(['queued', 'refused'])
+      expect(results.find((r) => r.status === 'refused')).toEqual({ status: 'refused', reason: 'free-used' })
+      expect(await freeEpisodesClaimed(sql)).toBe(1)
+    })
+
+    it('lets a second learner join an episode already being prepared, at no charge', async () => {
+      const [a, b] = [await learner(), await learner()]
+      const ep = await episode()
+      const first = await requestPreparation(sql, a, ep, 'mia')
+      const second = await requestPreparation(sql, b, ep, 'mia')
+      expect(second).toEqual({ status: 'queued', jobId: (first as any).jobId, charge: 'none' })
+      const [pb] = await sql`select free_episode_used from profiles where id = ${b}`
+      expect(pb!.free_episode_used).toBe(false)
+    })
+
+    it('closes the free episode after the cohort, until Finlay raises it', async () => {
+      await sql`update settings set value = '0' where key = 'free_cohort_size'`
+      const a = await learner()
+      const ep = await episode()
+      expect(await requestPreparation(sql, a, ep, 'mia')).toEqual({ status: 'refused', reason: 'free-closed' })
+      await sql`update settings set value = '100000' where key = 'free_cohort_size'`
+      expect((await requestPreparation(sql, a, ep, 'mia')).status).toBe('queued')
+    })
+
+    it('refuses episodes over 2 hours on the free episode', async () => {
+      const a = await learner()
+      expect(await requestPreparation(sql, a, await episode(7201), 'mia')).toEqual({ status: 'refused', reason: 'too-long' })
+    })
+
+    it('counts Plus hours and pauses everyone at the daily cap', async () => {
+      const a = await learner()
+      await sql`update profiles set plan = 'plus', plus_period_start = now(), plus_used_sec = ${4.5 * 3600} where id = ${a}`
+      expect(await requestPreparation(sql, a, await episode(3600), 'mia')).toEqual({ status: 'refused', reason: 'plus-limit' })
+      expect((await requestPreparation(sql, a, await episode(600), 'mia')).status).toBe('queued')
+
+      await pgSpendLedger(sql).reserve('other', 10)
+      const b = await learner()
+      expect(await requestPreparation(sql, b, await episode(), 'mia')).toEqual({ status: 'refused', reason: 'service-paused' })
+    })
+
+    it('resets Plus hours when a new month of the subscription starts', async () => {
+      const a = await learner()
+      await sql`update profiles set plan = 'plus', plus_period_start = now() - interval '32 days', plus_used_sec = ${5 * 3600} where id = ${a}`
+      expect((await requestPreparation(sql, a, await episode(3600), 'mia')).status).toBe('queued')
+      const [p] = await sql`select plus_used_sec from profiles where id = ${a}`
+      expect(p!.plus_used_sec).toBe(3600)
+    })
+  })
+
+  describe('the worker', () => {
+    it('hands each queued job to exactly one worker', async () => {
+      const [a, b] = [await learner(), await learner()]
+      await requestPreparation(sql, a, await episode(), 'mia')
+      await requestPreparation(sql, b, await episode(), 'mia')
+      const claims = await Promise.all([claimNextJob(sql), claimNextJob(sql), claimNextJob(sql)])
+      const ids = claims.filter(Boolean).map((c) => c!.id)
+      expect(ids).toHaveLength(2)
+      expect(new Set(ids).size).toBe(2)
+    })
+
+    it('marks an episode ready, then serves it free and voices it again for the other guide', async () => {
+      const [a, b] = [await learner(), await learner()]
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      const job = (await claimNextJob(sql))!
+      await completePreparation(sql, job.id, fakeResult(ep))
+      const [e] = await sql`select status, difficulty from episodes where id = ${ep}`
+      expect(e!.status).toBe('ready')
+      expect(await requestPreparation(sql, b, ep, 'mia')).toEqual({ status: 'ready' })
+      const leo = await requestPreparation(sql, b, ep, 'leo')
+      expect(leo).toMatchObject({ status: 'queued', charge: 'none' })
+      const [pb] = await sql`select free_episode_used from profiles where id = ${b}`
+      expect(pb!.free_episode_used).toBe(false)
+    })
+
+    it('retries a failed job, then gives the learner their free episode back', async () => {
+      const a = await learner()
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      for (let i = 1; i <= 3; i++) {
+        const job = (await claimNextJob(sql))!
+        expect(job.attempts).toBe(i)
+        expect(await failJob(sql, job.id, 'Gemini returned 503', true)).toBe(i < 3 ? 'retrying' : 'failed')
+      }
+      const [p] = await sql`select free_episode_used from profiles where id = ${a}`
+      const [e] = await sql`select status from episodes where id = ${ep}`
+      expect(p!.free_episode_used).toBe(false)
+      expect(e!.status).toBe('none')
+    })
+  })
+
+  describe('the guide on free listens', () => {
+    it('gives a free learner one guided episode a week, and keeps it guided on replay', async () => {
+      const a = await learner()
+      const [e1, e2] = [await episode(), await episode()]
+      expect(await startListen(sql, a, e1, 'standard')).toEqual({ guided: true })
+      expect(await startListen(sql, a, e2, 'standard')).toEqual({ guided: false })
+      expect(await startListen(sql, a, e1, 'standard')).toEqual({ guided: true })
+      expect(await startListen(sql, a, e2, null)).toEqual({ guided: false })
+    })
+  })
+
+  describe('spending ledger', () => {
+    it('totals today, and settles a reservation to the real cost', async () => {
+      const ledger = pgSpendLedger(sql)
+      await ledger.reserve('j1', 0.5)
+      await ledger.reserve('j2', 0.25)
+      expect(await ledger.todayUSD()).toBeCloseTo(0.75, 4)
+      await ledger.settle('j1', { transcriptionSec: 3600, textInTokens: 0, textOutTokens: 0, ttsAudioSec: 0 })
+      expect(await ledger.todayUSD()).toBeCloseTo(0.47, 4)
+    })
+  })
+})

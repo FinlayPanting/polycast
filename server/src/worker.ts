@@ -1,0 +1,85 @@
+import { costUSD, wordsFromPodcastJson, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
+import { SpendCapReached, SpendGuard } from './budget'
+import { claimNextJob, completePreparation, failJob, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
+import { EmptyTranscript, prepareEpisode, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
+import { ProviderError } from './providers/types'
+import { guideById } from './voices'
+
+export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
+  sql: Sql
+  fetch: typeof fetch
+  /** Tells the learner their episode is ready (Expo push). */
+  notifyReady?: (userId: string, episodeTitle: string, episodeId: string) => Promise<void>
+  alert?: (kind: string, message: string) => Promise<void>
+}
+
+async function guard(deps: WorkerDeps): Promise<SpendGuard> {
+  const cap = Number(await getSetting(deps.sql, 'daily_cap_usd', 10))
+  return new SpendGuard(pgSpendLedger(deps.sql), cap, (c) => deps.alert?.('spend-cap', `Daily spending cap of $${c} reached; new episodes paused until tomorrow (UTC).`))
+}
+
+/** Looks for a word-timed transcript in the episode's feed, so transcription can be skipped. */
+async function feedWordsFor(deps: WorkerDeps, feedUrl: string, guid: string, language: string) {
+  try {
+    const feed = parseFeed(await (await deps.fetch(feedUrl)).text())
+    const link = pickTimedTranscript(feed.episodes.find((e) => e.guid === guid)?.transcripts ?? [], language)
+    if (!link?.type.includes('json')) return undefined
+    return wordsFromPodcastJson(await (await deps.fetch(link.url)).json())
+  } catch {
+    return undefined
+  }
+}
+
+export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' | 'retrying' | 'failed'> {
+  const { sql } = deps
+  const [ep] = await sql`select e.*, p.feed_url from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${job.episodeId}`
+  const guide = guideById(job.guideId)
+  try {
+    const g = await guard(deps)
+    if (job.kind === 'voice') {
+      const [row] = await sql`select plan from lesson_plans where episode_id = ${job.episodeId} limit 1`
+      const { plan, usage } = await voiceForGuide(job.id, row!.plan as LessonPlan, guide, ep!.duration_sec, { ...deps, guard: g })
+      await sql`insert into lesson_plans (episode_id, guide_id, version, plan) values (${job.episodeId}, ${guide.id}, ${plan.version}, ${sql.json(plan as any)})
+                on conflict (episode_id, guide_id) do update set plan = excluded.plan`
+      await sql`update prep_jobs set status = 'done', finished_at = now(), cost_usd = ${costUSD(usage)} where id = ${job.id}`
+      return 'done'
+    }
+    const [requester] = await sql`select native_language from profiles p join prep_jobs j on j.requested_by = p.id where j.id = ${job.id}`
+    const result = await prepareEpisode(
+      {
+        jobId: job.id,
+        episodeId: job.episodeId,
+        audioUrl: ep!.audio_url,
+        durationSec: ep!.duration_sec,
+        language: ep!.language,
+        nativeLanguage: requester?.native_language ?? 'en',
+        guide,
+        feedWords: await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
+      },
+      { ...deps, guard: g, onStage: (s) => setJobStage(sql, job.id, s) },
+    )
+    await completePreparation(sql, job.id, { ...result, guideId: guide.id })
+    // Everyone waiting on this episode hears it's ready.
+    const waiting = await sql`select distinct requested_by from prep_jobs where episode_id = ${job.episodeId} and requested_by is not null`
+    for (const w of waiting) await deps.notifyReady?.(w.requested_by, ep!.title, job.episodeId).catch(() => {})
+    return 'done'
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    const retryable = e instanceof ProviderError ? e.retryable : !(e instanceof EmptyTranscript || e instanceof SpendCapReached)
+    return failJob(sql, job.id, message, retryable)
+  }
+}
+
+/** Runs queued jobs until stopped, polling when the queue is empty. */
+export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal?: AbortSignal } = {}): Promise<void> {
+  const poll = opts.pollMs ?? 3000
+  while (!opts.signal?.aborted) {
+    const job = await claimNextJob(deps.sql)
+    if (!job) {
+      await new Promise((r) => setTimeout(r, poll))
+      continue
+    }
+    const outcome = await runJob(deps, job)
+    console.log(`job ${job.id} (${job.kind}) → ${outcome}`)
+  }
+}

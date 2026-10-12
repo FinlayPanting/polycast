@@ -2,6 +2,10 @@
 
 Newest first. Each line: date, decision, why. Finlay can overrule any of these.
 
+- 2026-10-12: The server is one Node process (API + worker) on a small host, because guide audio needs ffmpeg, which Supabase Edge Functions can't run. Supabase provides the database, sign-in and file storage.
+- 2026-10-12: Failed jobs retry up to 3 times; after that the learner gets their free episode or Plus hours back. Hitting the daily cap fails the job without retrying, and also refunds.
+- 2026-10-12: Alerts for Finlay (50/90/100 free episodes, spending cap, removal requests) go to a webhook such as a private ntfy.sh topic, so they reach his phone with no extra account.
+
 - 2026-10-12: Learner-requested episodes use Gemini at the standard rate, not batch: batch targets up to 24 hours, breaking "ready in under 5 minutes". Batch is fine for pre-preparing the starter shelf. Cost per hour of new audio is about $0.51 (2-hour free episode about $1.01).
 - 2026-10-12: Each episode is voiced once for the guide of whoever first prepares it. A learner who picks a different guide triggers a voice-only pass (about $0.20 an hour), charged to the service rather than their allowance, and cached for everyone after. It still counts against the daily spending cap.
 - 2026-10-12: Starting voices: Mia = Gemini "Sulafat" (warm), Leo = Gemini "Achird" (friendly). For Finlay to audition and change in server/src/voices.ts.
