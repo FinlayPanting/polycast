@@ -20,6 +20,13 @@ Build progress and milestones: `docs/BUILD_PLAN.md`.
 - `pnpm install`
 - `pnpm check` — typecheck and test every package. Run before every commit.
 - `pnpm --filter @polycast/core test`
+- `source scripts/test-db.sh` first, so the server's database tests run instead of being skipped.
+
+## Board and releases
+
+- The Polycast Board (https://claude.ai/artifact/97Y4qqcc9rja8Z8MRYMjRw, read and written with the ArtifactData tool) is the list of work: collection `items` (status suggested, next, building, backlog, shipped, dismissed) and `settings/main`. Build only what Finlay marked `next` or asked for in chat; set `building` while working and `shipped` (with a one-line `shippedNote`) when pushed.
+- Live: the server deploys automatically from `rebuild-ios` to Railway (https://polycast-production.up.railway.app). Push only after `pnpm check` passes with the test database running. Database changes go in a new numbered migration in `server/supabase/migrations`; never edit an applied one. A new migration must be applied in the Supabase SQL editor before or with the push, so flag it to Finlay.
+- App changes reach phones only through a new TestFlight build.
 
 ## Rules
 
