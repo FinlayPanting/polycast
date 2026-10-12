@@ -2,6 +2,11 @@
 
 Newest first. Each line: date, decision, why. Finlay can overrule any of these.
 
+- 2026-10-12: Tap-a-word meanings are prepared with the episode as a glossary (one AI pass over every distinct word, about $0.06 an hour), because nothing may be generated during a listen. New-audio cost is now about $0.57 an hour; the worst-case 2-hour free episode about $1.14, so 100 free episodes cost at most about $115.
+- 2026-10-12: Sign-in at launch: Sign in with Apple and a 6-digit email code. Google sign-in is left out; it would also oblige Apple sign-in anyway, and adds a setup step for little gain on iPhone.
+- 2026-10-12: Episode audio plays through react-native-track-player (background play, lock screen, headphone presses as events); guide speech through expo-audio. Both sit behind small interfaces in app/src/player, so either can be swapped if device testing shows a problem.
+- 2026-10-12: The guide speaks over a paused episode (faded out, then paused), never over the host. Host clips play from the episode itself, then it seeks back to exactly where it paused.
+
 - 2026-10-12: The server is one Node process (API + worker) on a small host, because guide audio needs ffmpeg, which Supabase Edge Functions can't run. Supabase provides the database, sign-in and file storage.
 - 2026-10-12: Failed jobs retry up to 3 times; after that the learner gets their free episode or Plus hours back. Hitting the daily cap fails the job without retrying, and also refunds.
 - 2026-10-12: Alerts for Finlay (50/90/100 free episodes, spending cap, removal requests) go to a webhook such as a private ntfy.sh topic, so they reach his phone with no extra account.

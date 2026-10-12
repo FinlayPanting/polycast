@@ -34,6 +34,13 @@ export interface Transcript {
   source: 'scribe' | 'feed'
   words: Word[]
   segments: Segment[]
+  /** Tap-a-word meanings, prepared with the episode: normalised word form → dictionary form and meaning. */
+  glossary?: Record<string, GlossEntry>
+}
+
+export interface GlossEntry {
+  lemma: string
+  meaning: string
 }
 
 /** A stretch of the episode's own audio, used to let the host say a word. */

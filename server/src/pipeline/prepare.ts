@@ -14,6 +14,7 @@ import { withRetry } from '../retry'
 import type { SpeechSynth, Storage, TextModel, Transcriber } from '../providers/types'
 import type { Guide } from '../voices'
 import { assemblePlan, writePlanDraft } from './lessonPlan'
+import { buildGlossary } from './glossary'
 import { translateSegments } from './translate'
 import { voicePlan } from './voice'
 
@@ -79,6 +80,7 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
     await deps.onStage?.('translating')
     const segments = await translateSegments(buildSegments(words), input.language, input.nativeLanguage, deps.text, meter)
     const transcript: Transcript = { language: input.language, source: input.feedWords ? 'feed' : 'scribe', words, segments }
+    transcript.glossary = await buildGlossary(transcript, input.nativeLanguage, deps.text, meter)
 
     await deps.onStage?.('writing')
     const draft = await writePlanDraft(transcript, input.nativeLanguage, input.durationSec, deps.text, meter)

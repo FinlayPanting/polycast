@@ -243,3 +243,5 @@ create table alerts (
   created_at timestamptz not null default now()
 );
 alter table alerts enable row level security;
+
+alter table transcripts add column glossary jsonb not null default '{}';

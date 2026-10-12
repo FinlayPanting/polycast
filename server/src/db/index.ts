@@ -158,10 +158,10 @@ export async function completePreparation(
     const episodeId = job!.episode_id as string
     if (result.transcript.words.length > 0) {
       await tx`
-        insert into transcripts (episode_id, language, native_language, source, words, segments)
+        insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
         values (${episodeId}, ${result.transcript.language}, ${result.plan.nativeLanguage}, ${result.transcript.source},
-                ${tx.json(result.transcript.words as any)}, ${tx.json(result.transcript.segments as any)})
-        on conflict (episode_id) do update set words = excluded.words, segments = excluded.segments, source = excluded.source`
+                ${tx.json(result.transcript.words as any)}, ${tx.json(result.transcript.segments as any)}, ${tx.json((result.transcript.glossary ?? {}) as any)})
+        on conflict (episode_id) do update set words = excluded.words, segments = excluded.segments, source = excluded.source, glossary = excluded.glossary`
     }
     await tx`
       insert into lesson_plans (episode_id, guide_id, version, plan)

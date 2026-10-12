@@ -83,6 +83,13 @@ export function createApi(deps: ApiDeps) {
     await next()
   })
 
+  /** Deletes the learner's account and everything tied to it (spec: Privacy; App Store requirement). */
+  app.delete('/v1/account', async (c) => {
+    // Profiles, saved words and listens cascade from the auth user. Shared catalogue data stays.
+    await sql`delete from auth.users where id = ${c.get('userId')}`
+    return c.json({ ok: true })
+  })
+
   app.get('/v1/discover/:language', async (c) => c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex) }))
 
   app.get('/v1/search', async (c) => {
@@ -145,7 +152,7 @@ export function createApi(deps: ApiDeps) {
     if (!episode) return c.json({ error: 'Not found' }, 404)
     if (episode.status !== 'ready') return c.json({ error: 'This episode isn’t ready yet.', status: episode.status }, 409)
     const { guided } = await startListen(sql, userId, episodeId, level)
-    const [transcript] = await sql`select language, segments, words from transcripts where episode_id = ${episodeId}`
+    const [transcript] = await sql`select language, segments, words, glossary from transcripts where episode_id = ${episodeId}`
     const [plan] = guided
       ? await sql`select plan from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
       : []

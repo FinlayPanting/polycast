@@ -74,14 +74,14 @@ describe('cohort alerts', () => {
 })
 
 describe('costs', () => {
-  it('estimates about $0.50 for an hour of new audio, matching the spec', () => {
+  it('estimates under $0.60 for an hour of new audio, including the glossary', () => {
     const c = estimatePrepCostUSD(3600)
-    expect(c).toBeGreaterThan(0.4)
-    expect(c).toBeLessThan(0.55)
+    expect(c).toBeGreaterThan(0.5)
+    expect(c).toBeLessThan(0.6)
   })
 
-  it('keeps the worst-case free episode under about $1', () => {
-    expect(estimatePrepCostUSD(7200)).toBeLessThan(1.05)
+  it('keeps the worst-case 2-hour free episode under $1.20', () => {
+    expect(estimatePrepCostUSD(7200)).toBeLessThan(1.2)
   })
 
   it('skips transcription cost when the feed supplies a transcript', () => {

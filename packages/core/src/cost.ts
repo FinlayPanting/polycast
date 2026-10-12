@@ -49,8 +49,9 @@ export function estimatePrepUsage(durationSec: number, opts: { feedTranscript?: 
   const hours = durationSec / 3600
   return {
     transcriptionSec: opts.feedTranscript ? 0 : durationSec,
-    textInTokens: Math.round(30_000 * hours),
-    textOutTokens: Math.round(16_000 * hours),
+    // Translation, lesson plan and glossary.
+    textInTokens: Math.round(45_000 * hours),
+    textOutTokens: Math.round(30_000 * hours),
     ttsAudioSec: durationSec * GUIDE_SPEECH_RATIO,
   }
 }

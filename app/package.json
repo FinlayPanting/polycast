@@ -1,7 +1,7 @@
 {
   "name": "@polycast/app",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",
     "@polycast/core": "workspace:*",
@@ -12,6 +12,7 @@
     "expo-apple-authentication": "~57.0.2",
     "expo-audio": "~57.0.5",
     "expo-constants": "~57.0.21",
+    "expo-crypto": "~57.0.4",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",

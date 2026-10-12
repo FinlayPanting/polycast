@@ -16,6 +16,10 @@ function textModel() {
       const ids = [...req.prompt.matchAll(/^(s\d+): /gm)].map((m) => m[1]!)
       return { lines: ids.map((id) => ({ id, translation: `EN ${id}` })) }
     }
+    if (req.prompt.startsWith('form | example')) {
+      const forms = req.prompt.split('\n').slice(1).map((l) => l.split(' | ')[0]!)
+      return { entries: forms.map((form) => ({ form, lemma: form, meaning: `means ${form}` })) }
+    }
     return draftFor()
   })
 }
@@ -53,6 +57,8 @@ describe('preparing an episode', () => {
     expect(stages).toEqual(['transcribing', 'translating', 'writing', 'voicing', 'done'])
     expect(r.transcript.segments).toHaveLength(60)
     expect(r.transcript.segments.every((s) => s.translation?.startsWith('EN '))).toBe(true)
+    expect(r.transcript.glossary?.['försenad']).toEqual({ lemma: 'försenad', meaning: 'means försenad' })
+    expect(r.transcript.glossary?.['grej']).toBeDefined() // punctuation stripped from "grej."
 
     const kinds = r.plan.moments.map((m) => m.kind)
     expect(kinds[0]).toBe('warmup')

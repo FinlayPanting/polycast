@@ -55,7 +55,11 @@ run('API and worker', () => {
       fetch: fakeFetch,
       transcriber: mockTranscriber(ep.words),
       text: mockText((req) =>
-        req.prompt.includes('Translate these lines') ? { lines: [...req.prompt.matchAll(/^(s\d+): /gm)].map((m) => ({ id: m[1], translation: 'EN' })) } : draftFor(),
+        req.prompt.includes('Translate these lines')
+          ? { lines: [...req.prompt.matchAll(/^(s\d+): /gm)].map((m) => ({ id: m[1], translation: 'EN' })) }
+          : req.prompt.startsWith('form | example')
+            ? { entries: [] }
+            : draftFor(),
       ),
       speech: mockSpeech(),
       storage: memoryStorage(),
@@ -138,6 +142,17 @@ run('API and worker', () => {
       body: JSON.stringify({ event: { type: 'INITIAL_PURCHASE', app_user_id: lea } }),
     })
     expect(forged.status).toBe(401)
+  })
+
+  it('deletes a learner’s account and their words and listens, but keeps the shared catalogue', async () => {
+    const gone = await learner()
+    const [ep] = await sql`select id from episodes where status = 'ready' limit 1`
+    await sql`insert into saved_words (user_id, language, lemma, meaning, clip, review) values (${gone}, 'sv', 'fika', 'coffee break', '{}', '{}')`
+    await sql`insert into listens (user_id, episode_id) values (${gone}, ${ep!.id})`
+    expect((await call(gone, 'DELETE', '/v1/account')).status).toBe(200)
+    expect(await sql`select 1 from profiles where id = ${gone}`).toHaveLength(0)
+    expect(await sql`select 1 from saved_words where user_id = ${gone}`).toHaveLength(0)
+    expect(await sql`select 1 from episodes where id = ${ep!.id}`).toHaveLength(1)
   })
 
   it('accepts a creator’s removal request without an account, and alerts Finlay', async () => {
