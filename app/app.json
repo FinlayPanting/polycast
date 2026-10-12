@@ -1,0 +1,152 @@
+{
+  "expo": {
+    "name": "Polycast",
+    "slug": "polycast",
+    "scheme": "polycast",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.finlaypanting.polycast",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.finlaypanting.polycast",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0D0D0F"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "color": "#FF9C18"
+        }
+      ],
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#0D0D0F"
+        }
+      ],
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "FlagSE",
+            "ios": "./assets/icons/flag-se.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-se.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagDE",
+            "ios": "./assets/icons/flag-de.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-de.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagAT",
+            "ios": "./assets/icons/flag-at.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-at.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagFR",
+            "ios": "./assets/icons/flag-fr.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-fr.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagIT",
+            "ios": "./assets/icons/flag-it.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-it.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagES",
+            "ios": "./assets/icons/flag-es.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-es.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagMX",
+            "ios": "./assets/icons/flag-mx.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-mx.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagPT",
+            "ios": "./assets/icons/flag-pt.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-pt.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagBR",
+            "ios": "./assets/icons/flag-br.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-br.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagGB",
+            "ios": "./assets/icons/flag-gb.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-gb.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          },
+          {
+            "name": "FlagUS",
+            "ios": "./assets/icons/flag-us.png",
+            "android": {
+              "foregroundImage": "./assets/icons/flag-us.png",
+              "backgroundColor": "#0D0D0F"
+            }
+          }
+        ]
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

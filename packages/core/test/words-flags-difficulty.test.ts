@@ -64,7 +64,7 @@ describe('flags', () => {
   })
 
   it('maps flags to iOS alternate icon names, with the brand mark as the default icon', () => {
-    expect(alternateIconName('se')).toBe('flag-se')
+    expect(alternateIconName('se')).toBe('FlagSE')
     expect(alternateIconName(DEFAULT_MARK.id)).toBeNull()
   })
 })

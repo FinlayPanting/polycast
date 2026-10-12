@@ -68,5 +68,5 @@ export function needsOutline(hex: string, background = BRAND.ink): boolean {
 
 /** iOS alternate app icon name for a flag, as declared in the app config. */
 export function alternateIconName(flagId: string): string | null {
-  return flagId === DEFAULT_MARK.id ? null : `flag-${flagId}`
+  return flagId === DEFAULT_MARK.id ? null : `Flag${flagId.toUpperCase()}`
 }
