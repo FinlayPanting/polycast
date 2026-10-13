@@ -78,5 +78,20 @@ EOF
 
 step "Building and opening Polycast in the simulator (the first build takes 5 to 15 minutes)"
 echo "Leave this window open while you test: it serves the app. Press Ctrl+C to stop."
+# Pick an iPhone simulator explicitly, so a plugged-in iPhone isn't chosen
+# (building for a real phone needs a signing certificate).
+SIM=$(xcrun simctl list devices available -j | node -e '
+  const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices
+  const ios = Object.keys(d).filter((k) => k.includes("iOS")).sort((a, b) =>
+    b.localeCompare(a, undefined, { numeric: true }))
+  for (const r of ios) {
+    const phones = d[r].filter((x) => x.name.startsWith("iPhone"))
+    const pick = phones.find((x) => / Pro$/.test(x.name)) || phones[0]
+    if (pick) { console.log(pick.udid); break }
+  }')
+[ -n "$SIM" ] || stop "No iPhone simulator found. Open Xcode > Settings > Components, install iOS, then run this again."
+echo "Using simulator: $(xcrun simctl list devices | grep "$SIM" | sed -E 's/ \(.*//;s/^ +//')"
+xcrun simctl boot "$SIM" 2>/dev/null || true
+open -a Simulator
 cd app
-npx expo run:ios
+npx expo run:ios --device "$SIM"
