@@ -1,6 +1,6 @@
 import { costUSD, wordsFromPodcastJson, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
 import { SpendCapReached, SpendGuard } from './budget'
-import { claimNextJob, completePreparation, failJob, reclaimStaleJobs, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
+import { claimNextJob, completePreparation, failJob, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
 import { EmptyTranscript, prepareEpisode, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
 import { ProviderError } from './providers/types'
 import { guideById } from './voices'
@@ -45,6 +45,8 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
       return 'done'
     }
     const [requester] = await sql`select native_language from profiles p join prep_jobs j on j.requested_by = p.id where j.id = ${job.id}`
+    const nativeLanguage: string = requester?.native_language ?? 'en'
+    const saved = await savedTranscript(sql, job.episodeId, nativeLanguage)
     const result = await prepareEpisode(
       {
         jobId: job.id,
@@ -52,11 +54,17 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
         audioUrl: ep!.audio_url,
         durationSec: ep!.duration_sec,
         language: ep!.language,
-        nativeLanguage: requester?.native_language ?? 'en',
+        nativeLanguage,
         guide,
-        feedWords: await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
+        feedWords: saved ? undefined : await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
+        savedTranscript: saved,
       },
-      { ...deps, guard: g, onStage: (s) => setJobStage(sql, job.id, s) },
+      {
+        ...deps,
+        guard: g,
+        onStage: (s) => setJobStage(sql, job.id, s),
+        saveTranscript: (t) => saveTranscript(sql, job.episodeId, nativeLanguage, t),
+      },
     )
     await completePreparation(sql, job.id, { ...result, guideId: guide.id })
     // Everyone waiting on this episode hears it's ready.

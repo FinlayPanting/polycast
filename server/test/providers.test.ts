@@ -3,7 +3,7 @@ import { ffmpegAacEncoder, silentWav, wavDurationSec } from '../src/audio'
 import { wordsFromScribe, scribeTranscriber } from '../src/providers/elevenlabs'
 import { geminiSpeech, geminiText, readInteraction, readTokenUsage } from '../src/providers/gemini'
 import { ProviderError } from '../src/providers/types'
-import { mapLimit, withRetry } from '../src/retry'
+import { mapLimit, perMinute, retryAfterMs, withRetry } from '../src/retry'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
@@ -116,6 +116,36 @@ describe('retries', () => {
     let n = 0
     await expect(withRetry(async () => { n++; throw new ProviderError('bad', false, 400) }, { sleep: async () => {} })).rejects.toThrow('bad')
     expect(n).toBe(1)
+  })
+
+  it('waits as long as a rate-limited provider asks, and keeps trying longer', async () => {
+    const delays: number[] = []
+    let n = 0
+    const limited = () => new ProviderError('Gemini TTS returned 429: Rate limit exceeded. Please retry in 38s or upgrade.', true, 429)
+    const r = await withRetry(
+      async () => {
+        if (++n < 6) throw limited()
+        return 'ok'
+      },
+      { sleep: async (ms) => void delays.push(ms) },
+    )
+    expect(r).toBe('ok')
+    expect(n).toBe(6) // beyond the usual 4 tries
+    expect(delays.every((d) => d >= 38_000 && d <= 91_000)).toBe(true)
+    expect(retryAfterMs(limited())).toBe(38_000)
+  })
+
+  it('paces calls to a per-minute limit across all callers', async () => {
+    let now = 0
+    const clock = { now: () => now, sleep: async (ms: number) => void (now += ms) }
+    const startedAt: number[] = []
+    const call = perMinute(async (x: number) => (startedAt.push(now), x), 3, clock)
+    const out = await Promise.all([1, 2, 3, 4, 5, 6, 7].map((x) => call(x)))
+    expect(out).toEqual([1, 2, 3, 4, 5, 6, 7])
+    // At most 3 starts in any rolling minute.
+    for (const t of startedAt) expect(startedAt.filter((u) => u >= t && u < t + 60_000).length).toBeLessThanOrEqual(3)
+    expect(startedAt.slice(0, 3)).toEqual([0, 0, 0])
+    expect(startedAt[3]).toBeGreaterThanOrEqual(60_000)
   })
 
   it('limits concurrency and keeps order', async () => {

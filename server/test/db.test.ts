@@ -13,6 +13,8 @@ import {
   freeEpisodesClaimed,
   reclaimStaleJobs,
   releaseJob,
+  saveTranscript,
+  savedTranscript,
   pgSpendLedger,
   requestPreparation,
   startListen,
@@ -222,6 +224,15 @@ run('database', () => {
       const again = (await claimNextJob(sql))!
       expect(again.id).toBe(job.id)
       expect(again.attempts).toBe(1)
+    })
+
+    it('keeps a transcript for a retry, but only for the same translation language', async () => {
+      const ep = await episode()
+      const t = { language: 'sv', source: 'scribe' as const, words: [{ text: 'hej', start: 0, end: 0.4 }], segments: [], glossary: {} }
+      expect(await savedTranscript(sql, ep, 'en')).toBeUndefined()
+      await saveTranscript(sql, ep, 'en', t as any)
+      expect((await savedTranscript(sql, ep, 'en'))?.words).toEqual(t.words)
+      expect(await savedTranscript(sql, ep, 'de')).toBeUndefined()
     })
 
     it('picks up a job a dead server left running, and gives up after the last attempt', async () => {

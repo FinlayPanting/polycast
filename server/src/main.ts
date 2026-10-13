@@ -10,6 +10,7 @@ import { scribeTranscriber } from './providers/elevenlabs'
 import { geminiSpeech, geminiText } from './providers/gemini'
 import type { Storage } from './providers/types'
 import { Agent, setGlobalDispatcher } from 'undici'
+import { perMinute } from './retry'
 import { jobInProgress, workLoop } from './worker'
 
 // Node's fetch gives up if a reply takes over 5 minutes to start. Transcribing a long episode
@@ -58,6 +59,11 @@ function expoPush(sqlLookup: (userId: string) => Promise<string | undefined>) {
   }
 }
 
+/** Gemini's speech model allows 10 requests a minute on Tier 1; stay just under it. */
+function pacedSpeech<S extends { synthesize: (...a: any[]) => Promise<any> }>(speech: S, rpm: number): S {
+  return { ...speech, synthesize: perMinute(speech.synthesize.bind(speech), rpm) }
+}
+
 async function main() {
   const sql = connect(need('DATABASE_URL'))
   const supabaseUrl = need('SUPABASE_URL')
@@ -77,7 +83,7 @@ async function main() {
       fetch,
       transcriber: scribeTranscriber(need('ELEVENLABS_API_KEY')),
       text: geminiText(gemini),
-      speech: geminiSpeech(gemini, ffmpegAacEncoder()),
+      speech: pacedSpeech(geminiSpeech(gemini, ffmpegAacEncoder()), Number(process.env.GEMINI_TTS_RPM ?? 9)),
       storage: supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY')),
       alert,
       notifyReady: expoPush(async (id) => (await sql`select push_token from profiles where id = ${id}`)[0]?.push_token ?? undefined),

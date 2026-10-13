@@ -134,6 +134,28 @@ describe('preparing an episode', () => {
   })
 })
 
+describe('resuming a retried episode', () => {
+  it('keeps the transcript as soon as it exists, and a retry skips straight to writing', async () => {
+    const d = deps()
+    let saved: Parameters<NonNullable<Parameters<typeof prepareEpisode>[1]['saveTranscript']>>[0] | undefined
+    let voiceCalls = 0
+    const failingSpeech = { ...d.speech, synthesize: async () => { voiceCalls++; throw new ProviderError('voice is down', false, 400) } }
+    await expect(prepareEpisode(input(d.ep), { ...d, speech: failingSpeech, saveTranscript: async (t) => void (saved = t) })).rejects.toThrow('voice is down')
+    expect(voiceCalls).toBeGreaterThan(0)
+    expect(saved?.segments).toHaveLength(60)
+
+    const stages: string[] = []
+    let transcribed = 0
+    const transcriber = { transcribe: async (...a: Parameters<typeof d.transcriber.transcribe>) => (transcribed++, d.transcriber.transcribe(...a)) }
+    const r = await prepareEpisode({ ...input(d.ep), savedTranscript: saved }, { ...d, transcriber, onStage: (s) => void stages.push(s) })
+    expect(transcribed).toBe(0)
+    expect(stages).toEqual(['writing', 'voicing', 'done'])
+    expect(r.usage.transcriptionSec).toBe(0)
+    expect(r.transcript.segments).toHaveLength(60)
+    expect(r.plan.moments.length).toBeGreaterThan(0)
+  })
+})
+
 describe('assembling a plan', () => {
   it('keeps word-moment pairs together when one half fails validation', () => {
     const ep = syntheticEpisode()

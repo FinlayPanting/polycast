@@ -196,6 +196,22 @@ export async function failJob(sql: Sql, jobId: string, error: string, retryable:
   })
 }
 
+/** Keeps a finished transcript as soon as it exists, so a retried job can skip transcribing and translating. */
+export async function saveTranscript(sql: Sql, episodeId: string, nativeLanguage: string, t: Transcript): Promise<void> {
+  await sql`
+    insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
+    values (${episodeId}, ${t.language}, ${nativeLanguage}, ${t.source}, ${sql.json(t.words as any)}, ${sql.json(t.segments as any)}, ${sql.json((t.glossary ?? {}) as any)})
+    on conflict (episode_id) do update set language = excluded.language, native_language = excluded.native_language,
+      source = excluded.source, words = excluded.words, segments = excluded.segments, glossary = excluded.glossary`
+}
+
+/** A transcript saved earlier for this episode, translated into the same language, if there is one. */
+export async function savedTranscript(sql: Sql, episodeId: string, nativeLanguage: string): Promise<Transcript | undefined> {
+  const [row] = await sql`select language, source, words, segments, glossary from transcripts where episode_id = ${episodeId} and native_language = ${nativeLanguage}`
+  if (!row || !(row.words as unknown[]).length) return undefined
+  return { language: row.language, source: row.source, words: row.words, segments: row.segments, glossary: row.glossary } as Transcript
+}
+
 /**
  * Puts a job the worker was running back in the queue without counting the attempt: used when
  * the server shuts down mid-job (every deploy does this), so the next server picks it up.

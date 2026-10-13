@@ -31,6 +31,8 @@ export interface PrepareInput {
   guide: Guide
   /** Word-timed words from the publisher's own transcript, when it has one. */
   feedWords?: Word[]
+  /** A transcript (with subtitles and glossary) saved by an earlier attempt, so a retry skips straight to writing. */
+  savedTranscript?: Transcript
 }
 
 export interface PrepareDeps {
@@ -40,6 +42,8 @@ export interface PrepareDeps {
   storage: Storage
   guard: SpendGuard
   onStage?: (stage: Stage) => void | Promise<void>
+  /** Keeps the finished transcript, so a later attempt doesn't pay to transcribe and translate again. */
+  saveTranscript?: (transcript: Transcript) => Promise<void>
 }
 
 export interface PrepareResult {
@@ -66,21 +70,29 @@ export class EmptyTranscript extends Error {
  */
 export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Promise<PrepareResult> {
   const meter = new UsageMeter()
-  await deps.guard.reserve(input.jobId, estimatePrepCostUSD(input.durationSec, { feedTranscript: Boolean(input.feedWords) }))
+  const resumed = input.savedTranscript
+  await deps.guard.reserve(input.jobId, estimatePrepCostUSD(input.durationSec, { feedTranscript: Boolean(input.feedWords || resumed) }))
   try {
-    await deps.onStage?.('transcribing')
-    let words = input.feedWords
-    if (!words) {
-      const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec }))
-      meter.add(result.usage)
-      words = result.words
-    }
-    if (words.length === 0) throw new EmptyTranscript()
+    let transcript: Transcript
+    if (resumed) {
+      transcript = resumed
+    } else {
+      await deps.onStage?.('transcribing')
+      let words = input.feedWords
+      if (!words) {
+        const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec }))
+        meter.add(result.usage)
+        words = result.words
+      }
+      if (words.length === 0) throw new EmptyTranscript()
 
-    await deps.onStage?.('translating')
-    const segments = await translateSegments(buildSegments(words), input.language, input.nativeLanguage, deps.text, meter)
-    const transcript: Transcript = { language: input.language, source: input.feedWords ? 'feed' : 'scribe', words, segments }
-    transcript.glossary = await buildGlossary(transcript, input.nativeLanguage, deps.text, meter)
+      await deps.onStage?.('translating')
+      const segments = await translateSegments(buildSegments(words), input.language, input.nativeLanguage, deps.text, meter)
+      transcript = { language: input.language, source: input.feedWords ? 'feed' : 'scribe', words, segments }
+      transcript.glossary = await buildGlossary(transcript, input.nativeLanguage, deps.text, meter)
+      await deps.saveTranscript?.(transcript)
+    }
+    const words = transcript.words
 
     await deps.onStage?.('writing')
     const draft = await writePlanDraft(transcript, input.nativeLanguage, input.durationSec, deps.text, meter)
