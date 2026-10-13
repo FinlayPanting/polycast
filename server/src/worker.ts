@@ -74,6 +74,9 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     const retryable = e instanceof ProviderError ? e.retryable : !(e instanceof EmptyTranscript || e instanceof SpendCapReached)
+    if (e instanceof ProviderError && e.status === 429 && !e.retryable) {
+      await deps.alert?.('quota', `A provider's daily limit stopped an episode: ${message.slice(0, 200)}`).catch(() => {})
+    }
     return failJob(sql, job.id, message, retryable)
   }
 }

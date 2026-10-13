@@ -46,8 +46,12 @@ export class ProviderError extends Error {
   }
 }
 
-/** 429s and 5xx are worth retrying; other 4xx mean the request itself is wrong. */
+/**
+ * 429s and 5xx are worth retrying; other 4xx mean the request itself is wrong. A daily quota
+ * ("100 requests per day") isn't: waiting minutes won't help, so fail at once and say so.
+ */
 export function errorFromResponse(provider: string, status: number, body: string): ProviderError {
-  const retryable = status === 429 || status >= 500
+  const dailyQuota = status === 429 && /per day|daily/i.test(body)
+  const retryable = !dailyQuota && (status === 429 || status >= 500)
   return new ProviderError(`${provider} returned ${status}: ${body.slice(0, 300)}`, retryable, status)
 }

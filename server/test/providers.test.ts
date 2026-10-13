@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { ffmpegAacEncoder, silentWav, wavDurationSec } from '../src/audio'
 import { wordsFromScribe, scribeTranscriber } from '../src/providers/elevenlabs'
 import { geminiSpeech, geminiText, readInteraction, readTokenUsage } from '../src/providers/gemini'
-import { ProviderError } from '../src/providers/types'
+import { chirpVoiceName, googleChirpSpeech } from '../src/providers/googleTts'
+import { errorFromResponse, ProviderError } from '../src/providers/types'
 import { mapLimit, perMinute, retryAfterMs, withRetry } from '../src/retry'
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -79,6 +80,40 @@ describe('Gemini', () => {
     expect(r.durationSec).toBeCloseTo(2, 3)
     expect(body.generation_config.speech_config[0].voice).toBe('Sulafat')
     expect(body.input[0].content[0].annotations[0].style).toBe('warm')
+  })
+})
+
+describe('Google Cloud TTS (Chirp 3 HD)', () => {
+  it('voices text as the guide in the learner\'s language, British English for English', async () => {
+    let url = ''
+    let headers: Record<string, string> = {}
+    let body: any
+    const wav = silentWav(1.5)
+    const s = googleChirpSpeech('k3y', async (w) => ({ audio: w, mimeType: 'audio/wav' }), {
+      fetchImpl: async (u, init) => {
+        url = String(u)
+        headers = init!.headers as Record<string, string>
+        body = JSON.parse(String(init!.body))
+        return json({ audioContent: Buffer.from(wav).toString('base64') })
+      },
+    })
+    const r = await s.synthesize({ text: 'Nice one. Listen again.', voice: 'Sulafat', style: 'warm', language: 'en' })
+    expect(url).toBe('https://texttospeech.googleapis.com/v1/text:synthesize')
+    expect(headers['x-goog-api-key']).toBe('k3y')
+    expect(body.voice).toEqual({ languageCode: 'en-GB', name: 'en-GB-Chirp3-HD-Sulafat' })
+    expect(body.audioConfig.audioEncoding).toBe('LINEAR16')
+    expect(r.durationSec).toBeCloseTo(1.5, 3)
+    expect(r.usage).toEqual({ ttsChars: 23 })
+  })
+
+  it('picks a locale for each language, falling back to British English', () => {
+    expect(chirpVoiceName('Achird', 'de')).toEqual({ languageCode: 'de-DE', name: 'de-DE-Chirp3-HD-Achird' })
+    expect(chirpVoiceName('Achird', 'xx').languageCode).toBe('en-GB')
+  })
+
+  it('treats a daily quota as final, but a per-minute limit as worth retrying', () => {
+    expect(errorFromResponse('Gemini TTS', 429, 'limit: 100 requests per day on Tier 1').retryable).toBe(false)
+    expect(errorFromResponse('Gemini TTS', 429, 'limit: 10 requests per minute on Tier 1').retryable).toBe(true)
   })
 })
 

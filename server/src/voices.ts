@@ -5,7 +5,7 @@
 export interface Guide {
   id: string
   name: string
-  /** Gemini prebuilt voice name. */
+  /** Voice name shared by Gemini TTS and Google Cloud Chirp 3 HD (e.g. Sulafat, Achird). */
   voice: string
   style: string
 }

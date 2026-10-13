@@ -27,3 +27,7 @@ Newest first. Each line: date, decision, why. Finlay can overrule any of these.
 ## iOS 27: scene lifecycle (13 Oct 2026)
 
 Apps built with Xcode 27 crash at launch unless they adopt the UIScene lifecycle. Expo SDK 57 supports it as an opt-in: `expo-build-properties` with `ios.enableSceneSupport: true` (needs expo 57.0.23+). Turned on in app.json. Remove it when moving to SDK 58, which has it built in (expo/expo#46664). Any future config plugin that edits AppDelegate may clash with it.
+
+## Guide voice: Google Cloud Chirp 3 HD (13 Oct 2026)
+
+Finlay's call. Gemini TTS through AI Studio is capped at 10 requests a minute and 100 a day on Tier 1, and one hour-long episode needs more than 100. The server now voices the guide with Google Cloud Text-to-Speech, Chirp 3 HD, whenever `GOOGLE_TTS_API_KEY` is set (Gemini TTS stays as the fallback). Chirp 3 HD has the same voice names, so Mia is still Sulafat and Leo still Achird, in British English for English speakers. Limits are 200 requests a minute per project with no daily cap; the worker paces itself to `GOOGLE_TTS_RPM` (default 150). Price is $30 per million characters after the first million each month (free), about $0.40 for an hour-long episode against about $0.20 with Gemini, so an hour of new audio is now estimated at about $0.77 (was about $0.57). Chirp voices take no style prompt; the guide's warmth comes from the script and a speaking rate of 0.95. A daily quota (any 429 that mentions "per day") now fails the job at once with an alert, instead of retrying.

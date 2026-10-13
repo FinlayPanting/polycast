@@ -12,13 +12,20 @@ export const PRICES = {
   textOutPerToken: 3.75 / 1e6,
   /** Gemini 3.8 Flash TTS, per audio second of output (25 tokens a second at $9 per million). */
   ttsPerAudioSec: (25 * 9) / 1e6,
+  /** Google Cloud Text-to-Speech, Chirp 3 HD voices, per character ($30 per million; first 1M a month free). */
+  ttsPerChar: 30 / 1e6,
 } as const
+
+/** Guide speech runs at about 15 characters a second, for estimating per-character voices. */
+export const SPEECH_CHARS_PER_SEC = 15
 
 export interface Usage {
   transcriptionSec: number
   textInTokens: number
   textOutTokens: number
   ttsAudioSec: number
+  /** Characters sent to a per-character voice (Chirp 3 HD). */
+  ttsChars?: number
 }
 
 export const ZERO_USAGE: Usage = { transcriptionSec: 0, textInTokens: 0, textOutTokens: 0, ttsAudioSec: 0 }
@@ -29,6 +36,7 @@ export function addUsage(a: Usage, b: Partial<Usage>): Usage {
     textInTokens: a.textInTokens + (b.textInTokens ?? 0),
     textOutTokens: a.textOutTokens + (b.textOutTokens ?? 0),
     ttsAudioSec: a.ttsAudioSec + (b.ttsAudioSec ?? 0),
+    ttsChars: (a.ttsChars ?? 0) + (b.ttsChars ?? 0),
   }
 }
 
@@ -37,7 +45,8 @@ export function costUSD(u: Usage): number {
     u.transcriptionSec * PRICES.transcriptionPerSec +
     u.textInTokens * PRICES.textInPerToken +
     u.textOutTokens * PRICES.textOutPerToken +
-    u.ttsAudioSec * PRICES.ttsPerAudioSec
+    u.ttsAudioSec * PRICES.ttsPerAudioSec +
+    (u.ttsChars ?? 0) * PRICES.ttsPerChar
   )
 }
 
@@ -52,7 +61,9 @@ export function estimatePrepUsage(durationSec: number, opts: { feedTranscript?: 
     // Translation, lesson plan and glossary.
     textInTokens: Math.round(45_000 * hours),
     textOutTokens: Math.round(30_000 * hours),
-    ttsAudioSec: durationSec * GUIDE_SPEECH_RATIO,
+    // The guide's voice is Chirp 3 HD (per character) since 13 Oct 2026; see docs/DECISIONS.md.
+    ttsAudioSec: 0,
+    ttsChars: Math.round(durationSec * GUIDE_SPEECH_RATIO * SPEECH_CHARS_PER_SEC),
   }
 }
 

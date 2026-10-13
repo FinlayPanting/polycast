@@ -74,14 +74,15 @@ describe('cohort alerts', () => {
 })
 
 describe('costs', () => {
-  it('estimates under $0.60 for an hour of new audio, including the glossary', () => {
+  // Chirp 3 HD voices since 13 Oct 2026 (was Gemini TTS at about $0.20 an hour less); docs/DECISIONS.md.
+  it('estimates under $0.80 for an hour of new audio, including the glossary', () => {
     const c = estimatePrepCostUSD(3600)
-    expect(c).toBeGreaterThan(0.5)
-    expect(c).toBeLessThan(0.6)
+    expect(c).toBeGreaterThan(0.7)
+    expect(c).toBeLessThan(0.8)
   })
 
-  it('keeps the worst-case 2-hour free episode under $1.20', () => {
-    expect(estimatePrepCostUSD(7200)).toBeLessThan(1.2)
+  it('keeps the worst-case 2-hour free episode under $1.60', () => {
+    expect(estimatePrepCostUSD(7200)).toBeLessThan(1.6)
   })
 
   it('skips transcription cost when the feed supplies a transcript', () => {
