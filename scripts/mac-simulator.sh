@@ -92,6 +92,6 @@ SIM=$(xcrun simctl list devices available -j | node -e '
 [ -n "$SIM" ] || stop "No iPhone simulator found. Open Xcode > Settings > Components, install iOS, then run this again."
 echo "Using simulator: $(xcrun simctl list devices | grep "$SIM" | sed -E 's/ \(.*//;s/^ +//')"
 xcrun simctl boot "$SIM" 2>/dev/null || true
-open -a Simulator
+open "$(xcode-select -p)/Applications/Simulator.app" || true  # expo opens it too
 cd app
 npx expo run:ios --device "$SIM"
