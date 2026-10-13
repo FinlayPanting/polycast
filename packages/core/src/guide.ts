@@ -136,3 +136,32 @@ export function validateMoments(moments: GuideMoment[], durationSec: number): Pl
   }
   return problems
 }
+
+/**
+ * Splits guide text into runs in the learner's language and in the language they're learning. The
+ * script writer wraps anything said in the target language in [[double brackets]], so it can be voiced
+ * with a native accent and shown in italics. Brackets never nest; a stray bracket is kept as text.
+ */
+export function languageRuns(text: string): { text: string; target: boolean }[] {
+  const runs: { text: string; target: boolean }[] = []
+  let last = 0
+  for (const m of text.matchAll(/\[\[([^\[\]]+)\]\]/g)) {
+    if (m.index! > last) runs.push({ text: text.slice(last, m.index), target: false })
+    runs.push({ text: m[1]!, target: true })
+    last = m.index! + m[0].length
+  }
+  if (last < text.length) runs.push({ text: text.slice(last), target: false })
+  return runs.filter((r) => r.text.trim().length > 0)
+}
+
+/** Guide text without the [[ ]] marks, for anywhere it's shown or read as plain text. */
+export function withoutLanguageMarks(text: string): string {
+  return text.replace(/\[\[([^\[\]]+)\]\]/g, '$1')
+}
+
+/**
+ * Bumped when lesson plans are written differently, so episodes prepared before are rewritten and
+ * re-voiced from their saved transcript. 2: target-language text marked [[ ]] and read in that
+ * language; word moments placed in the conversation.
+ */
+export const LESSON_PLAN_VERSION = 2

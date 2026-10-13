@@ -1,4 +1,6 @@
 import {
+  LESSON_PLAN_VERSION,
+  withoutLanguageMarks,
   assignWordMomentLevels,
   findBreaks,
   findOccurrences,
@@ -96,7 +98,7 @@ export function planPrompt(transcript: Transcript, nativeLanguage: string, durat
   const target = languageName(transcript.language)
   const native = languageName(nativeLanguage)
   const minutes = Math.round(durationSec / 60)
-  const system = `You are Polycast's lesson-plan writer. A learner of ${target} (roughly A2 to B2) listens to a real ${target} podcast. A guide speaks to them in ${native} at natural pauses to keep them on track and teach a little as they go. You write what the guide says. The podcast is the star: be brief, warm, plain and accurate. Write for an adult, never childish or over-excited. Never state anything the episode doesn't say. Use British English spelling when writing English.`
+  const system = `You are Polycast's lesson-plan writer. A learner of ${target} (roughly A2 to B2) listens to a real ${target} podcast. A guide speaks to them in ${native} at natural pauses to keep them on track and teach a little as they go. You write what the guide says. The podcast is the star: be brief, warm, plain and accurate. Write for an adult, never childish or over-excited. Never state anything the episode doesn't say. Use British English spelling when writing English. Whenever the guide says anything in ${target} (a word, a phrase, an example sentence), wrap exactly that ${target} text in double square brackets, like [[försenad]], so it's read in a ${target} voice; never wrap ${native}, and never wrap placeholders such as {term} or {sentence}.`
 
   const prompt = `The episode is ${minutes} minutes long. Its transcript follows, one subtitle line per row as "id [m:ss] speaker: text".
 
@@ -105,7 +107,7 @@ Write a lesson plan:
 - summary: one or two sentences on what the episode is about.
 - warmup.terms: 3 useful words or phrases to listen for. warmup.script (under 60 words): who's talking, what it's about, then introduce each term, writing {term1}, {term2}, {term3} where the host's own voice will say it, followed by its meaning.
 - chapters: split the episode where the conversation moves on, about one every 6 to 10 minutes. For each, the id of its first line, a short title, and recap (under 40 words): what was said in that chapter, aimed at what a learner at this level probably missed.
-- wordMoments: about one every 2 minutes. Pick words or short phrases an intermediate learner would find useful in everyday life: not names, not words that look the same in ${native}, and spread through the episode. Copy text exactly as it appears in the line given by segmentId. priority from 1 to 10 (10 = most useful). listenFor (under 20 words): said just before the host says it, e.g. "Coming up, listen for {term}: it means delayed." spotlight (under 45 words): said just after; replay the host's line with {sentence}, explain the term in this context, and give one more everyday example in ${target} with its meaning.
+- wordMoments: about one every 2 minutes. Pick words or short phrases an intermediate learner would find useful in everyday life: not names, not words that look the same in ${native}, and spread through the episode. Copy text exactly as it appears in the line given by segmentId. priority from 1 to 10 (10 = most useful). Teach each term inside the conversation, so the learner keeps track of it: listenFor (under 25 words): said just before the host says it; first a short clause on what the hosts are talking about right then, then the term, e.g. "They're complaining about the trains now. Listen for {term}: it means delayed." spotlight (under 50 words): said just after; replay the host's line with {sentence}, say what it means in this part of the conversation (who said it and why), then give one more everyday example in ${target} with its meaning.
 - cultureNotes: only where a reference, joke or idiom would lose a learner (often none; at most 1 every 10 minutes). Under 30 words each, after the line it relates to.
 - quickQuestions: about one every 5 minutes, checking the gist of what was just said, after the given line. Three short options, one correct.
 - wrapUp: script (under 70 words) recapping the episode warmly and honestly, and 3 questions on its content.
@@ -160,7 +162,7 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
       const occ = locateTerm(transcript, t)
       const ph = `{term${i + 1}}`
       if (!occ) {
-        script = script.replace(ph, t.text)
+        script = script.replace(ph, `[[${t.text}]]`)
         dropped.push(`warm-up clip for "${t.text}"`)
         return
       }
@@ -244,7 +246,8 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
         minLevel: KIND_MIN_LEVEL.quickQuestion,
         script: q.prompt,
         clips: [],
-        question: { prompt: q.prompt, options: q.options, answerIndex: q.answerIndex },
+        // The question is read aloud from the script (marks and all); on screen it's plain text.
+        question: plainQuestion(q),
         waits: true,
       })
   }
@@ -268,7 +271,7 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
   return {
     plan: {
       episodeId: opts.episodeId,
-      version: 1,
+      version: LESSON_PLAN_VERSION,
       targetLanguage: transcript.language,
       nativeLanguage: opts.nativeLanguage,
       hosts: draft.hosts,
@@ -282,5 +285,7 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
 
 /** The wrap-up's extra questions travel with the plan for the end-of-episode screen. */
 export function wrapUpQuestions(draft: PlanDraft): Question[] {
-  return draft.wrapUp.questions.filter((q) => q.options.length >= 2 && q.answerIndex >= 0 && q.answerIndex < q.options.length)
+  return draft.wrapUp.questions.filter((q) => q.options.length >= 2 && q.answerIndex >= 0 && q.answerIndex < q.options.length).map(plainQuestion)
 }
+
+const plainQuestion = (q: Question): Question => ({ prompt: withoutLanguageMarks(q.prompt), options: q.options.map(withoutLanguageMarks), answerIndex: q.answerIndex })

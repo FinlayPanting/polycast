@@ -35,3 +35,19 @@ Finlay's call. Gemini TTS through AI Studio is capped at 10 requests a minute an
 ## Lessons follow each listener's adverts (13 Oct 2026)
 
 Hosts such as Acast stitch adverts into the audio per download, by location, so the copy we transcribe and the copy a learner plays can differ, which shifted subtitles, guide moments and host clips (found by Finlay on Brief Me Baby, in Austria). Fix, agreed with Finlay: the worker downloads each episode once, uploads those exact bytes to Scribe and stores a fingerprint (the loudness of every 50 ms, about 90 KB an hour) at `guide-audio/sync/<episode>.fp`; the audio itself is held in memory only and never stored. The plan carries `syncUrl`. The app downloads the learner's copy before playing (Finlay's call: it fits a learning app and gives offline listening), fingerprints it on the phone, matches the two (`@polycast/core` sync.ts: anchors every 5 s, 10 s windows, normalised cross-correlation of the loudness rhythm) and moves every time in the lesson onto the learner's copy. Words, lines and clips that only exist in our copy (our adverts) are dropped; guide moments always survive, moved to the next shared moment. If under 60% matches, the lesson keeps its own times. Tested on the real episode with a doctored copy (pre-roll, a cut advert, an added advert, re-encoding): every shift recovered exactly, edges within about a second, 0.2 s for 73 minutes. Episodes prepared before this are prepared again once, free, by the worker on start-up. Publisher transcripts aren't fingerprinted.
+
+## Guide speaks target-language words in a native voice (13 Oct 2026)
+
+Finlay heard Mia read Swedish words with a British accent. The plan writer now wraps every
+target-language word or sentence the guide says in `[[ ]]`; those runs are read by the same Chirp
+voice (Sulafat or Achird) in the target locale, so it's the same person with a native accent. If the
+target-language voice fails, the run is read in the guide's own voice rather than dropped. Brackets
+never reach the screen: the guide card shows those words in italics, and questions are stored plain.
+
+Word moments now open with what the hosts are talking about at that point, so a word is taught
+inside the conversation rather than as a detour from it.
+
+Plans carry `LESSON_PLAN_VERSION` (now 2). On start, the worker rewrites and re-voices episodes
+with an older plan from their saved transcript, at Polycast's cost (about two minutes each).
+
+The introduction can be heard again from the player ("Hear the introduction again").

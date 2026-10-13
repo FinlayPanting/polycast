@@ -22,6 +22,7 @@ import {
   type Sql,
 } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
+import { LESSON_PLAN_VERSION } from '@polycast/core'
 
 const run = PG_TEST_URL ? describe : describe.skip
 
@@ -67,7 +68,7 @@ run('database', () => {
 
   const fakeResult = (episodeId: string, guideId = 'mia') => ({
     transcript: { language: 'sv', source: 'scribe' as const, words: [{ text: 'Hej', start: 0, end: 0.4 }], segments: [] },
-    plan: { episodeId, version: 1, targetLanguage: 'sv', nativeLanguage: 'en', hosts: [], summary: '', moments: [], wrapUpQuestions: [] },
+    plan: { episodeId, version: LESSON_PLAN_VERSION, targetLanguage: 'sv', nativeLanguage: 'en', hosts: [], summary: '', moments: [], wrapUpQuestions: [] },
     difficulty: { wpm: 150, band: 'moderate' as const, label: 'B1–B2, natural pace' },
     usage: { transcriptionSec: 1800, textInTokens: 1000, textOutTokens: 500, ttsAudioSec: 300 },
     guideId,
@@ -257,6 +258,26 @@ run('database', () => {
       const [job] = await sql`select charge, guide_id, requested_by from prep_jobs where episode_id = ${old} and status = 'queued'`
       expect(job).toMatchObject({ charge: 'none', guide_id: 'leo', requested_by: a })
       expect(await queueSyncUpgrades(sql)).toBe(0) // once only
+    })
+
+    it('rewrites plans from an older version, keeping the transcript', async () => {
+      const a = await learner()
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      const [job] = await sql`select id from prep_jobs where episode_id = ${ep}`
+      const result = fakeResult(ep, 'mia')
+      ;(result.plan as any).syncUrl = 'https://s/sync.fp'
+      result.plan.version = LESSON_PLAN_VERSION - 1
+      await sql`update prep_jobs set status = 'running' where id = ${job!.id}`
+      await completePreparation(sql, job!.id, result)
+      expect(await queueSyncUpgrades(sql)).toBe(1)
+      const [e] = await sql`select status from episodes where id = ${ep}`
+      expect(e!.status).toBe('preparing')
+      expect(await sql`select 1 from transcripts where episode_id = ${ep}`).toHaveLength(1)
+      expect(await sql`select 1 from lesson_plans where episode_id = ${ep}`).toHaveLength(0)
+      const [queued] = await sql`select charge, guide_id, requested_by from prep_jobs where episode_id = ${ep} and status = 'queued'`
+      expect(queued).toMatchObject({ charge: 'none', guide_id: 'mia', requested_by: a })
+      expect(await queueSyncUpgrades(sql)).toBe(0)
     })
 
     it('picks up a job a dead server left running, and gives up after the last attempt', async () => {

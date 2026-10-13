@@ -182,3 +182,25 @@ describe('a guided listen', () => {
     expect(listen.current.phase).toBe('finished')
   })
 })
+
+describe('hearing a moment again', () => {
+  it('replays the introduction on request, then carries on from the same place', async () => {
+    const intro: GuideMoment = { ...spotlight, id: 'intro', kind: 'warmup', at: 0, script: 'Welcome', clips: [], audio: { parts: [{ kind: 'speech', url: 'intro.m4a', durationSec: 1 }], durationSec: 1 } }
+    const { audio, voice, listen } = setup([intro])
+    const started = listen.start(track) // the introduction plays straight away
+    await flush()
+    await voice.finishCurrent()
+    await started
+    await audio.advance(4)
+    expect(voice.played).toEqual(['intro.m4a'])
+
+    const replay = listen.replayMoment(intro)
+    await flush()
+    expect(listen.current.phase).toBe('guide')
+    await voice.finishCurrent()
+    await replay
+    expect(voice.played).toEqual(['intro.m4a', 'intro.m4a'])
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.pos).toBe(4)
+  })
+})

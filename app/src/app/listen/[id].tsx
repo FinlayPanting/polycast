@@ -202,6 +202,8 @@ export default function Listen() {
     if (state.phase === 'finished' && session) void savePosition(session.user.id, id, state.position, true)
   }, [state.phase, session, id])
 
+  // The introduction plays once at the start; this brings it back whenever the learner wants it.
+  const intro = useMemo(() => (data?.guided ? data.plan?.moments.find((m) => m.kind === 'warmup' && m.audio) : undefined), [data])
   const markers = useMemo(() => (data?.plan && data.guided ? selectMoments(data.plan.moments, data.guidanceLevel ?? 'standard').map((m) => m.at) : []), [data])
   const close = () => router.back()
 
@@ -254,6 +256,19 @@ export default function Listen() {
         </View>
         <Artwork uri={data.episode.image} size={40} radius={8} />
       </View>
+
+      {intro && !guideOn ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void l?.replayMoment(intro)}
+          hitSlop={8}
+          style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: MIN_TAP, justifyContent: 'center', paddingHorizontal: space.lg, opacity: pressed ? 0.6 : 1 })}
+        >
+          <Txt variant="smallStrong" tone="quiet">
+            Hear the introduction again
+          </Txt>
+        </Pressable>
+      ) : null}
 
       {!data.guided && guide !== '0' ? (
         <Txt variant="small" tone="quiet" style={{ paddingHorizontal: space.lg, paddingTop: space.sm }}>

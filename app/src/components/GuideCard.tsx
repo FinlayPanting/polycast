@@ -16,17 +16,25 @@ const KIND_LABEL: Record<GuideMoment['kind'], string> = {
   wrapUp: 'Wrap-up',
 }
 
-/** The guide's script for reading along, with the host's clips written out as the words they say. */
-export function scriptText(m: GuideMoment, clipText: (c: Clip) => string): { text: string; spoken: boolean }[] {
-  const parts: { text: string; spoken: boolean }[] = []
+export type ScriptPart = { text: string; spoken: boolean; target?: boolean }
+
+/**
+ * The guide's script for reading along: the host's clips written out as the words they say, and
+ * the guide's own target-language words ([[…]] in the plan) picked out without the brackets.
+ */
+export function scriptText(m: GuideMoment, clipText: (c: Clip) => string): ScriptPart[] {
+  const parts: ScriptPart[] = []
+  // split() with a capture group alternates: guide's own language, target language, own, …
+  const guideSays = (text: string) =>
+    text.split(/\[\[([^\[\]]+)\]\]/).forEach((t, i) => parts.push({ text: t, spoken: false, target: i % 2 === 1 || undefined }))
   let last = 0
   for (const match of m.script.matchAll(/\{clip:(\d+)\}/g)) {
-    parts.push({ text: m.script.slice(last, match.index), spoken: false })
+    guideSays(m.script.slice(last, match.index))
     const clip = m.clips[Number(match[1])]
     if (clip) parts.push({ text: `“${clipText(clip)}”`, spoken: true })
     last = match.index! + match[0].length
   }
-  parts.push({ text: m.script.slice(last), spoken: false })
+  guideSays(m.script.slice(last))
   return parts.filter((p) => p.text.length > 0)
 }
 
@@ -86,7 +94,10 @@ export function GuideCard({
 
       <Text style={[type.body, { color: p.text }]}>
         {scriptText(moment, clipText).map((part, i) => (
-          <Text key={i} style={part.spoken ? { color: p.savedText, fontFamily: type.bodyStrong.fontFamily } : undefined}>
+          <Text
+            key={i}
+            style={part.spoken ? { color: p.savedText, fontFamily: type.bodyStrong.fontFamily } : part.target ? { fontStyle: 'italic' } : undefined}
+          >
             {part.text}
           </Text>
         ))}

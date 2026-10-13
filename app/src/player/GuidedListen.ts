@@ -182,6 +182,15 @@ export class GuidedListen {
     await this.seek(replayLineStart(this.o.segments, position))
   }
 
+  /**
+   * Hear one of the guide's moments again (the introduction, say), then carry on from the same
+   * place in the episode. Does nothing while the guide is already speaking.
+   */
+  async replayMoment(m: GuideMoment): Promise<void> {
+    if (this.state.phase !== 'playing' && this.state.phase !== 'paused') return
+    await this.runMoments([m])
+  }
+
   async setRate(rate: number): Promise<void> {
     await this.o.audio.setRate(rate)
     this.set({ rate })

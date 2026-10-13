@@ -105,3 +105,17 @@ describe('lesson plan validation', () => {
     )
   })
 })
+
+describe('target-language runs in guide scripts', () => {
+  it('splits marked target-language text from the guide\'s own language', async () => {
+    const { languageRuns, withoutLanguageMarks } = await import('../src/guide')
+    expect(languageRuns('On the board you\'ll see [[tåget är försenat]], the train is late.')).toEqual([
+      { text: 'On the board you\'ll see ', target: false },
+      { text: 'tåget är försenat', target: true },
+      { text: ', the train is late.', target: false },
+    ])
+    expect(languageRuns('[[Hej]]')).toEqual([{ text: 'Hej', target: true }])
+    expect(languageRuns('No marks [here]')).toEqual([{ text: 'No marks [here]', target: false }])
+    expect(withoutLanguageMarks('Say [[tack]] and [[hej då]].')).toBe('Say tack and hej då.')
+  })
+})

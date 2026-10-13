@@ -10,6 +10,7 @@ import {
   type PrepDecision,
   type Transcript,
   type Usage,
+  LESSON_PLAN_VERSION,
 } from '@polycast/core'
 import type { SpendLedger } from '../budget'
 
@@ -217,6 +218,9 @@ export async function savedTranscript(sql: Sql, episodeId: string, nativeLanguag
  * fingerprint. Prepare each once more, at Polycast's cost, for whoever asked for it first. Their old
  * transcript goes too: its timings came from a copy of the audio we can't fingerprint. Publisher
  * transcripts are left alone (they can't be fingerprinted either way).
+ *
+ * Episodes whose plan was written by an older LESSON_PLAN_VERSION get a new plan and guide audio,
+ * also at Polycast's cost; their transcript stays, so this is a couple of minutes, not a full prep.
  */
 export async function queueSyncUpgrades(sql: Sql): Promise<number> {
   return sql.begin(async (tx) => {
@@ -235,7 +239,24 @@ export async function queueSyncUpgrades(sql: Sql): Promise<number> {
         insert into prep_jobs (episode_id, requested_by, kind, guide_id, charge, charged_sec)
         values (${e.id}, ${e.requested_by}, 'prepare', ${e.guide_id ?? 'mia'}, 'none', 0)`
     }
-    return stale.length
+
+    // Plans written the old way: keep the transcript (the job resumes from it), rewrite and re-voice.
+    const old = await tx`
+      select e.id, (select requested_by from prep_jobs j where j.episode_id = e.id and j.kind = 'prepare' order by created_at limit 1) as requested_by,
+             (select guide_id from lesson_plans l where l.episode_id = e.id order by created_at limit 1) as guide_id
+      from episodes e
+      where e.status = 'ready'
+        and exists (select 1 from lesson_plans l where l.episode_id = e.id and l.version < ${LESSON_PLAN_VERSION})
+        and exists (select 1 from transcripts t where t.episode_id = e.id)
+      for update of e skip locked`
+    for (const e of old) {
+      await tx`delete from lesson_plans where episode_id = ${e.id} and version < ${LESSON_PLAN_VERSION}`
+      await tx`update episodes set status = 'preparing' where id = ${e.id}`
+      await tx`
+        insert into prep_jobs (episode_id, requested_by, kind, guide_id, charge, charged_sec)
+        values (${e.id}, ${e.requested_by}, 'prepare', ${e.guide_id ?? 'mia'}, 'none', 0)`
+    }
+    return stale.length + old.length
   })
 }
 

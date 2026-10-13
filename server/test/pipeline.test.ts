@@ -1,9 +1,9 @@
-import { findBreaks, selectMoments } from '@polycast/core'
+import { findBreaks, selectMoments, type LessonPlan } from '@polycast/core'
 import { describe, expect, it } from 'vitest'
-import { memoryLedger, SpendCapReached, SpendGuard } from '../src/budget'
+import { memoryLedger, SpendCapReached, SpendGuard, UsageMeter } from '../src/budget'
 import { assemblePlan } from '../src/pipeline/lessonPlan'
 import { prepareEpisode } from '../src/pipeline/prepare'
-import { splitScript } from '../src/pipeline/voice'
+import { splitScript, voicePlan } from '../src/pipeline/voice'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
 import { ProviderError } from '../src/providers/types'
 import { DEFAULT_GUIDE } from '../src/voices'
@@ -73,7 +73,8 @@ describe('preparing an episode', () => {
     // Every moment is voiced; host clips sit between guide speech.
     for (const m of r.plan.moments) expect(m.audio?.parts.length).toBeGreaterThan(0)
     const spot = r.plan.moments.find((m) => m.kind === 'spotlight')!
-    expect(spot.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip', 'speech', 'clip', 'speech'])
+    // The lone "." between the two clips isn't sent to the voice.
+    expect(spot.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip', 'clip', 'speech'])
     expect(d.storage.files.size).toBeGreaterThan(10)
 
     // The real cost replaced the reservation in the ledger.
@@ -208,5 +209,39 @@ describe('splitting scripts around host clips', () => {
       { kind: 'speech', text: '. That was' },
       { kind: 'clip', clipIndex: 1 },
     ])
+  })
+})
+
+describe('voicing target-language words', () => {
+  const plan = {
+    episodeId: 'e',
+    version: 2,
+    targetLanguage: 'sv',
+    nativeLanguage: 'en',
+    hosts: [],
+    summary: '',
+    wrapUpQuestions: [],
+    moments: [{ id: 'spot-1', kind: 'spotlight', at: 10, minLevel: 'standard', script: 'They are late. {clip:0} Or: [[jag är sen]], I am late.', clips: [{ start: 1, end: 2 }] }],
+  } as unknown as LessonPlan
+
+  it('reads [[…]] in the target language with the same voice, and the rest in the learner\'s own', async () => {
+    const said: string[] = []
+    const speech = { ...mockSpeech(), synthesize: (r: { text: string; voice: string; style: string; language: string }) => (said.push(`${r.language}:${r.text}`), mockSpeech().synthesize(r)) }
+    const out = await voicePlan(plan, DEFAULT_GUIDE, { speech, storage: memoryStorage(), meter: new UsageMeter() })
+    expect(said).toEqual(['en:They are late.', 'en:Or:', 'sv:jag är sen', 'en:, I am late.'])
+    expect(out.moments[0]!.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip', 'speech', 'speech', 'speech'])
+  })
+
+  it('falls back to the learner\'s own language if the target voice fails', async () => {
+    const said: string[] = []
+    const speech = {
+      synthesize: async (r: { text: string; voice: string; style: string; language: string }) => {
+        if (r.language === 'sv') throw new ProviderError('no such voice', false, 400)
+        said.push(`${r.language}:${r.text}`)
+        return mockSpeech().synthesize(r)
+      },
+    }
+    await voicePlan(plan, DEFAULT_GUIDE, { speech, storage: memoryStorage(), meter: new UsageMeter() })
+    expect(said).toContain('en:jag är sen')
   })
 })
