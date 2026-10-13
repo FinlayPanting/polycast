@@ -108,3 +108,36 @@ describe('publisher JSON transcripts', () => {
     expect(wordsFromPodcastJson(sentenceLevel)).toBeUndefined()
   })
 })
+
+describe('Top charts in the target language', () => {
+  it('draws Spanish and Portuguese from two countries each, others from one', async () => {
+    const { TOP_CHART_COUNTRIES } = await import('../src')
+    expect(TOP_CHART_COUNTRIES.es).toEqual(['es', 'mx'])
+    expect(TOP_CHART_COUNTRIES.pt).toEqual(['pt', 'br'])
+    expect(TOP_CHART_COUNTRIES.sv).toEqual(['se'])
+    expect(TOP_CHART_COUNTRIES.fr).toEqual(['fr'])
+  })
+
+  it('interleaves charts by rank and keeps each show once', async () => {
+    const { interleaveCharts } = await import('../src')
+    const s = (id: string) => ({ appleId: id })
+    expect(interleaveCharts([[s('a'), s('b'), s('c')], [s('x'), s('a'), s('y'), s('z')]]).map((x) => x.appleId)).toEqual(['a', 'x', 'b', 'c', 'y', 'z'])
+    expect(interleaveCharts([])).toEqual([])
+  })
+
+  it('builds one lookup for many ids', async () => {
+    const { itunesLookupManyUrl } = await import('../src')
+    expect(itunesLookupManyUrl(['1', '22'])).toBe('https://itunes.apple.com/lookup?id=1,22&entity=podcast')
+  })
+
+  it("reads the channel's language from the start of a feed", async () => {
+    const { feedLanguageFromHead } = await import('../src')
+    expect(feedLanguageFromHead(RSS)).toBe('sv')
+    expect(feedLanguageFromHead('<rss><channel><title>X</title><language><![CDATA[es-MX]]></language>')).toBe('es')
+    expect(feedLanguageFromHead('<rss><channel><title>X</title><language> EN </language>')).toBe('en')
+    // An episode's own language tag is not the show's.
+    expect(feedLanguageFromHead('<rss><channel><title>X</title><item><language>sv</language></item>')).toBeUndefined()
+    expect(feedLanguageFromHead('<rss><channel><title>X</title>')).toBeUndefined()
+    expect(feedLanguageFromHead('not a feed')).toBeUndefined()
+  })
+})

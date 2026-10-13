@@ -1,6 +1,9 @@
 import {
   appleChartUrl,
   CHART_COUNTRY,
+  feedLanguageFromHead,
+  interleaveCharts,
+  itunesLookupManyUrl,
   itunesLookupUrl,
   itunesSearchUrl,
   parseAppleChart,
@@ -8,6 +11,7 @@ import {
   parseItunesResults,
   parsePodcastIndexTrending,
   podcastIndexTrendingUrl,
+  TOP_CHART_COUNTRIES,
   type Feed,
   type PodcastSummary,
   type TrendingPodcast,
@@ -85,13 +89,86 @@ async function cachedChart<T>(sql: Sql, language: string, chart: string, load: (
   }
 }
 
+/** How much of a feed is read to find its <language> tag. */
+const FEED_HEAD_BYTES = 64 * 1024
+const FEED_CHECK_CONCURRENCY = 8
+const FEED_CHECK_TIMEOUT_MS = 8000
+
+/** Reads just the start of a feed and returns the language its channel declares. */
+async function feedLanguage(f: Fetch, feedUrl: string): Promise<string | undefined> {
+  const res = await f(feedUrl, { headers: { 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' }, signal: AbortSignal.timeout(FEED_CHECK_TIMEOUT_MS) })
+  if (!res.ok || !res.body) return undefined
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let head = ''
+  try {
+    while (head.length < FEED_HEAD_BYTES) {
+      const { done, value } = await reader.read()
+      if (done) break
+      head += decoder.decode(value, { stream: true })
+      if (/<item[\s>]/i.test(head)) break
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+  return feedLanguageFromHead(head)
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i]!)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
+/**
+ * Keeps only chart shows whose own feed says they're in the language. Apple's country charts mix
+ * in English-language shows, so each show's feed is checked (from the database when known).
+ * Shows whose feed can't be found or doesn't declare a language are left out.
+ */
+export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSummary[], language: string): Promise<PodcastSummary[]> {
+  if (shows.length === 0) return []
+  const feeds = new Map<string, string>()
+  for (let i = 0; i < shows.length; i += 150) {
+    const batch = shows.slice(i, i + 150)
+    const res = await f(itunesLookupManyUrl(batch.map((s) => s.appleId)))
+    if (!res.ok) throw new Error(`Apple lookup returned ${res.status}`)
+    for (const r of parseItunesResults(await res.json())) if (r.feedUrl) feeds.set(r.appleId, r.feedUrl)
+  }
+  const known = new Map<string, string>()
+  const feedUrls = [...feeds.values()]
+  if (feedUrls.length) {
+    const rows = await sql`select feed_url, language from podcasts where feed_url in ${sql(feedUrls)} and language is not null`
+    for (const r of rows) known.set(r.feed_url, r.language)
+  }
+  const languages = await mapLimit(shows, FEED_CHECK_CONCURRENCY, async (s) => {
+    const feedUrl = feeds.get(s.appleId)
+    if (!feedUrl) return undefined
+    return known.get(feedUrl) ?? (await feedLanguage(f, feedUrl).catch(() => undefined))
+  })
+  return shows.filter((_, i) => languages[i] === language).map((s) => ({ ...s, feedUrl: feeds.get(s.appleId) }))
+}
+
+/** The Top charts shelf: Apple's charts for the language's countries, only shows in that language. */
 export function topChart(sql: Sql, f: Fetch, language: string): Promise<PodcastSummary[]> {
-  const country = CHART_COUNTRY[language]
-  if (!country) return Promise.resolve([])
-  return cachedChart(sql, language, 'top', async () => {
-    const res = await f(appleChartUrl(country, 50))
-    if (!res.ok) throw new Error(`Apple chart returned ${res.status}`)
-    return parseAppleChart(await res.json())
+  const countries = TOP_CHART_COUNTRIES[language]
+  if (!countries?.length) return Promise.resolve([])
+  // A new cache key, so charts cached before the language check aren't served.
+  return cachedChart(sql, language, 'top:in-language', async () => {
+    const charts = await Promise.all(
+      countries.map(async (country) => {
+        const res = await f(appleChartUrl(country, 50))
+        if (!res.ok) throw new Error(`Apple chart returned ${res.status}`)
+        return parseAppleChart(await res.json())
+      }),
+    )
+    return (await keepShowsInLanguage(sql, f, interleaveCharts(charts), language)).slice(0, 50)
   })
 }
 

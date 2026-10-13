@@ -166,6 +166,51 @@ export const CHART_COUNTRY: Record<string, string> = {
   en: 'gb',
 }
 
+/**
+ * Whose Apple charts feed each language's Top charts shelf. Spanish and Portuguese also draw on
+ * Mexico and Brazil, the largest audiences for each. Search still uses CHART_COUNTRY.
+ */
+export const TOP_CHART_COUNTRIES: Record<string, string[]> = {
+  ...Object.fromEntries(Object.entries(CHART_COUNTRY).map(([lang, country]) => [lang, [country]])),
+  es: ['es', 'mx'],
+  pt: ['pt', 'br'],
+}
+
+/** One lookup for many Apple ids (Apple accepts up to about 200 at once). */
+export function itunesLookupManyUrl(appleIds: string[]): string {
+  return `https://itunes.apple.com/lookup?id=${appleIds.map(encodeURIComponent).join(',')}&entity=podcast`
+}
+
+/** Merges several countries' charts by alternating rank, keeping each show once. */
+export function interleaveCharts<T extends { appleId: string }>(charts: T[][]): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  const longest = Math.max(0, ...charts.map((c) => c.length))
+  for (let i = 0; i < longest; i++) {
+    for (const chart of charts) {
+      const show = chart[i]
+      if (show && !seen.has(show.appleId)) {
+        seen.add(show.appleId)
+        out.push(show)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * The language a feed declares in its channel's <language> tag, as a two-letter code, read from
+ * the start of the feed so a long back catalogue need not be downloaded. Undefined if absent.
+ */
+export function feedLanguageFromHead(head: string): string | undefined {
+  const channelStart = head.search(/<channel[\s>]/i)
+  if (channelStart < 0) return undefined
+  const firstItem = head.slice(channelStart).search(/<item[\s>]/i)
+  const channel = firstItem < 0 ? head.slice(channelStart) : head.slice(channelStart, channelStart + firstItem)
+  const m = channel.match(/<language>\s*(?:<!\[CDATA\[)?\s*([A-Za-z]{2,3})(?:[-_][A-Za-z0-9-]+)?\s*(?:\]\]>)?\s*<\/language>/i)
+  return m?.[1]?.toLowerCase()
+}
+
 export function appleChartUrl(country: string, limit = 50): string {
   return `https://rss.marketingtools.apple.com/api/v2/${country}/podcasts/top/${limit}/podcasts.json`
 }
