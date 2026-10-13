@@ -1,3 +1,4 @@
+import { localOrStream } from './episodeAudio'
 import { newReview, nextReview, normalizeToken, type Clip, type ReviewState, type SavedWord } from '@polycast/core'
 import { config } from './config'
 import { supabase } from './supabase'
@@ -59,7 +60,10 @@ export async function listWords(language: string): Promise<(SavedWord & { audioU
     .select('language, lemma, forms, meaning, episode_id, clip, sentence, review, created_at, episodes(audio_url)')
     .eq('language', language)
     .order('created_at', { ascending: false })
-  return ((data ?? []) as unknown as (Row & { episodes: { audio_url: string } | null })[]).map((r) => ({ ...toSaved(r), audioUrl: r.episodes?.audio_url }))
+  return ((data ?? []) as unknown as (Row & { episodes: { audio_url: string } | null })[]).map((r) => {
+    const saved = toSaved(r)
+    return { ...saved, audioUrl: r.episodes?.audio_url ? localOrStream(saved.source.episodeId, r.episodes.audio_url) : undefined }
+  })
 }
 
 export async function recordReview(userId: string, word: SavedWord, result: 'gotIt' | 'again'): Promise<void> {

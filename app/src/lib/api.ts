@@ -70,6 +70,8 @@ export interface ListenPayload {
   guided: boolean
   guidanceLevel: 'light' | 'standard' | 'handsOn' | null
   plan: LessonPlan | null
+  /** Fingerprint of the copy we transcribed, to line the lesson up with the learner's copy. */
+  syncUrl?: string | null
 }
 
 export const api = {

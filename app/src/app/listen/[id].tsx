@@ -9,6 +9,7 @@ import { Scrubber } from '../../components/Scrubber'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
 import { Artwork, Button, Screen, Txt } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
+import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName } from '../../lib/languages'
@@ -118,6 +119,7 @@ export default function Listen() {
   const [oldFriends, setOldFriends] = useState<Set<number>>(new Set())
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
   const [saved, setSaved] = useState<string[]>([])
+  const [getReady, setGetReady] = useState<GetReadyStep>()
   const listen = useRef<GuidedListen | undefined>(undefined)
 
   const clipText = useCallback(
@@ -141,10 +143,18 @@ export default function Listen() {
   // Load the episode, its subtitles and (if guided) the lesson plan, then start playing.
   useEffect(() => {
     let disposed = false
+    const abort = new AbortController()
     ;(async () => {
       try {
-        const d = await api.listen(id, guide !== '0')
+        const fetched = await api.listen(id, guide !== '0')
         if (disposed) return
+        // Download the learner's own copy and line the lesson up with it (adverts can differ).
+        const ready = config.demo ? undefined : await getEpisodeReady(fetched, (s) => !disposed && setGetReady(s), abort.signal)
+        if (disposed) return
+        setGetReady(undefined)
+        const d: ListenPayload = ready
+          ? { ...fetched, transcript: ready.transcript, plan: ready.plan, episode: { ...fetched.episode, audioUrl: ready.url, durationSec: ready.durationSec } }
+          : fetched
         setData(d)
         const level = d.guidanceLevel ?? 'standard'
         const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
@@ -172,6 +182,7 @@ export default function Listen() {
     })()
     return () => {
       disposed = true
+      abort.abort()
       setRemoteHandler(undefined)
       void listen.current?.dispose()
     }
@@ -203,7 +214,24 @@ export default function Listen() {
       </Screen>
     )
   }
-  if (!data) return <Screen />
+  if (!data) {
+    return (
+      <Screen edges={['top', 'bottom']} style={{ padding: space.lg, gap: space.md, justifyContent: 'center', alignItems: 'center' }}>
+        <Mark height={44} />
+        {getReady ? (
+          <View style={{ gap: space.xs, alignItems: 'center' }}>
+            <Txt variant="heading">{getReady.step === 'downloading' ? 'Downloading the episode' : 'Lining up your lesson'}</Txt>
+            <Txt tone="quiet" style={{ textAlign: 'center' }}>
+              {getReady.step === 'downloading'
+                ? `${Math.round(getReady.progress * 100)}%. It stays on your phone, so you can listen offline too.`
+                : 'Matching the subtitles and the guide to your copy of the episode.'}
+            </Txt>
+          </View>
+        ) : null}
+        <Button kind="secondary" label="Cancel" onPress={close} />
+      </Screen>
+    )
+  }
   if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} onDone={close} /></Screen>
 
   const l = listen.current
