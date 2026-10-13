@@ -2,7 +2,8 @@ import type { Usage, Word } from '@polycast/core'
 
 /** Turns episode audio into timed words. The audio streams from the publisher; Polycast never stores it. */
 export interface Transcriber {
-  transcribe(input: { audioUrl: string; language: string; durationSec: number }): Promise<{
+  /** `audio`, when given, is transcribed instead of fetching `audioUrl`, so we know exactly which copy was heard. */
+  transcribe(input: { audioUrl: string; language: string; durationSec: number; audio?: Uint8Array }): Promise<{
     words: Word[]
     detectedLanguage?: string
     usage: Partial<Usage>
@@ -33,6 +34,8 @@ export interface SpeechSynth {
 /** File storage for guide audio. Returns a URL the app can stream. */
 export interface Storage {
   put(path: string, bytes: Uint8Array, contentType: string): Promise<string>
+  /** The public URL of a stored file, if it exists. */
+  exists?(path: string): Promise<string | undefined>
 }
 
 export class ProviderError extends Error {

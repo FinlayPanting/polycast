@@ -1,7 +1,7 @@
 import { costUSD, wordsFromPodcastJson, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
 import { SpendCapReached, SpendGuard } from './budget'
-import { claimNextJob, completePreparation, failJob, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
-import { EmptyTranscript, prepareEpisode, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
+import { claimNextJob, completePreparation, failJob, queueSyncUpgrades, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
+import { EmptyTranscript, prepareEpisode, syncPath, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
 import { ProviderError } from './providers/types'
 import { guideById } from './voices'
 
@@ -58,6 +58,7 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
         guide,
         feedWords: saved ? undefined : await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
         savedTranscript: saved,
+        savedSyncUrl: saved ? await deps.storage.exists?.(syncPath(job.episodeId)) : undefined,
       },
       {
         ...deps,
@@ -92,6 +93,8 @@ export function jobInProgress(): string | undefined {
 export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal?: AbortSignal } = {}): Promise<void> {
   const poll = opts.pollMs ?? 3000
   let lastReclaim = 0
+  const upgraded = await queueSyncUpgrades(deps.sql).catch((e) => (console.error('worker: sync upgrade check failed', e), 0))
+  if (upgraded) console.log(`worker: preparing ${upgraded} older episode(s) again so they follow each listener's adverts`)
   while (!opts.signal?.aborted) {
     try {
       if (Date.now() - lastReclaim > 60_000) {

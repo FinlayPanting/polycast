@@ -17,15 +17,18 @@ export function wordsFromScribe(words: ScribeWord[]): Word[] {
 }
 
 /**
- * ElevenLabs Scribe v2. Sends the publisher's audio URL (`source_url`), so the episode is
- * fetched by ElevenLabs and never stored by Polycast.
+ * ElevenLabs Scribe v2. Given the episode's bytes (downloaded once by the worker, which also
+ * fingerprints them), it uploads those, so the transcript's timings match the fingerprint exactly.
+ * Otherwise it sends the publisher's URL (`source_url`) and ElevenLabs fetches its own copy.
+ * Either way Polycast never stores the episode.
  */
 export function scribeTranscriber(apiKey: string, fetchImpl: typeof fetch = fetch): Transcriber {
   return {
-    async transcribe({ audioUrl, language, durationSec }) {
+    async transcribe({ audioUrl, language, durationSec, audio }) {
       const form = new FormData()
       form.set('model_id', 'scribe_v2')
-      form.set('source_url', audioUrl)
+      if (audio) form.set('file', new Blob([audio as BlobPart], { type: 'audio/mpeg' }), 'episode.mp3')
+      else form.set('source_url', audioUrl)
       form.set('language_code', language)
       form.set('diarize', 'true')
       form.set('timestamps_granularity', 'word')

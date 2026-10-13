@@ -166,6 +166,8 @@ export function createApi(deps: ApiDeps) {
       guided,
       guidanceLevel: guided ? level : null,
       plan: plan?.plan ?? null,
+      // Lets the app line the lesson up with the learner's own copy of the episode.
+      syncUrl: plan?.plan?.syncUrl ?? (await sql`select plan->>'syncUrl' as url from lesson_plans where episode_id = ${episodeId} and plan ? 'syncUrl' limit 1`)[0]?.url ?? null,
     })
   })
 

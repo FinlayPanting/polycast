@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ffmpegAacEncoder, silentWav, wavDurationSec } from '../src/audio'
+import { fingerprintFromPcm } from '@polycast/core'
+import { ffmpegAacEncoder, ffmpegFingerprint, silentWav, wavDurationSec } from '../src/audio'
 import { wordsFromScribe, scribeTranscriber } from '../src/providers/elevenlabs'
 import { geminiSpeech, geminiText, readInteraction, readTokenUsage } from '../src/providers/gemini'
 import { chirpVoiceName, googleChirpSpeech } from '../src/providers/googleTts'
@@ -30,6 +31,18 @@ describe('ElevenLabs Scribe', () => {
     expect(sent!.get('model_id')).toBe('scribe_v2')
     expect(sent!.get('file')).toBeNull()
     expect(r.usage.transcriptionSec).toBe(600)
+  })
+
+  it('uploads the exact bytes it is given, so timings match our fingerprint', async () => {
+    let sent: FormData | undefined
+    const t = scribeTranscriber('key', async (_url, init) => {
+      sent = init!.body as FormData
+      return json({ words: [] })
+    })
+    await t.transcribe({ audioUrl: 'https://cdn/x.mp3', language: 'sv', durationSec: 60, audio: new Uint8Array([1, 2, 3]) })
+    expect(sent!.get('source_url')).toBeNull()
+    const file = sent!.get('file') as Blob
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
   })
 
   it('marks rate limits as retryable and bad requests as not', async () => {
@@ -121,6 +134,19 @@ describe('audio', () => {
   it('reads WAV durations', () => {
     expect(wavDurationSec(silentWav(1.5))).toBeCloseTo(1.5, 3)
     expect(() => wavDurationSec(new Uint8Array(50))).toThrow('Not a WAV file')
+  })
+
+  it('fingerprints an episode with ffmpeg the same way the app does', async () => {
+    // Two seconds of a tone that gets louder, as 8 kHz WAV: ffmpeg's frames match the shared maths.
+    const rate = 8000
+    const pcm = Int16Array.from({ length: rate * 2 }, (_, i) => Math.round(Math.sin(i / 3) * 200 * (1 + (i / rate) * 40)))
+    const wav = silentWav(2, rate)
+    new Int16Array(wav.buffer, 44).set(pcm)
+    const fp = await ffmpegFingerprint()(wav)
+    const expected = fingerprintFromPcm(pcm)
+    expect(fp).toHaveLength(40)
+    for (let i = 0; i < 40; i++) expect(Math.abs(fp[i]! - expected[i]!)).toBeLessThanOrEqual(1)
+    expect(fp[39]!).toBeGreaterThan(fp[0]!)
   })
 
   it('encodes guide speech to small AAC files with ffmpeg', async () => {

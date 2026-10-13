@@ -213,6 +213,33 @@ export async function savedTranscript(sql: Sql, episodeId: string, nativeLanguag
 }
 
 /**
+ * Episodes prepared before lessons could follow each listener's adverts (13 Oct 2026) have no
+ * fingerprint. Prepare each once more, at Polycast's cost, for whoever asked for it first. Their old
+ * transcript goes too: its timings came from a copy of the audio we can't fingerprint. Publisher
+ * transcripts are left alone (they can't be fingerprinted either way).
+ */
+export async function queueSyncUpgrades(sql: Sql): Promise<number> {
+  return sql.begin(async (tx) => {
+    const stale = await tx`
+      select e.id, (select requested_by from prep_jobs j where j.episode_id = e.id and j.kind = 'prepare' order by created_at limit 1) as requested_by,
+             (select guide_id from prep_jobs j where j.episode_id = e.id and j.kind = 'prepare' order by created_at limit 1) as guide_id
+      from episodes e
+      where e.status = 'ready'
+        and not exists (select 1 from lesson_plans l where l.episode_id = e.id and l.plan ? 'syncUrl')
+        and not exists (select 1 from transcripts t where t.episode_id = e.id and t.source = 'feed')
+      for update of e skip locked`
+    for (const e of stale) {
+      await tx`delete from transcripts where episode_id = ${e.id}`
+      await tx`update episodes set status = 'preparing' where id = ${e.id}`
+      await tx`
+        insert into prep_jobs (episode_id, requested_by, kind, guide_id, charge, charged_sec)
+        values (${e.id}, ${e.requested_by}, 'prepare', ${e.guide_id ?? 'mia'}, 'none', 0)`
+    }
+    return stale.length
+  })
+}
+
+/**
  * Puts a job the worker was running back in the queue without counting the attempt: used when
  * the server shuts down mid-job (every deploy does this), so the next server picks it up.
  */

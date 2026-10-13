@@ -47,5 +47,8 @@ export function memoryStorage(): Storage & { files: Map<string, Uint8Array> } {
       files.set(path, bytes)
       return `https://storage.test/${path}`
     },
+    async exists(path) {
+      return files.has(path) ? `https://storage.test/${path}` : undefined
+    },
   }
 }

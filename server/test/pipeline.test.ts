@@ -134,6 +134,39 @@ describe('preparing an episode', () => {
   })
 })
 
+describe('fingerprinting the copy we transcribe', () => {
+  it('downloads once, fingerprints those bytes, transcribes the same bytes and links the fingerprint', async () => {
+    const d = deps()
+    const bytes = new Uint8Array([9, 8, 7])
+    let heard: Uint8Array | undefined
+    const transcriber = {
+      async transcribe(i: { audioUrl: string; language: string; durationSec: number; audio?: Uint8Array }) {
+        heard = i.audio
+        return d.transcriber.transcribe(i)
+      },
+    }
+    let downloads = 0
+    const r = await prepareEpisode(input(d.ep), {
+      ...d,
+      transcriber,
+      downloadAudio: async () => (downloads++, bytes),
+      fingerprint: async (a) => Uint8Array.from(a, (x) => x * 2),
+    })
+    expect(downloads).toBe(1)
+    expect(heard).toBe(bytes)
+    expect(d.storage.files.get('sync/ep1.fp')).toEqual(new Uint8Array([18, 16, 14]))
+    expect(r.plan.syncUrl).toBe('https://storage.test/sync/ep1.fp')
+  })
+
+  it('keeps the fingerprint when a retry resumes from the saved transcript', async () => {
+    const d = deps()
+    let saved: any
+    await prepareEpisode(input(d.ep), { ...d, saveTranscript: async (t) => void (saved = t) })
+    const r = await prepareEpisode({ ...input(d.ep), savedTranscript: saved, savedSyncUrl: 'https://storage.test/sync/ep1.fp' }, d)
+    expect(r.plan.syncUrl).toBe('https://storage.test/sync/ep1.fp')
+  })
+})
+
 describe('resuming a retried episode', () => {
   it('keeps the transcript as soon as it exists, and a retry skips straight to writing', async () => {
     const d = deps()

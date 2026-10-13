@@ -11,6 +11,7 @@ import {
   completePreparation,
   failJob,
   freeEpisodesClaimed,
+  queueSyncUpgrades,
   reclaimStaleJobs,
   releaseJob,
   saveTranscript,
@@ -233,6 +234,29 @@ run('database', () => {
       await saveTranscript(sql, ep, 'en', t as any)
       expect((await savedTranscript(sql, ep, 'en'))?.words).toEqual(t.words)
       expect(await savedTranscript(sql, ep, 'de')).toBeUndefined()
+    })
+
+    it('prepares older episodes once more, free, so they can follow each listener\'s adverts', async () => {
+      const [a, b] = [await learner(), await learner()]
+      const [old, fresh] = [await episode(), await episode()]
+      await requestPreparation(sql, a, old, 'leo')
+      await requestPreparation(sql, b, fresh, 'leo')
+      for (const ep of [old, fresh]) {
+        const [job] = await sql`select id from prep_jobs where episode_id = ${ep}`
+        const result = fakeResult(ep, 'leo')
+        if (ep === fresh) (result.plan as any).syncUrl = 'https://s/sync.fp'
+        await sql`update prep_jobs set status = 'running' where id = ${job!.id}`
+        await completePreparation(sql, job!.id, result)
+      }
+      await queueSyncUpgrades(sql)
+      const [o] = await sql`select status from episodes where id = ${old}`
+      const [f] = await sql`select status from episodes where id = ${fresh}`
+      expect(o!.status).toBe('preparing')
+      expect(f!.status).toBe('ready')
+      expect(await sql`select 1 from transcripts where episode_id = ${old}`).toHaveLength(0)
+      const [job] = await sql`select charge, guide_id, requested_by from prep_jobs where episode_id = ${old} and status = 'queued'`
+      expect(job).toMatchObject({ charge: 'none', guide_id: 'leo', requested_by: a })
+      expect(await queueSyncUpgrades(sql)).toBe(0) // once only
     })
 
     it('picks up a job a dead server left running, and gives up after the last attempt', async () => {

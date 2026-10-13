@@ -3,7 +3,7 @@
  * Configuration comes from environment variables; see .env.example.
  */
 import { serve } from '@hono/node-server'
-import { ffmpegAacEncoder } from './audio'
+import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
 import { createApi, supabaseVerifier } from './api'
 import { connect, releaseJob } from './db'
 import { scribeTranscriber } from './providers/elevenlabs'
@@ -35,6 +35,11 @@ function supabaseStorage(url: string, serviceKey: string, bucket = 'guide-audio'
       })
       if (!res.ok) throw new Error(`Storage upload failed: ${res.status} ${await res.text()}`)
       return `${url}/storage/v1/object/public/${bucket}/${path}`
+    },
+    async exists(path) {
+      const publicUrl = `${url}/storage/v1/object/public/${bucket}/${path}`
+      const res = await fetch(publicUrl, { method: 'HEAD' })
+      return res.ok ? publicUrl : undefined
     },
   }
 }
@@ -91,6 +96,8 @@ async function main() {
         ? pacedSpeech(googleChirpSpeech(process.env.GOOGLE_TTS_API_KEY, ffmpegAacEncoder()), Number(process.env.GOOGLE_TTS_RPM ?? 150))
         : pacedSpeech(geminiSpeech(gemini, ffmpegAacEncoder()), Number(process.env.GEMINI_TTS_RPM ?? 9)),
       storage: supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY')),
+      downloadAudio: downloadEpisode(),
+      fingerprint: ffmpegFingerprint(),
       alert,
       notifyReady: expoPush(async (id) => (await sql`select push_token from profiles where id = ${id}`)[0]?.push_token ?? undefined),
     }, { signal: stopping.signal })

@@ -33,6 +33,8 @@ export interface PrepareInput {
   feedWords?: Word[]
   /** A transcript (with subtitles and glossary) saved by an earlier attempt, so a retry skips straight to writing. */
   savedTranscript?: Transcript
+  /** The fingerprint an earlier attempt stored with that transcript, if any. */
+  savedSyncUrl?: string
 }
 
 export interface PrepareDeps {
@@ -44,7 +46,16 @@ export interface PrepareDeps {
   onStage?: (stage: Stage) => void | Promise<void>
   /** Keeps the finished transcript, so a later attempt doesn't pay to transcribe and translate again. */
   saveTranscript?: (transcript: Transcript) => Promise<void>
+  /**
+   * With both of these, the episode is downloaded once: those bytes are fingerprinted and sent to
+   * transcription, so the app can line our timings up with each listener's copy (adverts differ).
+   */
+  downloadAudio?: (url: string) => Promise<Uint8Array>
+  fingerprint?: (audio: Uint8Array) => Promise<Uint8Array>
 }
+
+/** Where an episode's fingerprint is stored. */
+export const syncPath = (episodeId: string) => `sync/${episodeId}.fp`
 
 export interface PrepareResult {
   transcript: Transcript
@@ -71,6 +82,7 @@ export class EmptyTranscript extends Error {
 export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Promise<PrepareResult> {
   const meter = new UsageMeter()
   const resumed = input.savedTranscript
+  let syncUrl = resumed ? input.savedSyncUrl : undefined
   await deps.guard.reserve(input.jobId, estimatePrepCostUSD(input.durationSec, { feedTranscript: Boolean(input.feedWords || resumed) }))
   try {
     let transcript: Transcript
@@ -80,7 +92,13 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
       await deps.onStage?.('transcribing')
       let words = input.feedWords
       if (!words) {
-        const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec }))
+        let audio: Uint8Array | undefined
+        if (deps.downloadAudio && deps.fingerprint) {
+          audio = await withRetry(() => deps.downloadAudio!(input.audioUrl))
+          syncUrl = await deps.storage.put(syncPath(input.episodeId), await deps.fingerprint(audio), 'application/octet-stream')
+        }
+        const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec, audio }))
+        audio = undefined // never kept
         meter.add(result.usage)
         words = result.words
       }
@@ -103,7 +121,8 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
     })
 
     await deps.onStage?.('voicing')
-    const plan = await voicePlan(unvoiced, input.guide, { speech: deps.speech, storage: deps.storage, meter })
+    const voiced = await voicePlan(unvoiced, input.guide, { speech: deps.speech, storage: deps.storage, meter })
+    const plan = syncUrl ? { ...voiced, syncUrl } : voiced
 
     await deps.onStage?.('done')
     return {

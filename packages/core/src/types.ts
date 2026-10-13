@@ -121,4 +121,10 @@ export interface LessonPlan {
   moments: GuideMoment[]
   /** Questions on the wrap-up screen; tap to answer, or later from a notification. */
   wrapUpQuestions: Question[]
+  /**
+   * Fingerprint of the exact audio we transcribed (see sync.ts), so the app can line the lesson up
+   * with the listener's own copy when adverts differ. Missing for episodes prepared before 13 Oct 2026
+   * and for publisher transcripts.
+   */
+  syncUrl?: string
 }
