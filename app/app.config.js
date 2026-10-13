@@ -12,7 +12,9 @@ module.exports = ({ config }) => {
     name: 'Polycast Test',
     ios: {
       ...config.ios,
-      bundleIdentifier: `${config.ios.bundleIdentifier}.test`,
+      // One id per Apple team: an id registered by one team can't be used by another, so a Mac
+      // with two teams in Xcode would otherwise fail ("cannot be registered to your development team").
+      bundleIdentifier: `${config.ios.bundleIdentifier}.test${process.env.POLYCAST_TEAM ? `.t${process.env.POLYCAST_TEAM.toLowerCase()}` : ''}`,
       usesAppleSignIn: false,
       infoPlist: { ...config.ios.infoPlist, UIBackgroundModes: ['audio'] },
     },

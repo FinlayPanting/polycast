@@ -23,8 +23,10 @@ PREFS="$HOME/Library/Preferences/com.apple.dt.Xcode.plist"
 TEAM=$(plutil -extract IDEProvisioningTeamByIdentifier json -o - "$PREFS" 2>/dev/null | node -e '
   let teams = []
   try { teams = Object.values(JSON.parse(require("fs").readFileSync(0, "utf8"))).flat() } catch {}
-  const pick = teams.find((t) => t.isFreeProvisioningTeam) || teams[0]
-  if (pick) console.log(pick.teamID)' || true)
+  // Same choice every run: free (personal) team first, then by id.
+  teams.sort((a, b) => (b.isFreeProvisioningTeam ? 1 : 0) - (a.isFreeProvisioningTeam ? 1 : 0) || String(a.teamID).localeCompare(String(b.teamID)))
+  for (const t of teams) console.error("  found team " + t.teamID + (t.isFreeProvisioningTeam ? " (personal)" : "") + (t.teamName ? " " + t.teamName : ""))
+  if (teams[0]) console.log(teams[0].teamID)' || true)
 [ -n "$TEAM" ] || stop "No Apple Account in Xcode yet. Open Xcode > Settings > Accounts, click +, add your Apple Account, close Settings, then run this again."
 echo "Team: $TEAM"
 
@@ -57,6 +59,7 @@ step "Building Polycast Test for your iPhone (quiet: only problems are printed; 
 cd app
 # Regenerates ios/ as the test app (the simulator script regenerates it back).
 export POLYCAST_PERSONAL_TEAM=1
+export POLYCAST_TEAM="$TEAM"
 npx expo prebuild -p ios --clean
 WS=$(ls -d ios/*.xcworkspace | head -1)
 SCHEME=$(basename "$WS" .xcworkspace)
