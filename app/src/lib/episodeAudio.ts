@@ -16,7 +16,18 @@ import type { ListenPayload } from './api'
 export type GetReadyStep = { step: 'downloading'; progress: number } | { step: 'syncing' }
 
 const folder = () => new Directory(Paths.document, 'episodes')
-const audioFile = (episodeId: string) => new File(folder(), `${episodeId}.audio`)
+const AUDIO_TYPES = ['mp3', 'm4a', 'aac', 'mp4', 'wav', 'ogg', 'opus'] as const
+
+/**
+ * The file keeps the episode's real extension: iOS decides how to decode a file from it, and an
+ * unknown one (".audio") makes both the player and the fingerprinting fail ("Cannot Open").
+ */
+export function audioExtension(url: string): string {
+  const path = url.split(/[?#]/)[0]!.toLowerCase()
+  const ext = path.slice(path.lastIndexOf('.') + 1)
+  return (AUDIO_TYPES as readonly string[]).includes(ext) ? ext : 'mp3'
+}
+const audioFile = (episodeId: string, url: string) => new File(folder(), `${episodeId}.${audioExtension(url)}`)
 const fingerprintFile = (episodeId: string) => new File(folder(), `${episodeId}.fp`)
 
 /** Whether this phone can download and line up episodes (not the web preview or an older build). */
@@ -24,9 +35,12 @@ export const canSyncOnDevice = Platform.OS === 'ios' && PolycastFingerprint !== 
 
 /** Downloads the episode unless it's already here; reports progress from 0 to 1. */
 export async function downloadEpisode(episodeId: string, url: string, onProgress: (p: number) => void, signal?: AbortSignal): Promise<string> {
-  const file = audioFile(episodeId)
-  if (file.exists && file.size > 0) return file.uri
   folder().create({ idempotent: true, intermediates: true })
+  // Builds from 13 Oct 2026 saved episodes as ".audio", which iOS can't open: clear those out.
+  const unreadable = new File(folder(), `${episodeId}.audio`)
+  if (unreadable.exists) unreadable.delete()
+  const file = audioFile(episodeId, url)
+  if (file.exists && file.size > 0) return file.uri
   const partial = new File(folder(), `${episodeId}.partial`)
   if (partial.exists) partial.delete()
   const task = new DownloadTask(url, partial, {
@@ -78,7 +92,7 @@ export interface ReadyEpisode {
 
 /**
  * Gets an episode ready to play: downloads the learner's copy, then lines the lesson up with it.
- * Any failure after the download falls back to the lesson's own times, never to not playing.
+ * If lining up fails, it plays the stream with the lesson's own times, never nothing.
  */
 export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyStep) => void, signal?: AbortSignal): Promise<ReadyEpisode> {
   const unsynced = { url: data.episode.audioUrl, transcript: data.transcript, plan: data.plan, durationSec: data.episode.durationSec, synced: false }
@@ -96,8 +110,9 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
     const r = retimeLesson({ ...data.transcript, source: 'scribe' }, data.plan, map)
     return { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map }
   } catch (e) {
-    console.warn('Polycast: couldn’t line the lesson up with this copy; using its own times', e)
-    return local
+    // Play the stream with the lesson's own times: never leave the learner unable to listen.
+    console.warn('Polycast: couldn’t line the lesson up with this copy; streaming with its own times', e)
+    return unsynced
   }
 }
 
@@ -107,11 +122,11 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
  */
 export function localOrStream(episodeId: string | undefined, streamUrl: string): string {
   if (!episodeId || Platform.OS === 'web') return streamUrl
-  const f = audioFile(episodeId)
+  const f = audioFile(episodeId, streamUrl)
   return f.exists ? f.uri : streamUrl
 }
 
 /** Removes a downloaded episode (and its fingerprint) from the phone. */
-export function removeDownload(episodeId: string): void {
-  for (const f of [audioFile(episodeId), fingerprintFile(episodeId)]) if (f.exists) f.delete()
+export function removeDownload(episodeId: string, url: string): void {
+  for (const f of [audioFile(episodeId, url), fingerprintFile(episodeId)]) if (f.exists) f.delete()
 }
