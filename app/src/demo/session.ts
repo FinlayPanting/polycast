@@ -16,6 +16,7 @@ export const DEMO_PROFILE: Profile = {
   plan: 'free',
   free_episode_used: false,
   plus_used_sec: 0,
+  interests: ['sport', 'sport/f1', 'comedy'],
 }
 
 const now = new Date(Date.now() - 2 * 86400_000).toISOString()

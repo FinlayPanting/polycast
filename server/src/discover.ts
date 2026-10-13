@@ -1,5 +1,5 @@
 import { DISCOVER_CATEGORIES, type PodcastSummary, type TrendingPodcast } from '@polycast/core'
-import { categoryChart, topChart, type Fetch } from './catalogue'
+import { categoryChart, forYou, topChart, type Fetch, type ForYouShow } from './catalogue'
 import type { Sql } from './db'
 
 export interface ShelfEpisode {
@@ -14,6 +14,7 @@ export interface ShelfEpisode {
 }
 
 export type Shelf =
+  | { id: 'for-you'; title: string; shows: ForYouShow[] }
   | { id: 'picks'; title: string; shows: { podcastId: string; title: string; author: string | null; artwork: string | null; readyEpisodes: number }[] }
   | { id: 'easy' | 'favourites'; title: string; episodes: ShelfEpisode[] }
   | { id: 'top'; title: string; shows: PodcastSummary[] }
@@ -37,8 +38,11 @@ async function readyEpisodes(sql: Sql, where: ReturnType<Sql['unsafe']> | Return
   }))
 }
 
-/** The Discover tab for one target language, shelves in the spec's order. Empty shelves are left out. */
-export async function discoverShelves(sql: Sql, f: Fetch, language: string, podcastIndex?: { key: string; secret: string }): Promise<Shelf[]> {
+/**
+ * The Discover tab for one target language, shelves in the spec's order. A learner who picked
+ * interests gets a For you shelf first. Empty shelves are left out.
+ */
+export async function discoverShelves(sql: Sql, f: Fetch, language: string, podcastIndex?: { key: string; secret: string }, interests: string[] = []): Promise<Shelf[]> {
   const picks = await sql`
     select p.id, p.title, p.author, p.artwork,
       (select count(*)::int from episodes e where e.podcast_id = p.id and e.status = 'ready') as ready_episodes
@@ -52,12 +56,14 @@ export async function discoverShelves(sql: Sql, f: Fetch, language: string, podc
   const favourites = favIds.length ? await readyEpisodes(sql, sql`e.id in ${sql(favIds)}`, 20) : []
   favourites.sort((a, b) => favIds.indexOf(a.episodeId) - favIds.indexOf(b.episodeId))
 
-  const [top, ...categories] = await Promise.all([
+  const [mine, top, ...categories] = await Promise.all([
+    forYou(sql, f, language, interests, podcastIndex).catch(() => [] as ForYouShow[]),
     topChart(sql, f, language).catch(() => [] as PodcastSummary[]),
     ...DISCOVER_CATEGORIES.map((c) => categoryChart(sql, f, language, c, podcastIndex).catch(() => [] as TrendingPodcast[])),
   ])
 
   const shelves: Shelf[] = [
+    { id: 'for-you', title: 'For you', shows: mine as ForYouShow[] },
     {
       id: 'picks',
       title: 'Polycast picks',

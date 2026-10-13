@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { topChart } from '../src/catalogue'
+import { forYou, topChart } from '../src/catalogue'
+import { discoverShelves } from '../src/discover'
 import type { Sql } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
 
@@ -18,6 +19,14 @@ function fakeApple(charts: Record<string, string[]>, calls: string[] = []): type
     if (url.includes('itunes.apple.com/lookup')) {
       const ids = new URL(url).searchParams.get('id')!.split(',')
       return Response.json({ results: ids.filter((id) => !id.startsWith('nofeed')).map((id) => ({ collectionId: id, collectionName: `Show ${id}`, feedUrl: `https://feeds.example.com/${id}.xml` })) })
+    }
+    if (url.includes('itunes.apple.com/search')) {
+      const country = new URL(url).searchParams.get('country')!
+      return Response.json({ results: (charts[`search:${country}`] ?? []).map((id) => ({ collectionId: id, collectionName: `Show ${id}`, feedUrl: `https://feeds.example.com/${id}.xml` })) })
+    }
+    if (url.includes('api.podcastindex.org')) {
+      const cat = new URL(url).searchParams.get('cat')!
+      return Response.json({ feeds: (charts[`pi:${cat}`] ?? []).map((id) => ({ id: Number(id.split('-')[1]), title: `PI ${id}`, url: `https://feeds.example.com/${id}.xml`, language: id.split('-')[0], categories: {} })) })
     }
     const f = url.match(/feeds\.example\.com\/(.+)\.xml/)
     if (f) {
@@ -74,5 +83,44 @@ run('Top charts only show the target language', () => {
 
   it('has no top chart for a language without a country', async () => {
     expect(await topChart(sql, fakeApple({}), 'xx')).toEqual([])
+  })
+})
+
+run('For you shelf from a learner\'s interests', () => {
+  let sql: Sql
+  let drop: () => Promise<void>
+  beforeAll(async () => {
+    ;({ sql, drop } = await freshDatabase())
+  })
+  afterAll(async () => drop?.())
+  const creds = { key: 'k', secret: 's' }
+
+  it('mixes category shows and searched shows in the language, each with why it is there', async () => {
+    const f = fakeApple({
+      'pi:Comedy': ['sv-11', 'en-12', 'sv-13'],
+      'pi:Soccer': ['sv-21'],
+      'search:se': ['sv-31', 'en-32'],
+    })
+    const shows = await forYou(sql, f, 'sv', ['comedy', 'sport/f1', 'sport/football'], creds)
+    // In the order the learner picked: comedy, then sport narrowed to Formula One and football.
+    expect(shows.map((s) => s.title)).toEqual(['PI sv-11', 'Show sv-31', 'PI sv-21', 'PI sv-13'])
+    expect(shows.map((s) => s.why)).toEqual(['Because you like a laugh', 'Because you follow Formula One', 'Because you follow football', 'Because you like a laugh'])
+  })
+
+  it('searches Mexico as well as Spain for Spanish', async () => {
+    const calls: string[] = []
+    const shows = await forYou(sql, fakeApple({ 'search:es': ['es-41'], 'search:mx': ['es-42', 'en-43'] }, calls), 'es', ['sport/f1'], creds)
+    expect(shows.map((s) => s.title)).toEqual(['Show es-41', 'Show es-42'])
+  })
+
+  it('is empty with no interests, and Discover then has no For you shelf', async () => {
+    expect(await forYou(sql, fakeApple({}), 'sv', [], creds)).toEqual([])
+    const shelves = await discoverShelves(sql, fakeApple({ 'pi:Music': ['de-51'] }), 'de', creds, [])
+    expect(shelves.map((s) => s.id)).not.toContain('for-you')
+  })
+
+  it('leads Discover with For you when the learner picked interests', async () => {
+    const shelves = await discoverShelves(sql, fakeApple({ 'pi:Music': ['de-51'], de: ['de-52'] }), 'de', creds, ['music'])
+    expect(shelves[0]).toMatchObject({ id: 'for-you', title: 'For you', shows: [{ title: 'PI de-51', why: 'Because you love music' }] })
   })
 })

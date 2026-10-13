@@ -125,6 +125,14 @@ run('API and worker', () => {
     expect(shelves[2].shows[0].artwork).toBe('https://img/600x600bb.jpg')
   })
 
+  it('reads the learner\'s saved interests for Discover', async () => {
+    const someone = await learner()
+    await sql`update profiles set interests = '{comedy}' where id = ${someone}`
+    const { shelves } = await (await call(someone, 'GET', '/v1/discover/sv')).json()
+    // No Podcast Index key in this test, so the For you shelf is empty and left out; the request still works.
+    expect(shelves.map((s: any) => s.id)).toContain('top')
+  })
+
   it('switches a learner to Plus and back when RevenueCat says so', async () => {
     const lea = await learner()
     const hook = (type: string) =>

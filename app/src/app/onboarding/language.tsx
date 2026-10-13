@@ -61,7 +61,7 @@ export default function ChooseLanguage() {
           label="Continue"
           disabled={!choice}
           // The language is saved on the next screen: saving it is what marks onboarding as done.
-          onPress={() => choice && router.push({ pathname: '/onboarding/guidance', params: { language: choice } })}
+          onPress={() => choice && router.push({ pathname: '/onboarding/interests', params: { language: choice } })}
         />
       </View>
     </Screen>

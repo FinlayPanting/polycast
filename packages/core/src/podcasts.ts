@@ -182,15 +182,15 @@ export function itunesLookupManyUrl(appleIds: string[]): string {
 }
 
 /** Merges several countries' charts by alternating rank, keeping each show once. */
-export function interleaveCharts<T extends { appleId: string }>(charts: T[][]): T[] {
+export function interleaveCharts<T>(charts: T[][], key: (show: T) => string = (show) => (show as { appleId: string }).appleId): T[] {
   const seen = new Set<string>()
   const out: T[] = []
   const longest = Math.max(0, ...charts.map((c) => c.length))
   for (let i = 0; i < longest; i++) {
     for (const chart of charts) {
       const show = chart[i]
-      if (show && !seen.has(show.appleId)) {
-        seen.add(show.appleId)
+      if (show && !seen.has(key(show))) {
+        seen.add(key(show))
         out.push(show)
       }
     }
