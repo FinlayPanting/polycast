@@ -1,0 +1,27 @@
+// Builds normally from app.json. With POLYCAST_PERSONAL_TEAM=1 (scripts/mac-iphone.sh) it
+// makes a test build a free Apple account can sign: its own bundle id, so the real one stays
+// free for the paid team, and without Sign in with Apple and push notifications, which free
+// accounts can't use. Learners never get this build.
+const { withEntitlementsPlist } = require('expo/config-plugins')
+
+module.exports = ({ config }) => {
+  if (process.env.POLYCAST_PERSONAL_TEAM !== '1') return config
+  const pluginName = (p) => (Array.isArray(p) ? p[0] : p)
+  const personal = {
+    ...config,
+    name: 'Polycast Test',
+    ios: {
+      ...config.ios,
+      bundleIdentifier: `${config.ios.bundleIdentifier}.test`,
+      usesAppleSignIn: false,
+      infoPlist: { ...config.ios.infoPlist, UIBackgroundModes: ['audio'] },
+    },
+    plugins: config.plugins.filter((p) => !['expo-apple-authentication', 'expo-notifications'].includes(pluginName(p))),
+  }
+  // Some packages add these on their own; a free account can't sign an app that asks for them.
+  return withEntitlementsPlist(personal, (c) => {
+    delete c.modResults['aps-environment']
+    delete c.modResults['com.apple.developer.applesignin']
+    return c
+  })
+}
