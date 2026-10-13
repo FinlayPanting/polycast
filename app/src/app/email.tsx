@@ -14,7 +14,7 @@ export default function EmailSignIn() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
 
-  const input = [type.body, { color: p.text, backgroundColor: p.raised, borderRadius: 14, paddingHorizontal: space.md, minHeight: 52, borderWidth: 1, borderColor: p.line }]
+  const input = [type.body, { letterSpacing: 0, color: p.text, backgroundColor: p.raised, borderRadius: 14, paddingHorizontal: space.md, minHeight: 52, borderWidth: 1, borderColor: p.line }]
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)

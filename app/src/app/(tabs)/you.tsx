@@ -74,7 +74,7 @@ export default function You() {
         </View>
 
         <Section title="Learning">
-          <Choice options={LANGUAGES.map((l) => ({ id: l.code, label: l.name }))} value={language} accent={p.play} onChange={(code) => set({ target_language: code, flag_id: 'polycast' })} />
+          <Choice options={LANGUAGES.map((l) => ({ id: l.code, label: l.name }))} value={language} accent={p.play} onChange={(code) => set({ target_language: code, flag_id: LANGUAGES.find((l) => l.code === code)?.defaultFlag ?? 'polycast' })} />
         </Section>
 
         <Section title="Your interests">

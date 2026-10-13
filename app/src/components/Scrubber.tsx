@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { View, type LayoutChangeEvent } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { runOnJS } from 'react-native-reanimated'
 import { space, usePalette } from '../theme'
 import { clock, Txt } from './ui'
 
@@ -14,13 +13,18 @@ export function Scrubber({ position, duration, markers, onSeek }: { position: nu
   const frac = duration > 0 ? Math.min(1, shown / duration) : 0
   const toSec = (x: number) => Math.max(0, Math.min(duration, (x / width) * duration))
 
+  // runOnJS(true): these callbacks use plain JavaScript (toSec, state). Run as UI-thread worklets,
+  // as gesture callbacks are by default, calling toSec crashed the app on the first drag.
   const pan = Gesture.Pan()
-    .onUpdate((e) => runOnJS(setDrag)(toSec(e.x)))
+    .runOnJS(true)
+    .onUpdate((e) => setDrag(toSec(e.x)))
     .onEnd((e) => {
-      runOnJS(onSeek)(toSec(e.x))
-      runOnJS(setDrag)(undefined)
+      onSeek(toSec(e.x))
+      setDrag(undefined)
     })
-  const tap = Gesture.Tap().onEnd((e) => runOnJS(onSeek)(toSec(e.x)))
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((e) => onSeek(toSec(e.x)))
 
   return (
     <View

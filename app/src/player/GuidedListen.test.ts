@@ -204,3 +204,28 @@ describe('hearing a moment again', () => {
     expect(audio.pos).toBe(4)
   })
 })
+
+describe('host clips and moving the playhead', () => {
+  it('ignores a stale position from before the seek, so the host isn\'t cut off after a word', async () => {
+    const { audio, voice, listen } = setup([spotlight])
+    await listen.start(track)
+    await audio.advance(10)
+    await voice.finishCurrent() // the clip starts: seek to 6
+    // The player's next update still says 10 (where it was before the seek): past the clip's end.
+    ;(listen as any).onProgress(10)
+    await flush()
+    expect(voice.played).toEqual(['guide-1.m4a']) // still in the clip
+    await audio.advance(1.25)
+    expect(voice.played).toEqual(['guide-1.m4a', 'guide-2.m4a'])
+  })
+
+  it('picks up where the learner scrubbed to if they move the playhead while the guide speaks', async () => {
+    const { audio, listen } = setup([spotlight])
+    await listen.start(track)
+    await audio.advance(10)
+    await listen.seek(25)
+    await flush()
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.pos).toBe(25)
+  })
+})

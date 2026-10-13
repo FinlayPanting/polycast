@@ -1,6 +1,8 @@
 import { router } from 'expo-router'
 import { SymbolView } from 'expo-symbols'
+import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
+import { LanguageSheet } from '../../components/LanguageSheet'
 import { Mark } from '../../components/Mark'
 import { ShelfRow } from '../../components/Shelves'
 import { Button, Screen, Txt } from '../../components/ui'
@@ -12,7 +14,8 @@ import { MIN_TAP, space, type, usePalette } from '../../theme'
 
 export default function Discover() {
   const p = usePalette()
-  const { profile } = useSession()
+  const { profile, updatePrefs } = useSession()
+  const [picking, setPicking] = useState(false)
   const language = profile?.target_language ?? 'sv'
   const { data, error, loading, reload } = useAsync(() => api.discover(language), [language])
 
@@ -20,12 +23,19 @@ export default function Discover() {
     <Screen>
       <ScrollView refreshControl={<RefreshControl refreshing={loading && Boolean(data)} onRefresh={reload} tintColor={p.quiet} />} contentContainerStyle={{ paddingBottom: space.xxl, gap: space.xl }}>
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <Mark height={30} flagId={profile?.flag_id} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Learning ${languageName(language)}. Change language`}
+            onPress={() => setPicking(true)}
+            hitSlop={8}
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, alignSelf: 'flex-start', opacity: pressed ? 0.6 : 1 })}
+          >
+            <Mark height={30} flagId={profile?.flag_id} accessibilityLabel="" />
             <Txt variant="title" accessibilityRole="header">
               {languageName(language)}
             </Txt>
-          </View>
+            <SymbolView name="chevron.down" size={16} tintColor={p.quiet} />
+          </Pressable>
           <Pressable
             accessibilityRole="search"
             accessibilityLabel={`Search ${languageName(language)} podcasts`}
@@ -53,6 +63,15 @@ export default function Discover() {
           </View>
         ) : null}
       </ScrollView>
+      <LanguageSheet
+        visible={picking}
+        current={language}
+        onClose={() => setPicking(false)}
+        onPick={(code, flagId) => {
+          setPicking(false)
+          void updatePrefs({ target_language: code, flag_id: flagId }).catch(() => {})
+        }}
+      />
     </Screen>
   )
 }

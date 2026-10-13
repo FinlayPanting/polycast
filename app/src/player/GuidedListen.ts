@@ -40,7 +40,9 @@ export class GuidedListen {
   private state: ListenState = { phase: 'loading', position: 0, rate: 1 }
   private readonly sleep: (ms: number) => Promise<void>
   private unsubscribe: (() => void)[] = []
-  private clipEnd: { at: number; done: () => void } | undefined
+  private clipEnd: { start: number; at: number; started: boolean; done: () => void } | undefined
+  /** Where to pick up after the guide, if the learner moved the playhead while it was speaking. */
+  private resumeOverride: number | undefined
   private skipRequested = false
   private answerWaiter: ((index: number) => void) | undefined
   private lastSaved = 0
@@ -70,10 +72,13 @@ export class GuidedListen {
   }
 
   private async onProgress(position: number) {
-    if (this.clipEnd && position >= this.clipEnd.at - CLIP_TOLERANCE) {
-      const done = this.clipEnd.done
-      this.clipEnd = undefined
-      done()
+    if (this.clipEnd) {
+      // Count the clip as playing only once the playhead has been seen inside it: the first update
+      // after a seek can still carry the old position (often past the clip's end), which used to
+      // cut the host off after a word.
+      const c = this.clipEnd
+      if (position >= c.start - 0.5 && position < c.at) c.started = true
+      if (c.started && position >= c.at - CLIP_TOLERANCE) this.endClip()
       return
     }
     if (this.state.phase !== 'playing') return
@@ -113,9 +118,11 @@ export class GuidedListen {
     }
 
     if (this.state.phase === 'finished') return
-    await this.o.audio.seek(resumeAt)
+    const back = this.resumeOverride ?? resumeAt
+    this.resumeOverride = undefined
+    await this.o.audio.seek(back)
     await this.o.audio.setVolume(0)
-    this.set({ phase: 'playing', moment: undefined, answer: undefined, position: resumeAt })
+    this.set({ phase: 'playing', moment: undefined, answer: undefined, position: back })
     await this.o.audio.play()
     await this.fade(0, 1)
   }
@@ -124,10 +131,20 @@ export class GuidedListen {
   private async playClip(start: number, end: number) {
     await this.o.audio.seek(start)
     await this.o.audio.setVolume(1)
-    const reached = new Promise<void>((done) => (this.clipEnd = { at: end, done }))
+    const reached = new Promise<void>((done) => (this.clipEnd = { start, at: end, started: false, done }))
+    // Never wait forever on the playhead: if progress updates stop, move on a little after the clip.
+    const clip = this.clipEnd
+    const guard = setTimeout(() => this.clipEnd === clip && this.endClip(), ((end - start) / (this.state.rate || 1) + 3) * 1000)
     await this.o.audio.play()
     await reached
+    clearTimeout(guard)
     await this.o.audio.pause()
+  }
+
+  private endClip() {
+    const c = this.clipEnd
+    this.clipEnd = undefined
+    c?.done()
   }
 
   private async fade(from: number, to: number) {
@@ -144,11 +161,7 @@ export class GuidedListen {
     if (this.state.phase !== 'guide' && this.state.phase !== 'question') return
     this.skipRequested = true
     this.o.voice.stop()
-    if (this.clipEnd) {
-      const done = this.clipEnd.done
-      this.clipEnd = undefined
-      done()
-    }
+    this.endClip()
     this.answerWaiter?.(-1)
   }
 
@@ -170,7 +183,11 @@ export class GuidedListen {
   }
 
   async seek(to: number): Promise<void> {
-    if (this.state.phase === 'guide' || this.state.phase === 'question') this.skipGuide()
+    if (this.state.phase === 'guide' || this.state.phase === 'question') {
+      // The guide stops and the episode picks up where the learner moved it, not where it paused.
+      this.resumeOverride = to
+      this.skipGuide()
+    }
     this.timeline.seek(to)
     await this.o.audio.seek(to)
     this.set({ position: to })

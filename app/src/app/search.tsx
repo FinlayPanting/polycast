@@ -41,7 +41,9 @@ export default function Search() {
           placeholderTextColor={p.faint}
           returnKeyType="search"
           accessibilityLabel="Search podcasts"
-          style={[type.body, { flex: 1, minHeight: 48, borderRadius: 14, backgroundColor: p.raised, color: p.text, paddingHorizontal: space.md }]}
+          // letterSpacing 0 on purpose: iOS reuses text fields, and one could keep the sign-in code's wide
+          // spacing (6) if this didn't set its own.
+          style={[type.body, { letterSpacing: 0, flex: 1, minHeight: 48, borderRadius: 14, backgroundColor: p.raised, color: p.text, paddingHorizontal: space.md }]}
         />
         <Button kind="quiet" label="Cancel" onPress={() => router.back()} style={{ paddingHorizontal: space.sm }} />
       </View>
