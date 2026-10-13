@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Build Polycast and open it in the iPhone simulator on a Mac.
+# Needs Xcode from the Mac App Store; no Apple Developer membership needed.
+#
+# Run it from Terminal with:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/FinlayPanting/polycast/rebuild-ios/scripts/mac-simulator.sh)"
+#
+# Safe to run again: it updates the code and rebuilds.
+set -euo pipefail
+
+DIR="$HOME/Developer/polycast-ios"
+BRANCH="rebuild-ios"
+
+step() { printf '\n\033[1;33m==> %s\033[0m\n' "$1"; }
+stop() { printf '\n\033[1;31m%s\033[0m\n' "$1"; exit 1; }
+
+step "Checking Xcode"
+[ -d /Applications/Xcode.app ] || stop "Xcode isn't in Applications yet. Install it from the Mac App Store, open it once, then run this again."
+if [ "$(xcode-select -p 2>/dev/null)" != "/Applications/Xcode.app/Contents/Developer" ]; then
+  echo "Pointing the command-line tools at Xcode (your Mac password may be needed)."
+  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+fi
+if ! xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1; then
+  echo "Accepting Xcode's licence and finishing its first-launch setup (your Mac password may be needed)."
+  sudo xcodebuild -license accept
+  sudo xcodebuild -runFirstLaunch
+fi
+
+step "Checking the iPhone simulator"
+if ! xcrun simctl list runtimes 2>/dev/null | grep -q "^iOS"; then
+  echo "Downloading the iOS simulator (several GB, can take 10 to 20 minutes)."
+  xcodebuild -downloadPlatform iOS
+fi
+
+step "Checking Homebrew, Node and CocoaPods"
+if ! command -v brew >/dev/null 2>&1; then
+  for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$b" ] && eval "$("$b" shellenv)"; done
+fi
+need_brew() {
+  command -v brew >/dev/null 2>&1 && return 0
+  echo "Installing Homebrew, the Mac's package installer (your Mac password will be needed)."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+}
+node_major=$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || true)
+if [ -z "${node_major}" ] || [ "${node_major}" -lt 20 ]; then
+  need_brew
+  brew install node
+fi
+if ! command -v pod >/dev/null 2>&1; then
+  need_brew
+  brew install cocoapods
+fi
+echo "Node $(node -v), CocoaPods $(pod --version)"
+
+step "Getting the latest Polycast code"
+mkdir -p "$(dirname "$DIR")"
+if [ -d "$DIR/.git" ]; then
+  git -C "$DIR" fetch -q origin "$BRANCH"
+  git -C "$DIR" checkout -q "$BRANCH"
+  git -C "$DIR" reset -q --hard "origin/$BRANCH"
+else
+  git clone -q -b "$BRANCH" https://github.com/FinlayPanting/polycast.git "$DIR"
+fi
+cd "$DIR"
+git log --oneline -1
+
+step "Installing packages"
+npx -y pnpm@9.15.9 install
+
+step "Pointing the app at the live server"
+# Public values only (the same ones the App Store build uses; see app/eas.json).
+cat > app/.env <<'EOF'
+EXPO_PUBLIC_API_URL=https://polycast-production.up.railway.app
+EXPO_PUBLIC_SUPABASE_URL=https://usfdvpivogjtmrbwopzg.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_AoGtiBtbd9z_xFnR8SX-6Q_WQPA2xTI
+EOF
+
+step "Building and opening Polycast in the simulator (the first build takes 5 to 15 minutes)"
+echo "Leave this window open while you test: it serves the app. Press Ctrl+C to stop."
+cd app
+npx expo run:ios
