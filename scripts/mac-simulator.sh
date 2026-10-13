@@ -92,6 +92,34 @@ SIM=$(xcrun simctl list devices available -j | node -e '
 [ -n "$SIM" ] || stop "No iPhone simulator found. Open Xcode > Settings > Components, install iOS, then run this again."
 echo "Using simulator: $(xcrun simctl list devices | grep "$SIM" | sed -E 's/ \(.*//;s/^ +//')"
 xcrun simctl boot "$SIM" 2>/dev/null || true
-open "$(xcode-select -p)/Applications/Simulator.app" || true  # expo opens it too
+# Xcode 27 replaced Simulator.app with Device Hub; open whichever this Mac has.
+open -b com.apple.dt.Devices 2>/dev/null || open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null || true
+
+# Expo's own run:ios can't find Xcode 27's simulators yet, so build with
+# xcodebuild, install with simctl and start the dev server ourselves.
 cd app
-npx expo run:ios --device "$SIM"
+npx expo prebuild -p ios
+WS=$(ls -d ios/*.xcworkspace | head -1)
+SCHEME=$(basename "$WS" .xcworkspace)
+echo "Building $SCHEME (quiet: only problems are printed; the first build takes 5 to 15 minutes)."
+xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Debug \
+  -sdk iphonesimulator -destination "id=$SIM" -derivedDataPath ios/build \
+  CODE_SIGNING_ALLOWED=NO -quiet build
+APP="ios/build/Build/Products/Debug-iphonesimulator/$SCHEME.app"
+[ -d "$APP" ] || stop "The build finished but $APP is missing."
+xcrun simctl install "$SIM" "$APP"
+echo "Installed on the simulator."
+
+step "Starting the app's dev server"
+lsof -ti tcp:8081 | xargs kill 2>/dev/null || true
+npx expo start --dev-client --port 8081 &
+SERVER=$!
+trap 'kill $SERVER 2>/dev/null' EXIT
+for _ in $(seq 1 60); do
+  curl -fs http://localhost:8081/status 2>/dev/null | grep -q running && break
+  sleep 2
+done
+xcrun simctl openurl "$SIM" "exp+polycast://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
+echo
+echo "Polycast is opening in the simulator. Leave this window open while you test; press Ctrl+C to stop."
+wait $SERVER
