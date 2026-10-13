@@ -3,6 +3,7 @@ import { setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-
 import { router } from 'expo-router'
 import { useState } from 'react'
 import { Alert, Linking, Pressable, ScrollView, View } from 'react-native'
+import { InterestPicker } from '../../components/InterestPicker'
 import { Mark } from '../../components/Mark'
 import { Button, Screen, Txt, minutes } from '../../components/ui'
 import { api } from '../../lib/api'
@@ -74,6 +75,13 @@ export default function You() {
 
         <Section title="Learning">
           <Choice options={LANGUAGES.map((l) => ({ id: l.code, label: l.name }))} value={language} accent={p.play} onChange={(code) => set({ target_language: code, flag_id: 'polycast' })} />
+        </Section>
+
+        <Section title="Your interests">
+          <Txt variant="small" tone="quiet">
+            Discover leads with {languageName(language)} shows about these.
+          </Txt>
+          <InterestPicker value={profile.interests ?? []} onChange={(interests) => set({ interests })} />
         </Section>
 
         <Section title="Guidance">

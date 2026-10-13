@@ -147,6 +147,14 @@ const show = (id: string, title: string, author: string, artwork: number, readyE
 
 export const SHELVES: Shelf[] = [
   {
+    id: 'for-you',
+    title: 'For you',
+    shows: [
+      { appleId: 'f1', title: 'Depåsnack', author: 'Två motorjournalister', artwork: art.historia, genres: [], why: 'Because you follow Formula One' },
+      { appleId: 'c1', title: 'Skratt i P3', author: 'Sveriges Radio', artwork: art.kaffe, genres: [], why: 'Because you like a laugh' },
+    ],
+  },
+  {
     id: 'picks',
     title: 'Polycast picks',
     shows: [show('p1', 'Svenska Samtal', 'Anna & Erik', art.samtal, 12), show('p2', 'Kaffe med Karin', 'Karin Lund', art.kaffe, 5), show('p3', 'Historiepodden', 'Två historiker', art.historia, 8)],

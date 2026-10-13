@@ -90,7 +90,10 @@ export function createApi(deps: ApiDeps) {
     return c.json({ ok: true })
   })
 
-  app.get('/v1/discover/:language', async (c) => c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex) }))
+  app.get('/v1/discover/:language', async (c) => {
+    const [profile] = await sql`select interests from profiles where id = ${c.get('userId')}`
+    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? []) })
+  })
 
   app.get('/v1/search', async (c) => {
     const q = c.req.query('q')?.trim()

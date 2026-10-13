@@ -18,10 +18,11 @@ export interface Profile {
   plan: 'free' | 'plus'
   free_episode_used: boolean
   plus_used_sec: number
+  interests: string[]
 }
 
 /** The preferences a learner may change themselves; everything else is set by the server. */
-export type ProfilePrefs = Partial<Pick<Profile, 'native_language' | 'target_language' | 'guidance_level' | 'guide_id' | 'flag_id' | 'subtitle_mode'>>
+export type ProfilePrefs = Partial<Pick<Profile, 'native_language' | 'target_language' | 'guidance_level' | 'guide_id' | 'flag_id' | 'subtitle_mode' | 'interests'>>
 
 interface SessionValue {
   ready: boolean

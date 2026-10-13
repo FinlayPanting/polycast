@@ -2,6 +2,7 @@ import {
   appleChartUrl,
   CHART_COUNTRY,
   feedLanguageFromHead,
+  interestQueries,
   interleaveCharts,
   itunesLookupManyUrl,
   itunesLookupUrl,
@@ -180,4 +181,44 @@ export function categoryChart(sql: Sql, f: Fetch, language: string, category: st
     // Podcast Index's language filter is loose; keep only feeds that say they're in the language.
     return parsePodcastIndexTrending(await res.json()).filter((p) => p.language === language)
   })
+}
+
+/** A show on the For you shelf, with the line saying why it's there. */
+export type ForYouShow = (PodcastSummary | TrendingPodcast) & { why: string }
+
+/** Apple search in each of the language's chart countries, keeping only shows in the language. */
+function searchInLanguage(sql: Sql, f: Fetch, language: string, term: string): Promise<PodcastSummary[]> {
+  const countries = TOP_CHART_COUNTRIES[language]
+  if (!countries?.length) return Promise.resolve([])
+  return cachedChart(sql, language, `search:${term}`, async () => {
+    const results = await Promise.all(
+      countries.map(async (country) => {
+        const res = await f(itunesSearchUrl(term, country))
+        if (!res.ok) throw new Error(`Search returned ${res.status}`)
+        return parseItunesResults(await res.json())
+      }),
+    )
+    return (await keepShowsInLanguage(sql, f, interleaveCharts(results), language)).slice(0, 30)
+  })
+}
+
+/**
+ * Shows in the target language matching a learner's interests, each with a "why" line. Results
+ * from each interest are alternated so one doesn't crowd out the rest. Lookups are cached daily
+ * and free (no AI is used).
+ */
+export async function forYou(sql: Sql, f: Fetch, language: string, interests: string[], creds: { key: string; secret: string } | undefined, max = 30): Promise<ForYouShow[]> {
+  const queries = interestQueries(interests)
+  if (!queries.length) return []
+  const lists = await Promise.all(
+    queries.map(async (q): Promise<ForYouShow[]> => {
+      const shows: (PodcastSummary | TrendingPodcast)[] = await ('search' in q.source
+        ? searchInLanguage(sql, f, language, q.source.search)
+        : categoryChart(sql, f, language, q.source.categories.join(','), creds)
+      ).catch(() => [])
+      return shows.map((s) => ({ ...s, why: q.why }))
+    }),
+  )
+  const showKey = (s: ForYouShow) => ('appleId' in s ? `a${s.appleId}` : `p${s.podcastIndexId}`)
+  return interleaveCharts(lists, showKey).slice(0, max)
 }

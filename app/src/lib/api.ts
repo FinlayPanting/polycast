@@ -54,6 +54,7 @@ export interface ShelfEpisode {
 }
 
 export type Shelf =
+  | { id: 'for-you'; title: string; shows: ((PodcastSummary | { podcastIndexId: number; title: string; author: string; artwork: string; feedUrl: string }) & { why: string })[] }
   | { id: 'picks'; title: string; shows: { podcastId: string; title: string; author: string | null; artwork: string | null; readyEpisodes: number }[] }
   | { id: 'easy' | 'favourites'; title: string; episodes: ShelfEpisode[] }
   | { id: 'top'; title: string; shows: PodcastSummary[] }

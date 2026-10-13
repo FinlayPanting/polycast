@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router'
+import { normaliseInterests } from '@polycast/core'
 import { useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Button, Screen, Txt } from '../../components/ui'
@@ -10,7 +11,7 @@ type Level = (typeof GUIDANCE)[number]['id']
 
 export default function ChooseGuidance() {
   const p = usePalette()
-  const { language } = useLocalSearchParams<{ language: string }>()
+  const { language, interests } = useLocalSearchParams<{ language: string; interests?: string }>()
   const { updatePrefs } = useSession()
   const [level, setLevel] = useState<Level>('standard')
   const [guide, setGuide] = useState<string>('mia')
@@ -77,7 +78,7 @@ export default function ChooseGuidance() {
             setBusy(true)
             setError(undefined)
             try {
-              await updatePrefs({ guidance_level: level, guide_id: guide, target_language: language, flag_id: 'polycast' })
+              await updatePrefs({ guidance_level: level, guide_id: guide, target_language: language, flag_id: 'polycast', interests: normaliseInterests(interests ? interests.split(',') : []) })
             } catch (e) {
               setError(e instanceof Error ? e.message : 'Couldn’t save that. Please try again.')
             } finally {
