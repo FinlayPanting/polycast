@@ -5,11 +5,16 @@
 import { serve } from '@hono/node-server'
 import { ffmpegAacEncoder } from './audio'
 import { createApi, supabaseVerifier } from './api'
-import { connect } from './db'
+import { connect, releaseJob } from './db'
 import { scribeTranscriber } from './providers/elevenlabs'
 import { geminiSpeech, geminiText } from './providers/gemini'
 import type { Storage } from './providers/types'
-import { workLoop } from './worker'
+import { Agent, setGlobalDispatcher } from 'undici'
+import { jobInProgress, workLoop } from './worker'
+
+// Node's fetch gives up if a reply takes over 5 minutes to start. Transcribing a long episode
+// can take longer than that, so allow 20 minutes.
+setGlobalDispatcher(new Agent({ headersTimeout: 20 * 60_000, bodyTimeout: 20 * 60_000 }))
 
 function need(name: string): string {
   const v = process.env[name]
@@ -65,6 +70,7 @@ async function main() {
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
 
+  const stopping = new AbortController()
   if (process.env.RUN_WORKER !== 'false') {
     void workLoop({
       sql,
@@ -75,9 +81,22 @@ async function main() {
       storage: supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY')),
       alert,
       notifyReady: expoPush(async (id) => (await sql`select push_token from profiles where id = ${id}`)[0]?.push_token ?? undefined),
-    })
+    }, { signal: stopping.signal })
     console.log('Worker running')
   }
+
+  // Railway stops the old server on every deploy. Hand an unfinished job back to the queue so
+  // the new server picks it up, instead of leaving it "running" with nobody working on it.
+  const shutdown = async (signal: string) => {
+    stopping.abort()
+    const job = jobInProgress()
+    console.log(`${signal}: shutting down${job ? `, returning job ${job} to the queue` : ''}`)
+    if (job) await releaseJob(sql, job).catch((e) => console.error('could not release job', e))
+    await sql.end({ timeout: 5 }).catch(() => {})
+    process.exit(0)
+  }
+  process.once('SIGTERM', () => void shutdown('SIGTERM'))
+  process.once('SIGINT', () => void shutdown('SIGINT'))
 }
 
 main().catch((e) => {

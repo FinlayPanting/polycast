@@ -11,6 +11,8 @@ import {
   completePreparation,
   failJob,
   freeEpisodesClaimed,
+  reclaimStaleJobs,
+  releaseJob,
   pgSpendLedger,
   requestPreparation,
   startListen,
@@ -210,6 +212,33 @@ run('database', () => {
       const [e] = await sql`select status from episodes where id = ${ep}`
       expect(p!.free_episode_used).toBe(false)
       expect(e!.status).toBe('none')
+    })
+
+    it('hands an unfinished job back when the server shuts down, without using up an attempt', async () => {
+      const ep = await episode()
+      await requestPreparation(sql, await learner(), ep, 'mia')
+      const job = (await claimNextJob(sql))!
+      await releaseJob(sql, job.id)
+      const again = (await claimNextJob(sql))!
+      expect(again.id).toBe(job.id)
+      expect(again.attempts).toBe(1)
+    })
+
+    it('picks up a job a dead server left running, and gives up after the last attempt', async () => {
+      const a = await learner()
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      const job = (await claimNextJob(sql))!
+      expect(await reclaimStaleJobs(sql)).toBe(0) // still fresh: leave it alone
+      for (let i = 1; i <= 3; i++) {
+        await sql`update prep_jobs set started_at = now() - interval '2 hours' where id = ${job.id}`
+        expect(await reclaimStaleJobs(sql)).toBe(1)
+        if (i < 3) expect((await claimNextJob(sql))!.attempts).toBe(i + 1)
+      }
+      const [j] = await sql`select status from prep_jobs where id = ${job.id}`
+      const [p] = await sql`select free_episode_used from profiles where id = ${a}`
+      expect(j!.status).toBe('failed')
+      expect(p!.free_episode_used).toBe(false)
     })
   })
 

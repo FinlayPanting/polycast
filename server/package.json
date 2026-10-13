@@ -16,7 +16,8 @@
     "hono": "^4.6.14",
     "jose": "^5.9.6",
     "postgres": "^3.4.5",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "undici": "^6.23.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

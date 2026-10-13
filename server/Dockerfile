@@ -9,4 +9,6 @@ COPY server server
 RUN pnpm install --frozen-lockfile --filter @polycast/server...
 WORKDIR /app/server
 ENV NODE_ENV=production
-CMD ["pnpm", "exec", "tsx", "src/main.ts"]
+# Node itself runs as the main process, so it receives Railway's SIGTERM and can hand back an
+# unfinished job (pnpm exec would swallow the signal).
+CMD ["node", "--import", "tsx", "src/main.ts"]

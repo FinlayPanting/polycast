@@ -196,6 +196,30 @@ export async function failJob(sql: Sql, jobId: string, error: string, retryable:
   })
 }
 
+/**
+ * Puts a job the worker was running back in the queue without counting the attempt: used when
+ * the server shuts down mid-job (every deploy does this), so the next server picks it up.
+ */
+export async function releaseJob(sql: Sql, jobId: string): Promise<void> {
+  await sql`
+    update prep_jobs set status = 'queued', attempts = greatest(attempts - 1, 0), error = 'Server restarted mid-job'
+    where id = ${jobId} and status = 'running'`
+}
+
+/**
+ * A job still "running" long after it started belongs to a server that died without releasing it
+ * (a crash, or a restart that skipped the shutdown hook). Retry it, or fail it after the last attempt.
+ */
+export async function reclaimStaleJobs(sql: Sql, olderThanMinutes = STALE_JOB_MINUTES): Promise<number> {
+  const stale = await sql`
+    select id from prep_jobs where status = 'running' and started_at < now() - make_interval(mins => ${olderThanMinutes})`
+  for (const job of stale) await failJob(sql, job.id, `No progress for ${olderThanMinutes} minutes; the server probably restarted`, true)
+  return stale.length
+}
+
+/** Longer than any real preparation (a 2-hour episode takes about 15 minutes). */
+export const STALE_JOB_MINUTES = 60
+
 /** How many of the free cohort have claimed their episode, for Finlay's 50/90/100 alerts. */
 export async function freeEpisodesClaimed(sql: Sql): Promise<number> {
   const [row] = await sql`select count(*)::int as n from profiles where free_episode_used`

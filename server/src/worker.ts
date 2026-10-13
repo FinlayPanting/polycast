@@ -1,6 +1,6 @@
 import { costUSD, wordsFromPodcastJson, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
 import { SpendCapReached, SpendGuard } from './budget'
-import { claimNextJob, completePreparation, failJob, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
+import { claimNextJob, completePreparation, failJob, reclaimStaleJobs, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
 import { EmptyTranscript, prepareEpisode, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
 import { ProviderError } from './providers/types'
 import { guideById } from './voices'
@@ -70,17 +70,31 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
   }
 }
 
+let currentJob: string | undefined
+
+/** The job this process is working on, so shutdown can hand it back to the queue. */
+export function jobInProgress(): string | undefined {
+  return currentJob
+}
+
 /** Runs queued jobs until stopped, polling when the queue is empty. */
 export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal?: AbortSignal } = {}): Promise<void> {
   const poll = opts.pollMs ?? 3000
+  let lastReclaim = 0
   while (!opts.signal?.aborted) {
     try {
+      if (Date.now() - lastReclaim > 60_000) {
+        lastReclaim = Date.now()
+        const n = await reclaimStaleJobs(deps.sql)
+        if (n) console.log(`worker: put ${n} abandoned job(s) back in the queue`)
+      }
       const job = await claimNextJob(deps.sql)
       if (!job) {
         await new Promise((r) => setTimeout(r, poll))
         continue
       }
-      const outcome = await runJob(deps, job)
+      currentJob = job.id
+      const outcome = await runJob(deps, job).finally(() => (currentJob = undefined))
       console.log(`job ${job.id} (${job.kind}) → ${outcome}`)
     } catch (err) {
       // A database hiccup (or a database not yet set up) must not take the API down with it.
