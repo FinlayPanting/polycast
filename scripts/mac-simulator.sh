@@ -98,7 +98,7 @@ open -b com.apple.dt.Devices 2>/dev/null || open "$(xcode-select -p)/Application
 # Expo's own run:ios can't find Xcode 27's simulators yet, so build with
 # xcodebuild, install with simctl and start the dev server ourselves.
 cd app
-npx expo prebuild -p ios
+npx expo prebuild -p ios --clean
 WS=$(ls -d ios/*.xcworkspace | head -1)
 SCHEME=$(basename "$WS" .xcworkspace)
 echo "Building $SCHEME (quiet: only problems are printed; the first build takes 5 to 15 minutes)."
