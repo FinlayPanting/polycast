@@ -1,4 +1,5 @@
-import TrackPlayer, { AppKilledPlaybackBehavior, Capability, Event, IOSCategory } from 'react-native-track-player'
+import TrackPlayer, { AppKilledPlaybackBehavior, Capability, Event, IOSCategory, IOSCategoryMode } from 'react-native-track-player'
+import { plog } from '../lib/playbackLog'
 import type { EpisodeAudio } from './types'
 
 let setup: Promise<void> | undefined
@@ -7,11 +8,16 @@ let setup: Promise<void> | undefined
 function ensureSetup(): Promise<void> {
   setup ??= (async () => {
     try {
-      await TrackPlayer.setupPlayer({ iosCategory: IOSCategory.Playback, autoHandleInterruptions: true })
+      // Must match the guide voice's setup (expoGuideVoice: playback, default mode, no mixing), so
+      // neither library switches the session under the other.
+      await TrackPlayer.setupPlayer({ iosCategory: IOSCategory.Playback, iosCategoryMode: IOSCategoryMode.Default, iosCategoryOptions: [], autoHandleInterruptions: true })
     } catch (e) {
       // Already set up (e.g. after a fast refresh in development).
       if (!String(e).includes('already been initialized')) throw e
     }
+    TrackPlayer.addEventListener(Event.PlaybackState, (e) => plog(`  episode player: ${e.state}`))
+    TrackPlayer.addEventListener(Event.RemoteDuck, (e) => plog(`  episode player: duck ${JSON.stringify(e)}`))
+    TrackPlayer.addEventListener(Event.PlaybackError, (e) => plog(`  episode player error: ${e.message}`))
     await TrackPlayer.updateOptions({
       capabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext, Capability.SkipToPrevious, Capability.SeekTo, Capability.JumpForward, Capability.JumpBackward],
       forwardJumpInterval: 30,
@@ -36,7 +42,10 @@ export function trackPlayerAudio(): EpisodeAudio {
     pause: () => TrackPlayer.pause(),
     seek: (s) => TrackPlayer.seekTo(s),
     position: () => TrackPlayer.getPosition(),
-    setVolume: (v) => TrackPlayer.setVolume(v),
+    async setVolume(v) {
+      await TrackPlayer.setVolume(v)
+      if (v === 0 || v === 1) plog(`  episode volume ${v}`)
+    },
     setRate: (r) => TrackPlayer.setRate(r),
     onProgress(listener) {
       const sub = TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (e) => listener(e.position))

@@ -2,7 +2,7 @@ import { alternateIconName, flagsForLanguage, PLUS_MONTHLY_SEC } from '@polycast
 import { setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons'
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { Alert, Linking, Pressable, ScrollView, View } from 'react-native'
+import { Alert, Linking, Pressable, ScrollView, Share, View } from 'react-native'
 import { InterestPicker } from '../../components/InterestPicker'
 import { Mark } from '../../components/Mark'
 import { Button, Screen, Txt, minutes } from '../../components/ui'
@@ -11,6 +11,8 @@ import { GUIDANCE, GUIDES, LANGUAGES, languageName } from '../../lib/languages'
 import { useSession, type ProfilePrefs } from '../../lib/session'
 import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
+import Constants from 'expo-constants'
+import { playbackLog } from '../../lib/playbackLog'
 
 function Choice<T extends string>({ options, value, onChange, accent }: { options: { id: T; label: string }[]; value: T | undefined; onChange: (v: T) => void; accent: string }) {
   const p = usePalette()
@@ -136,6 +138,9 @@ export default function You() {
         <Section title="Account">
           <Button kind="secondary" label="Privacy policy" onPress={() => Linking.openURL('https://polycast.app/privacy')} />
           <Button kind="secondary" label="For podcast creators" onPress={() => Linking.openURL('https://polycast.app/creators')} />
+          {Constants.expoConfig?.extra?.testBuild ? (
+            <Button kind="secondary" label="Share playback log" onPress={() => void Share.share({ message: playbackLog() || 'Nothing played yet.' })} />
+          ) : null}
           <Button kind="secondary" label="Sign out" onPress={signOut} />
           <Button
             kind="quiet"

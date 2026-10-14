@@ -7,7 +7,7 @@ import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
-import { Artwork, Button, Screen, Txt } from '../../components/ui'
+import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { config } from '../../lib/config'
@@ -16,7 +16,8 @@ import { guideName } from '../../lib/languages'
 import { useSession } from '../../lib/session'
 import { resumePosition, savePosition } from '../../lib/data'
 import { listWords, saveWord } from '../../lib/words'
-import { expoGuideVoice } from '../../player/expoGuideVoice'
+import { plog } from '../../lib/playbackLog'
+import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
 import { GuidedListen, type ListenState } from '../../player/GuidedListen'
 import { setRemoteHandler } from '../../player/remote'
 import { trackPlayerAudio } from '../../player/trackPlayerAudio'
@@ -172,6 +173,8 @@ export default function Listen() {
         })
         listen.current = l
         setRemoteHandler((cmd) => void l.remote(cmd))
+        plog(`listen: ${d.episode.title} (${ready?.synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
+        if (!config.demo) await prepareGuideAudio()
         await l.start({ url: d.episode.audioUrl, title: d.episode.title, artist: d.episode.podcastTitle, artwork: d.episode.image ?? undefined, durationSec: d.episode.durationSec }, startAt)
 
         const known = await listWords(d.transcript.language).catch(() => [])
@@ -311,6 +314,10 @@ export default function Listen() {
           />
         ) : null}
 
+        {!guideOn && state.next && data.guided ? (
+          <NextGuide guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
+        ) : null}
+
         <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} onSeek={(s) => void l?.seek(s)} />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -342,5 +349,24 @@ export default function Listen() {
         }}
       />
     </Screen>
+  )
+}
+
+/** A quiet countdown to the guide's next moment, so it never takes the learner by surprise. */
+function NextGuide({ guideName, flagId, seconds }: { guideName: string; flagId?: string; seconds: number }) {
+  const s = Math.max(0, Math.ceil(seconds))
+  // Whole seconds only, and only the last 10 every second: a ticking clock is a distraction.
+  const label = s <= 10 ? `${guideName} is about to step in` : `${guideName} in ${clock(s)}`
+  return (
+    <View
+      accessible
+      accessibilityLabel={s <= 10 ? `${guideName} is about to step in` : `${guideName} steps in after ${clock(s)}`}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, alignSelf: 'center' }}
+    >
+      <Mark height={16} flagId={flagId} speaking={s <= 10} accessibilityLabel="" />
+      <Txt variant="small" tone="quiet">
+        {label}
+      </Txt>
+    </View>
   )
 }

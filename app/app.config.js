@@ -10,6 +10,8 @@ module.exports = ({ config }) => {
   const personal = {
     ...config,
     name: 'Polycast Test',
+    // Shows "Share playback log" on the You tab, for testing on a phone.
+    extra: { ...config.extra, testBuild: true },
     ios: {
       ...config.ios,
       // One id per Apple team: an id registered by one team can't be used by another, so a Mac

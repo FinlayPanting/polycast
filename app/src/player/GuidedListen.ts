@@ -1,4 +1,5 @@
 import { GuideTimeline, playSteps, replayLineStart, type GuideMoment, type Segment } from '@polycast/core'
+import { plog } from '../lib/playbackLog'
 import type { EpisodeAudio, GuideVoice, RemoteCommand } from './types'
 
 export type Phase = 'loading' | 'playing' | 'paused' | 'guide' | 'question' | 'finished'
@@ -25,11 +26,9 @@ export interface ListenOptions {
   onSavePosition?: (seconds: number) => void
 }
 
-/** Development-only trace of what the player does, shown in the Mac's Terminal while testing. */
-const DEV = typeof __DEV__ !== 'undefined' && __DEV__
-const t0 = Date.now()
+/** Trace of what the player does: Terminal in development, and the shareable playback log on a test phone. */
 function trace(...args: unknown[]) {
-  if (DEV) console.log(`[listen +${((Date.now() - t0) / 1000).toFixed(2)}s]`, ...args)
+  plog(...args)
 }
 const fmt = (s: number) => s.toFixed(2)
 
