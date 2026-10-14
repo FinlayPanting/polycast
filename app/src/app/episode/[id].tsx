@@ -11,6 +11,7 @@ import { useSession } from '../../lib/session'
 import { getEpisode } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
+import { Loading } from '../../components/Loading'
 
 const STAGES: Record<string, string> = {
   transcribing: 'Listening to the episode',
@@ -67,7 +68,7 @@ export default function Episode() {
     return prefetchEpisode(ep.id, ep.audio_url, setDownloaded)
   }, [ep, preparingNow])
 
-  if (!ep) return <Screen />
+  if (!ep) return <Screen><Loading /></Screen>
 
   const preparing = Boolean(jobId) || ep.status === 'preparing'
   const plus = profile?.plan === 'plus'

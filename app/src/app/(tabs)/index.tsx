@@ -11,6 +11,7 @@ import { languageName } from '../../lib/languages'
 import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
 import { MIN_TAP, space, type, usePalette } from '../../theme'
+import { Loading } from '../../components/Loading'
 
 export default function Discover() {
   const p = usePalette()
@@ -54,6 +55,7 @@ export default function Discover() {
           </View>
         ) : null}
 
+        {!data && !error ? <Loading fill={false} /> : null}
         {data?.shelves.map((shelf) => <ShelfRow key={shelf.id} shelf={shelf} />)}
 
         {data && data.shelves.length === 0 ? (

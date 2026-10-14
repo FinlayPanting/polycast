@@ -4,6 +4,7 @@ import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/u
 import { api, type EpisodeListing } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
 import { space } from '../theme'
+import { Loading } from '../components/Loading'
 
 function published(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
@@ -58,7 +59,7 @@ export default function Show() {
                 <Button kind="secondary" label="Try again" onPress={reload} style={{ alignSelf: 'flex-start' }} />
               </View>
             ) : (
-              <Txt tone="quiet">Loading the show…</Txt>
+              <Loading label="Loading the show…" fill={false} />
             )}
           </View>
         }

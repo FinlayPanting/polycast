@@ -219,7 +219,7 @@ export default function Listen() {
   if (!data) {
     return (
       <Screen edges={['top', 'bottom']} style={{ padding: space.lg, gap: space.md, justifyContent: 'center', alignItems: 'center' }}>
-        <Mark height={44} />
+        <Mark height={44} flagId={profile?.flag_id} speaking accessibilityLabel="Loading" />
         {getReady ? (
           <View style={{ gap: space.xs, alignItems: 'center' }}>
             <Txt variant="heading">{getReady.step === 'downloading' ? 'Downloading the episode' : 'Lining up your lesson'}</Txt>

@@ -10,6 +10,7 @@ import { api } from '../../lib/api'
 import { GUIDANCE, GUIDES, LANGUAGES, languageName } from '../../lib/languages'
 import { useSession, type ProfilePrefs } from '../../lib/session'
 import { MIN_TAP, space, usePalette } from '../../theme'
+import { Loading } from '../../components/Loading'
 
 function Choice<T extends string>({ options, value, onChange, accent }: { options: { id: T; label: string }[]; value: T | undefined; onChange: (v: T) => void; accent: string }) {
   const p = usePalette()
@@ -48,7 +49,7 @@ export default function You() {
   const p = usePalette()
   const { profile, updatePrefs, signOut } = useSession()
   const [error, setError] = useState<string>()
-  if (!profile) return <Screen />
+  if (!profile) return <Screen><Loading /></Screen>
 
   const set = (prefs: ProfilePrefs) => updatePrefs(prefs).catch((e) => setError(e instanceof Error ? e.message : 'Couldn’t save that.'))
   const language = profile.target_language ?? 'sv'

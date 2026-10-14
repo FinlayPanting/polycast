@@ -6,6 +6,7 @@ import { Artwork, Button, Row, Screen, Txt, minutes } from '../../components/ui'
 import { listListens } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
+import { Loading } from '../../components/Loading'
 
 /** Episodes started or finished, most recent first, with where the learner left off. */
 export default function Library() {
@@ -57,7 +58,9 @@ export default function Library() {
               <Txt tone="quiet">Episodes you start will appear here, so you can pick up where you left off.</Txt>
               <Button kind="secondary" label="Find something to listen to" onPress={() => router.push('/')} style={{ alignSelf: 'flex-start' }} />
             </View>
-          ) : null
+          ) : (
+            <Loading fill={false} />
+          )
         }
       />
     </Screen>
