@@ -45,6 +45,39 @@ describe('ElevenLabs Scribe', () => {
     expect(new Uint8Array(await file.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
   })
 
+  it('asks Scribe to spell the show’s names, and takes only its spellings, not its timings', async () => {
+    let sent: FormData | undefined
+    const t = scribeTranscriber('key', async (_url, init) => {
+      sent = init!.body as FormData
+      return json({
+        words: [
+          { text: 'Hej', start: 0, end: 0.4, type: 'word' },
+          { text: ' ', start: 0.4, end: 0.5, type: 'spacing' },
+          { text: 'Siggi.', start: 0.5, end: 1, type: 'word' },
+        ],
+        edited_transcript: { kind: 'transcript', text: 'Hej Sigge.' },
+      })
+    })
+    const r = await t.transcribe({ audioUrl: 'u', language: 'sv', durationSec: 600, names: { showTitle: 'Alex & Sigges podcast', hosts: ['Alex Schulman', 'Sigge Eklund'], names: [] } })
+    expect(String(sent!.get('transcript_edit'))).toContain('Sigge Eklund')
+    expect(r.words).toEqual([{ text: 'Hej', start: 0, end: 0.4 }, { text: 'Sigge.', start: 0.5, end: 1 }])
+    expect(r.usage).toEqual({ transcriptionSec: 600, transcriptEditSec: 600 })
+  })
+
+  it('keeps the original transcript when the edit fails, and sends no instruction without names', async () => {
+    let sent: FormData | undefined
+    const t = scribeTranscriber('key', async (_url, init) => {
+      sent = init!.body as FormData
+      return json({ words: [{ text: 'Siggi', start: 0, end: 0.4, type: 'word' }], edited_transcript: { kind: 'error', error_type: 'edit_failed', message: 'no' } })
+    })
+    const r = await t.transcribe({ audioUrl: 'u', language: 'sv', durationSec: 5, names: { showTitle: 'Show', hosts: ['Sigge'], names: [] } })
+    expect(r.words.map((w) => w.text)).toEqual(['Siggi'])
+    expect(r.usage.transcriptEditSec).toBe(10) // billed for at least 10 seconds
+    const r2 = await t.transcribe({ audioUrl: 'u', language: 'sv', durationSec: 5 })
+    expect(sent!.get('transcript_edit')).toBeNull()
+    expect(r2.usage.transcriptEditSec).toBeUndefined()
+  })
+
   it('marks rate limits as retryable and bad requests as not', async () => {
     const limited = scribeTranscriber('key', async () => new Response('slow down', { status: 429 }))
     await expect(limited.transcribe({ audioUrl: 'u', language: 'sv', durationSec: 1 })).rejects.toMatchObject({ retryable: true, status: 429 })
