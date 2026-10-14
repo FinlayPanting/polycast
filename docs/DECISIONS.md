@@ -52,6 +52,10 @@ with an older plan from their saved transcript, at Polycast's cost (about two mi
 
 The introduction can be heard again from the player ("Hear the introduction again").
 
-## Scribe spells show and host names (14 Oct 2026, branch build/PC-1013-02, not yet live)
+## Scribe spells show and host names (14 Oct 2026, live)
 
 Board item PC-1013-02. Every transcription sends Scribe a `transcript_edit` instruction (at most 2,000 characters) naming the show, its hosts (the feed's author, split on "och", "und", "&" and similar) and capitalised words that recur in two or more episode titles, and asks it to correct the spelling of names only. Word timings always describe Scribe's original words, so Polycast keeps those and takes an edited spelling only where the edit swaps one capitalised word for a similar-looking one (within 30% of its letters); anything added, dropped, merged or rephrased is ignored, and a failed edit leaves the original. Cost: ElevenLabs charges 30% on top of transcription for this (about $0.07 an hour, minimum 10 seconds a request), and calls the feature experimental. It is counted in the cost table and the spending cap, which puts an hour of new audio at about $0.84 (was about $0.77) and the worst-case 2-hour free episode at about $1.67.
+
+## Weekly drop-off funnel (14 Oct 2026, live)
+
+Board item PC-1012-09. Counts only, no tracking: the one new table, `first_opens` (migration 0004), is a daily counter the app bumps once per install with no identifier. Every other step is counted from tables Polycast already keeps, for the people who signed up in a given week: signed up, picked a language, started a guided listen, finished one, used the free episode, started Plus (has ever had a Plus period), came back (a listen updated at least 7 days after signing up). `GET /admin/funnel?week=YYYY-MM-DD` returns the counts and a plain-text version for the morning email, behind a `FUNNEL_TOKEN` Railway variable. To go live: run 0004 in Supabase, set `FUNNEL_TOKEN`, merge the branch, and give the morning email run the token.
