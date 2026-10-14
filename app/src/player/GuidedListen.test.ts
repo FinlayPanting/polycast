@@ -39,7 +39,7 @@ function fakeAudio() {
 }
 
 const flush = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve()
+  for (let i = 0; i < 400; i++) await Promise.resolve()
 }
 
 function fakeVoice() {
@@ -100,14 +100,16 @@ describe('a guided listen', () => {
     expect(voice.played).toEqual(['guide-1.m4a'])
 
     await voice.finishCurrent() // first speech done → host clip plays from the episode
-    expect(audio.log).toContain('seek 6.0')
+    // A touch early, so the host's first syllable isn't cut.
+    expect(audio.log.some((l) => /^seek 5\.[89]$/.test(l))).toBe(true)
     expect(audio.playing).toBe(true)
-    await audio.advance(1.25) // clip reaches its end
+    await audio.advance(1.5) // clip reaches its end, plus a short tail
     expect(voice.played).toEqual(['guide-1.m4a', 'guide-2.m4a'])
 
     await voice.finishCurrent()
     expect(listen.current.phase).toBe('playing')
-    expect(audio.log.at(-2)).toBe('seek 10.0')
+    // Picks up a couple of seconds early, so the learner hears the end of the sentence again.
+    expect(audio.log.at(-2)).toBe('seek 8.0')
     expect(audio.playing).toBe(true)
     expect(audio.volume).toBe(1)
 
@@ -123,7 +125,7 @@ describe('a guided listen', () => {
     await flush()
     expect(voice.played).toEqual(['guide-1.m4a'])
     expect(listen.current.phase).toBe('playing')
-    expect(audio.pos).toBe(10)
+    expect(audio.pos).toBe(8)
   })
 
   it('waits for an answer on a Hands-on question, then shows whether it was right', async () => {
@@ -184,7 +186,7 @@ describe('a guided listen', () => {
 })
 
 describe('hearing a moment again', () => {
-  it('replays the introduction on request, then carries on from the same place', async () => {
+  it('replays the introduction on request, then carries on from about the same place', async () => {
     const intro: GuideMoment = { ...spotlight, id: 'intro', kind: 'warmup', at: 0, script: 'Welcome', clips: [], audio: { parts: [{ kind: 'speech', url: 'intro.m4a', durationSec: 1 }], durationSec: 1 } }
     const { audio, voice, listen } = setup([intro])
     const started = listen.start(track) // the introduction plays straight away
@@ -201,7 +203,7 @@ describe('hearing a moment again', () => {
     await replay
     expect(voice.played).toEqual(['intro.m4a', 'intro.m4a'])
     expect(listen.current.phase).toBe('playing')
-    expect(audio.pos).toBe(4)
+    expect(audio.pos).toBe(2) // the same place, picked up a couple of seconds early
   })
 })
 
@@ -215,7 +217,7 @@ describe('host clips and moving the playhead', () => {
     ;(listen as any).onProgress(10)
     await flush()
     expect(voice.played).toEqual(['guide-1.m4a']) // still in the clip
-    await audio.advance(1.25)
+    await audio.advance(1.5)
     expect(voice.played).toEqual(['guide-1.m4a', 'guide-2.m4a'])
   })
 
@@ -227,5 +229,19 @@ describe('host clips and moving the playhead', () => {
     await flush()
     expect(listen.current.phase).toBe('playing')
     expect(audio.pos).toBe(25)
+  })
+})
+
+describe('questions and the lock screen', () => {
+  it("doesn't wait for an answer while the phone is locked: reads the question and carries on", async () => {
+    const audio = fakeAudio()
+    const voice = fakeVoice()
+    const listen = new GuidedListen({ audio, voice, moments: [question], segments, sleep: async () => {}, inForeground: () => false })
+    await listen.start(track)
+    await audio.advance(20)
+    expect(voice.played).toEqual(['q.m4a'])
+    await voice.finishCurrent()
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.playing).toBe(true)
   })
 })

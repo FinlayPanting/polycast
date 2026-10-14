@@ -24,6 +24,8 @@ export interface ListenOptions {
   onChange?: (state: ListenState) => void
   /** Called every so often with the position, to save where the learner left off. */
   onSavePosition?: (seconds: number) => void
+  /** Whether the app is on screen. A question can't be answered on a locked phone, so it doesn't wait. */
+  inForeground?: () => boolean
 }
 
 /** Trace of what the player does: Terminal in development, and the shareable playback log on a test phone. */
@@ -32,8 +34,25 @@ function trace(...args: unknown[]) {
 }
 const fmt = (s: number) => s.toFixed(2)
 
-const FADE_MS = 350
-const FADE_STEPS = 7
+// Pacing of a handover (Finlay, 14 Oct): the guide shouldn't cut in or vanish. The host fades out,
+// a short breath, the guide; then a breath, and the episode fades back in a couple of seconds
+// earlier, so the learner hears the end of the last sentence again and knows where they are.
+const FADE_OUT_MS = 450
+const FADE_IN_MS = 900
+const FADE_STEPS = 9
+const BREATH_BEFORE_GUIDE_MS = 450
+const BREATH_AFTER_GUIDE_MS = 500
+/** How far back the episode picks up after the guide. */
+export const PICK_UP_BEFORE_SEC = 2
+/** Pauses around the host's clips, so a clip never runs straight into the guide's words. */
+const GAP_BEFORE_CLIP_MS = 350
+const GAP_AFTER_CLIP_MS = 450
+const GAP_BETWEEN_LINES_MS = 120
+/** A host clip starts a touch early and ends a touch late, so names and first syllables aren't cut. */
+export const CLIP_LEAD_SEC = 0.15
+export const CLIP_TAIL_SEC = 0.2
+/** With the phone locked, a question is read, given a moment's thought, and the episode carries on. */
+const LOCKED_QUESTION_PAUSE_MS = 3000
 /** A clip of the host is done when the playhead reaches its end, give or take one progress update. */
 const CLIP_TOLERANCE = 0.05
 
@@ -104,14 +123,19 @@ export class GuidedListen {
     const resumeAt = await this.o.audio.position()
     trace(`guide moment(s) ${due.map((m) => m.id).join(', ')} at pos=${fmt(resumeAt)}`)
     this.set({ phase: 'guide', moment: due[0] })
-    await this.fade(1, 0)
+    await this.fade(1, 0, FADE_OUT_MS)
     await this.o.audio.pause()
+    await this.sleep(BREATH_BEFORE_GUIDE_MS)
 
     for (const m of due) {
       this.timeline.markPlayed(m.id)
       this.skipRequested = false
       this.set({ phase: 'guide', moment: m, answer: undefined })
-      for (const step of playSteps(m)) {
+      const steps = playSteps(m)
+      for (const [i, step] of steps.entries()) {
+        if (this.skipRequested) break
+        const prev = steps[i - 1]
+        if (prev) await this.sleep(step.kind === 'clip' ? GAP_BEFORE_CLIP_MS : prev.kind === 'clip' ? GAP_AFTER_CLIP_MS : GAP_BETWEEN_LINES_MS)
         if (this.skipRequested) break
         if (step.kind === 'speech') {
           trace(`  guide speaks (${step.durationSec ? fmt(step.durationSec) + 's' : 'length unknown'})`)
@@ -120,7 +144,10 @@ export class GuidedListen {
           trace(`  guide finished after ${fmt((Date.now() - said) / 1000)}s`)
         } else await this.playClip(step.start, step.end)
       }
-      if (m.waits && m.question && !this.skipRequested) {
+      if (m.waits && m.question && !this.skipRequested && this.o.inForeground && !this.o.inForeground()) {
+        trace('  question asked with the phone locked: not waiting for an answer')
+        await this.sleep(LOCKED_QUESTION_PAUSE_MS)
+      } else if (m.waits && m.question && !this.skipRequested) {
         this.set({ phase: 'question', moment: m })
         const index = await new Promise<number>((resolve) => (this.answerWaiter = resolve))
         this.answerWaiter = undefined
@@ -132,18 +159,23 @@ export class GuidedListen {
     }
 
     if (this.state.phase === 'finished') return
-    const back = this.resumeOverride ?? resumeAt
+    // Where the learner moved the playhead wins; otherwise pick up a little before where we stopped
+    // (not for the warm-up at the very start).
+    const back = this.resumeOverride ?? (resumeAt > PICK_UP_BEFORE_SEC + 1 ? resumeAt - PICK_UP_BEFORE_SEC : resumeAt)
     this.resumeOverride = undefined
+    if (!this.skipRequested) await this.sleep(BREATH_AFTER_GUIDE_MS)
     trace(`back to the episode at pos=${fmt(back)}`)
     await this.o.audio.seek(back)
     await this.o.audio.setVolume(0)
     this.set({ phase: 'playing', moment: undefined, answer: undefined, position: back })
     await this.o.audio.play()
-    await this.fade(0, 1)
+    await this.fade(0, 1, FADE_IN_MS)
   }
 
   /** Plays the host saying something, from the episode itself, then pauses. */
-  private async playClip(start: number, end: number) {
+  private async playClip(clipStart: number, clipEnd: number) {
+    const start = Math.max(0, clipStart - CLIP_LEAD_SEC)
+    const end = clipEnd + CLIP_TAIL_SEC
     trace(`  host clip ${fmt(start)}–${fmt(end)} (${fmt(end - start)}s): seeking`)
     const began = Date.now()
     await this.o.audio.seek(start)
@@ -167,10 +199,12 @@ export class GuidedListen {
     c?.done()
   }
 
-  private async fade(from: number, to: number) {
+  /** An eased fade (slow at both ends), which sounds gentler than a straight line. */
+  private async fade(from: number, to: number, ms: number) {
     for (let i = 1; i <= FADE_STEPS; i++) {
-      await this.o.audio.setVolume(from + ((to - from) * i) / FADE_STEPS)
-      await this.sleep(FADE_MS / FADE_STEPS)
+      const eased = 0.5 - 0.5 * Math.cos((Math.PI * i) / FADE_STEPS)
+      await this.o.audio.setVolume(from + (to - from) * eased)
+      await this.sleep(ms / FADE_STEPS)
     }
   }
 

@@ -25,9 +25,14 @@ export function playSteps(m: GuideMoment): PlayStep[] {
  * timers in the background). Seeks are reported explicitly: seeking forward passes over the moments in
  * between silently, seeking back makes later moments due again.
  */
+/** Rewinding further than this plays the guide's moments in between again. */
+export const REHEAR_AFTER_REWIND_SEC = 60
+
 export class GuideTimeline {
   private readonly moments: GuideMoment[]
   private readonly done = new Set<string>()
+  /** Moments the learner actually heard (not just passed by seeking forward). */
+  private readonly heard = new Set<string>()
   private position = 0
 
   constructor(moments: GuideMoment[]) {
@@ -40,10 +45,21 @@ export class GuideTimeline {
     return this.moments.filter((m) => m.at <= position && !this.done.has(m.id))
   }
 
-  /** The learner moved the playhead. */
+  /**
+   * The learner moved the playhead. Going back a little (replaying a line, 15 seconds back) keeps the
+   * moments they've just heard; going back further hears them again.
+   */
   seek(to: number): void {
     if (to < this.position) {
-      for (const m of this.moments) if (m.at > to) this.done.delete(m.id)
+      const far = this.position - to > REHEAR_AFTER_REWIND_SEC
+      for (const m of this.moments) {
+        if (m.at <= to) continue
+        // Skipped ones come back; ones just heard come back only after a long rewind.
+        if (far || !this.heard.has(m.id)) {
+          this.done.delete(m.id)
+          this.heard.delete(m.id)
+        }
+      }
     } else {
       for (const m of this.moments) if (m.at < to) this.done.add(m.id)
     }
@@ -52,6 +68,7 @@ export class GuideTimeline {
 
   markPlayed(id: string): void {
     this.done.add(id)
+    this.heard.add(id)
   }
 
   /** The next moment after a position, for the "next in 1:37" hint and markers on the scrubber. */

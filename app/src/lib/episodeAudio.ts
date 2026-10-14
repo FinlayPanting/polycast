@@ -13,7 +13,7 @@ import type { ListenPayload } from './api'
  * on the phone, so the episode also plays offline. It's never uploaded or shared.
  */
 
-export type GetReadyStep = { step: 'downloading'; progress: number } | { step: 'syncing' }
+export type GetReadyStep = { step: 'downloading'; progress: number } | { step: 'syncing' } | { step: 'guide'; progress: number }
 
 const folder = () => new Directory(Paths.document, 'episodes')
 const AUDIO_TYPES = ['mp3', 'm4a', 'aac', 'mp4', 'wav', 'ogg', 'opus'] as const
@@ -102,6 +102,55 @@ export function prefetchEpisode(episodeId: string, url: string, onProgress?: (p:
   return () => abort.abort()
 }
 
+const guideFolder = (episodeId: string) => new Directory(folder(), `${episodeId}-guide`)
+
+/** A stable file name for a guide line: its name plus a short hash of its address (which includes the plan version). */
+export function guideFileName(url: string): string {
+  const path = url.split(/[?#]/)[0]!
+  const base = path.slice(path.lastIndexOf('/') + 1).replace(/[^\w.-]/g, '_') || 'line'
+  let h = 5381
+  for (let i = 0; i < path.length; i++) h = ((h << 5) + h + path.charCodeAt(i)) | 0
+  return `${(h >>> 0).toString(36)}-${base}`
+}
+
+/**
+ * Saves every line the guide says in this lesson to the phone, next to the episode, and points the
+ * plan at those copies. Each line then starts at once (fetching them as they played took about a
+ * second each, and up to 14 seconds with the phone locked), and the lesson works offline. A line
+ * that fails to save keeps its web address, so the guide still speaks.
+ */
+export async function saveGuideAudio(episodeId: string, plan: LessonPlan, onProgress: (p: number) => void): Promise<LessonPlan> {
+  const urls = [...new Set(plan.moments.flatMap((m) => m.audio?.parts ?? []).flatMap((p) => (p.kind === 'speech' && /^https?:/.test(p.url) ? [p.url] : [])))]
+  if (urls.length === 0) return plan
+  const dir = guideFolder(episodeId)
+  dir.create({ idempotent: true, intermediates: true })
+  const local = new Map<string, string>()
+  let done = 0
+  const queue = [...urls]
+  const worker = async () => {
+    for (let url = queue.shift(); url; url = queue.shift()) {
+      const file = new File(dir, guideFileName(url))
+      try {
+        if (!(file.exists && file.size > 0)) {
+          const saved = await new DownloadTask(url, file, {}).downloadAsync()
+          if (!saved) throw new Error('paused')
+        }
+        local.set(url, file.uri)
+      } catch {
+        // Keep the web address for this line.
+      }
+      onProgress(++done / urls.length)
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker))
+  return {
+    ...plan,
+    moments: plan.moments.map((m) =>
+      m.audio ? { ...m, audio: { ...m.audio, parts: m.audio.parts.map((p) => (p.kind === 'speech' && local.has(p.url) ? { ...p, url: local.get(p.url)! } : p)) } } : m,
+    ),
+  }
+}
+
 function fromBase64(b64: string): Uint8Array {
   const bin = globalThis.atob(b64)
   const out = new Uint8Array(bin.length)
@@ -148,8 +197,14 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
   }
   onStep({ step: 'downloading', progress: 0 })
   const uri = await downloadEpisode(data.episode.id, data.episode.audioUrl, (progress) => onStep({ step: 'downloading', progress }), signal)
+  const withGuide = async (ready: ReadyEpisode): Promise<ReadyEpisode> => {
+    if (!ready.plan) return ready
+    onStep({ step: 'guide', progress: 0 })
+    return { ...ready, plan: await saveGuideAudio(data.episode.id, ready.plan, (progress) => onStep({ step: 'guide', progress })) }
+  }
   const local = { ...unsynced, url: uri }
-  if (!data.syncUrl) return local
+  if (!data.syncUrl) return withGuide(local)
+  let ready: ReadyEpisode
   try {
     onStep({ step: 'syncing' })
     const [mine, theirs] = await Promise.all([referenceFingerprint(data.syncUrl), localFingerprint(data.episode.id, uri)])
@@ -158,12 +213,13 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
     const map = alignFingerprints(mine, theirs)
     const r = retimeLesson({ ...data.transcript, source: 'scribe' }, data.plan, map)
     if (__DEV__) console.log('[listen] lined up with this copy:', { synced: r.synced, listenerDuration: map.listenerDuration, referenceDuration: data.episode.durationSec, file: uri.split('/').pop() })
-    return { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map }
+    ready = { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map }
   } catch (e) {
     // Play the stream with the lesson's own times: never leave the learner unable to listen.
     console.warn('Polycast: couldn’t line the lesson up with this copy; streaming with its own times', e)
-    return unsynced
+    ready = unsynced
   }
+  return withGuide(ready)
 }
 
 /**
@@ -179,4 +235,6 @@ export function localOrStream(episodeId: string | undefined, streamUrl: string):
 /** Removes a downloaded episode (and its fingerprint) from the phone. */
 export function removeDownload(episodeId: string, url: string): void {
   for (const f of [audioFile(episodeId, url), fingerprintFile(episodeId)]) if (f.exists) f.delete()
+  const guide = guideFolder(episodeId)
+  if (guide.exists) guide.delete()
 }

@@ -2,7 +2,7 @@ import { findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, typ
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Modal, Pressable, ScrollView, View } from 'react-native'
+import { AppState, Modal, Pressable, ScrollView, View } from 'react-native'
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
@@ -170,6 +170,7 @@ export default function Listen() {
           onSavePosition: (sec) => {
             if (session) void savePosition(session.user.id, id, sec)
           },
+          inForeground: () => AppState.currentState === 'active',
         })
         listen.current = l
         setRemoteHandler((cmd) => void l.remote(cmd))
@@ -225,11 +226,15 @@ export default function Listen() {
         <Mark height={44} flagId={profile?.flag_id} speaking accessibilityLabel="Loading" />
         {getReady ? (
           <View style={{ gap: space.xs, alignItems: 'center' }}>
-            <Txt variant="heading">{getReady.step === 'downloading' ? 'Downloading the episode' : 'Lining up your lesson'}</Txt>
+            <Txt variant="heading">
+              {getReady.step === 'downloading' ? 'Downloading the episode' : getReady.step === 'guide' ? `Getting ${guideName(profile?.guide_id)} ready` : 'Lining up your lesson'}
+            </Txt>
             <Txt tone="quiet" style={{ textAlign: 'center' }}>
               {getReady.step === 'downloading'
                 ? `${Math.round(getReady.progress * 100)}%. It stays on your phone, so you can listen offline too.`
-                : 'Matching the subtitles and the guide to your copy of the episode.'}
+                : getReady.step === 'guide'
+                  ? `${Math.round(getReady.progress * 100)}%. Saving what ${guideName(profile?.guide_id)} says, so it starts the moment it's needed.`
+                  : 'Matching the subtitles and the guide to your copy of the episode.'}
             </Txt>
           </View>
         ) : null}

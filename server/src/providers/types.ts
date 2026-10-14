@@ -30,7 +30,8 @@ export interface TextModel {
 
 /** The guide's voice. Returns encoded audio ready to store. */
 export interface SpeechSynth {
-  synthesize(input: { text: string; voice: string; style: string; language: string }): Promise<{
+  /** `rate` is the speaking rate (1 = normal); providers that can't change it ignore it. */
+  synthesize(input: { text: string; voice: string; style: string; language: string; rate?: number }): Promise<{
     audio: Uint8Array
     mimeType: string
     durationSec: number

@@ -3,6 +3,7 @@ import { mapLimit, withRetry } from '../retry'
 import type { SpeechSynth, Storage } from '../providers/types'
 import type { UsageMeter } from '../budget'
 import type { Guide } from '../voices'
+import { TARGET_SPEAKING_RATE } from '../providers/googleTts'
 
 /** Splits a script at {clip:N} markers into speech and host-clip parts, in order. */
 export function splitScript(script: string): ({ kind: 'speech'; text: string } | { kind: 'clip'; clipIndex: number })[] {
@@ -46,9 +47,9 @@ export async function voicePlan(
       // word sounds Swedish rather than English-accented. A run of only punctuation isn't voiced.
       for (const run of languageRuns(piece.text)) {
         if (!/\p{L}|\p{N}/u.test(run.text)) continue
-        const say = (language: string) =>
-          withRetry(() => deps.speech.synthesize({ text: run.text.trim(), voice: guide.voice, style: guide.style, language }))
-        const spoken = run.target ? await say(plan.targetLanguage).catch(() => say(plan.nativeLanguage)) : await say(plan.nativeLanguage)
+        const say = (language: string, rate?: number) =>
+          withRetry(() => deps.speech.synthesize({ text: run.text.trim(), voice: guide.voice, style: guide.style, language, rate }))
+        const spoken = run.target ? await say(plan.targetLanguage, TARGET_SPEAKING_RATE).catch(() => say(plan.nativeLanguage, TARGET_SPEAKING_RATE)) : await say(plan.nativeLanguage)
         const { audio, mimeType, durationSec: d, usage } = spoken
         deps.meter.add(usage)
         const ext = mimeType === 'audio/mp4' ? 'm4a' : mimeType === 'audio/mpeg' ? 'mp3' : 'wav'

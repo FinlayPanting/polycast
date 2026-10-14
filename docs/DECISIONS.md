@@ -59,3 +59,13 @@ Board item PC-1013-02. Every transcription sends Scribe a `transcript_edit` inst
 ## Weekly drop-off funnel (14 Oct 2026, live)
 
 Board item PC-1012-09. Counts only, no tracking: the one new table, `first_opens` (migration 0004), is a daily counter the app bumps once per install with no identifier. Every other step is counted from tables Polycast already keeps, for the people who signed up in a given week: signed up, picked a language, started a guided listen, finished one, used the free episode, started Plus (has ever had a Plus period), came back (a listen updated at least 7 days after signing up). `GET /admin/funnel?week=YYYY-MM-DD` returns the counts and a plain-text version for the morning email, behind a `FUNNEL_TOKEN` Railway variable. To go live: run 0004 in Supabase, set `FUNNEL_TOKEN`, merge the branch, and give the morning email run the token.
+
+## A calmer guide (14 Oct 2026, live)
+
+Finlay, after a 15-minute test on his iPhone: the guide cut in, said its piece and was gone before he'd taken it in, and host clips ran straight into its words. Changes:
+- Handovers: the host fades out over 450 ms (eased), a 450 ms breath, the guide; a 500 ms breath after, then the episode fades back in over 900 ms from 2 seconds before where it stopped, so the learner hears the end of the sentence again. Pauses inside a moment: 350 ms before a host clip, 450 ms after, 120 ms between guide lines. Host clips start 0.15 s early and end 0.2 s late so names aren't clipped.
+- Scripts (lesson plan version 3, which re-plans and re-voices every ready episode once at Polycast's cost): context first (who's talking, about what), a lead-in before each host clip, and every term heard twice, from the host and then slowly from the guide. Quick questions start with a line of context.
+- Voice: the guide's own language at 0.9 speed (was 0.95), target-language words and examples at 0.8.
+- The app saves every guide line to the phone with the episode, so the guide starts at once (fetching each line as it played took about a second, up to 14 seconds with the phone locked) and works offline.
+- Replaying a line or going back under a minute no longer makes the guide repeat a moment just heard; moments skipped by seeking forward still come back.
+- A Hands-on question asked while the phone is locked is read out, then the episode carries on after a 3-second pause instead of waiting for a tap that can't come.

@@ -4,6 +4,7 @@ import { memoryLedger, SpendCapReached, SpendGuard, UsageMeter } from '../src/bu
 import { assemblePlan } from '../src/pipeline/lessonPlan'
 import { prepareEpisode } from '../src/pipeline/prepare'
 import { splitScript, voicePlan } from '../src/pipeline/voice'
+import { TARGET_SPEAKING_RATE } from '../src/providers/googleTts'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
 import { ProviderError } from '../src/providers/types'
 import { DEFAULT_GUIDE } from '../src/voices'
@@ -230,6 +231,13 @@ describe('voicing target-language words', () => {
     const out = await voicePlan(plan, DEFAULT_GUIDE, { speech, storage: memoryStorage(), meter: new UsageMeter() })
     expect(said).toEqual(['en:They are late.', 'en:Or:', 'sv:jag är sen', 'en:, I am late.'])
     expect(out.moments[0]!.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip', 'speech', 'speech', 'speech'])
+  })
+
+  it('reads target-language words slowly, and the guide\'s own words at its normal pace', async () => {
+    const rates: string[] = []
+    const speech = { ...mockSpeech(), synthesize: (r: { text: string; voice: string; style: string; language: string; rate?: number }) => (rates.push(`${r.language}:${r.rate ?? 'default'}`), mockSpeech().synthesize(r)) }
+    await voicePlan(plan, DEFAULT_GUIDE, { speech, storage: memoryStorage(), meter: new UsageMeter() })
+    expect(rates).toEqual(['en:default', 'en:default', `sv:${TARGET_SPEAKING_RATE}`, 'en:default'])
   })
 
   it('falls back to the learner\'s own language if the target voice fails', async () => {

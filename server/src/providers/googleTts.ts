@@ -22,6 +22,11 @@ export function chirpVoiceName(voice: string, language: string): { languageCode:
  * with Gemini's voices. Billed per character, with project limits per minute rather than per day.
  * Returns WAV (LINEAR16), encoded to AAC like the other voice.
  */
+/** The guide's own-language pace (was 0.95; Finlay found it rushed, 14 Oct 2026). */
+export const GUIDE_SPEAKING_RATE = 0.9
+/** Target-language words and examples: slow and clear, so a learner catches every sound. */
+export const TARGET_SPEAKING_RATE = 0.8
+
 export function googleChirpSpeech(
   apiKey: string,
   encode: (wav: Uint8Array) => Promise<{ audio: Uint8Array; mimeType: string }>,
@@ -29,15 +34,15 @@ export function googleChirpSpeech(
 ): SpeechSynth {
   const fetchImpl = opts.fetchImpl ?? fetch
   return {
-    async synthesize({ text, voice, language }) {
+    async synthesize({ text, voice, language, rate }) {
       const res = await fetchImpl('https://texttospeech.googleapis.com/v1/text:synthesize', {
         method: 'POST',
         headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input: { text },
           voice: chirpVoiceName(voice, language),
-          // A touch slower than default: the guide is talking to a learner.
-          audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000, speakingRate: opts.speakingRate ?? 0.95 },
+          // Slower than default: the guide is talking to a learner who was half-listening.
+          audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000, speakingRate: rate ?? opts.speakingRate ?? GUIDE_SPEAKING_RATE },
         }),
       })
       if (!res.ok) throw errorFromResponse('Google TTS', res.status, await res.text())

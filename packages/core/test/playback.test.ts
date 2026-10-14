@@ -29,14 +29,32 @@ describe('the guide timeline', () => {
     expect(t.next(25)?.id).toBe('c')
   })
 
-  it('makes later moments due again after seeking back', () => {
-    const t = new GuideTimeline([m('a', 10), m('b', 20)])
-    t.tick(10.1)
+  it('makes later moments due again after seeking back a long way', () => {
+    const t = new GuideTimeline([m('a', 100), m('b', 200)])
+    t.tick(100.1)
     t.markPlayed('a')
-    t.tick(15)
-    t.seek(5)
-    expect(t.tick(5.2)).toEqual([])
-    expect(t.next(5.2)?.id).toBe('a')
+    t.tick(150)
+    t.seek(30)
+    expect(t.tick(30.2)).toEqual([])
+    expect(t.next(30.2)?.id).toBe('a')
+  })
+
+  it('keeps a moment just heard when the learner replays a line or goes back a little', () => {
+    const t = new GuideTimeline([m('a', 607), m('b', 700)])
+    t.tick(607.1)
+    t.markPlayed('a')
+    t.tick(612)
+    t.seek(601) // replay the last line: Mia shouldn't step in again
+    expect(t.tick(607.5)).toEqual([])
+    expect(t.next(607.5)?.id).toBe('b')
+  })
+
+  it('brings back a moment the learner skipped past, even after a small rewind', () => {
+    const t = new GuideTimeline([m('a', 10), m('b', 100)])
+    t.tick(5)
+    t.seek(15) // passed over a without hearing it
+    t.seek(8)
+    expect(t.tick(10.1).map((x) => x.id)).toEqual(['a'])
   })
 
   it('plays a warm-up at 0 straight away', () => {

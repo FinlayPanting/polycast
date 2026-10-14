@@ -164,4 +164,5 @@ export function withoutLanguageMarks(text: string): string {
  * re-voiced from their saved transcript. 2: target-language text marked [[ ]] and read in that
  * language; word moments placed in the conversation.
  */
-export const LESSON_PLAN_VERSION = 2
+/** 3 (14 Oct 2026): calmer, context-first scripts; the guide repeats each term slowly. */
+export const LESSON_PLAN_VERSION = 3
