@@ -25,6 +25,14 @@ export interface ListenOptions {
   onSavePosition?: (seconds: number) => void
 }
 
+/** Development-only trace of what the player does, shown in the Mac's Terminal while testing. */
+const DEV = typeof __DEV__ !== 'undefined' && __DEV__
+const t0 = Date.now()
+function trace(...args: unknown[]) {
+  if (DEV) console.log(`[listen +${((Date.now() - t0) / 1000).toFixed(2)}s]`, ...args)
+}
+const fmt = (s: number) => s.toFixed(2)
+
 const FADE_MS = 350
 const FADE_STEPS = 7
 /** A clip of the host is done when the playhead reaches its end, give or take one progress update. */
@@ -77,8 +85,10 @@ export class GuidedListen {
       // after a seek can still carry the old position (often past the clip's end), which used to
       // cut the host off after a word.
       const c = this.clipEnd
+      const wasStarted = c.started
       if (position >= c.start - 0.5 && position < c.at) c.started = true
-      if (c.started && position >= c.at - CLIP_TOLERANCE) this.endClip()
+      trace(`  clip tick pos=${fmt(position)} (clip ${fmt(c.start)}–${fmt(c.at)})${c.started ? '' : ' ignored: outside clip'}${c.started && !wasStarted ? ' started' : ''}`)
+      if (c.started && position >= c.at - CLIP_TOLERANCE) this.endClip('reached end')
       return
     }
     if (this.state.phase !== 'playing') return
@@ -93,6 +103,7 @@ export class GuidedListen {
 
   private async runMoments(due: GuideMoment[]) {
     const resumeAt = await this.o.audio.position()
+    trace(`guide moment(s) ${due.map((m) => m.id).join(', ')} at pos=${fmt(resumeAt)}`)
     this.set({ phase: 'guide', moment: due[0] })
     await this.fade(1, 0)
     await this.o.audio.pause()
@@ -103,8 +114,12 @@ export class GuidedListen {
       this.set({ phase: 'guide', moment: m, answer: undefined })
       for (const step of playSteps(m)) {
         if (this.skipRequested) break
-        if (step.kind === 'speech') await this.o.voice.play(step.url)
-        else await this.playClip(step.start, step.end)
+        if (step.kind === 'speech') {
+          trace(`  guide speaks (${step.durationSec ? fmt(step.durationSec) + 's' : 'length unknown'})`)
+          const said = Date.now()
+          await this.o.voice.play(step.url)
+          trace(`  guide finished after ${fmt((Date.now() - said) / 1000)}s`)
+        } else await this.playClip(step.start, step.end)
       }
       if (m.waits && m.question && !this.skipRequested) {
         this.set({ phase: 'question', moment: m })
@@ -120,6 +135,7 @@ export class GuidedListen {
     if (this.state.phase === 'finished') return
     const back = this.resumeOverride ?? resumeAt
     this.resumeOverride = undefined
+    trace(`back to the episode at pos=${fmt(back)}`)
     await this.o.audio.seek(back)
     await this.o.audio.setVolume(0)
     this.set({ phase: 'playing', moment: undefined, answer: undefined, position: back })
@@ -129,21 +145,26 @@ export class GuidedListen {
 
   /** Plays the host saying something, from the episode itself, then pauses. */
   private async playClip(start: number, end: number) {
+    trace(`  host clip ${fmt(start)}–${fmt(end)} (${fmt(end - start)}s): seeking`)
+    const began = Date.now()
     await this.o.audio.seek(start)
+    trace(`  host clip: seek done, player says pos=${fmt(await this.o.audio.position())}`)
     await this.o.audio.setVolume(1)
     const reached = new Promise<void>((done) => (this.clipEnd = { start, at: end, started: false, done }))
     // Never wait forever on the playhead: if progress updates stop, move on a little after the clip.
     const clip = this.clipEnd
-    const guard = setTimeout(() => this.clipEnd === clip && this.endClip(), ((end - start) / (this.state.rate || 1) + 3) * 1000)
+    const guard = setTimeout(() => this.clipEnd === clip && this.endClip('gave up: no progress reached the end'), ((end - start) / (this.state.rate || 1) + 3) * 1000)
     await this.o.audio.play()
     await reached
     clearTimeout(guard)
     await this.o.audio.pause()
+    trace(`  host clip done after ${fmt((Date.now() - began) / 1000)}s of ${fmt(end - start)}s, paused at pos=${fmt(await this.o.audio.position())}`)
   }
 
-  private endClip() {
+  private endClip(why = 'skipped') {
     const c = this.clipEnd
     this.clipEnd = undefined
+    if (c) trace(`  host clip ends: ${why}`)
     c?.done()
   }
 

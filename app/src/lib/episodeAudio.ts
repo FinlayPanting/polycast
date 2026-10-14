@@ -96,7 +96,10 @@ export interface ReadyEpisode {
  */
 export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyStep) => void, signal?: AbortSignal): Promise<ReadyEpisode> {
   const unsynced = { url: data.episode.audioUrl, transcript: data.transcript, plan: data.plan, durationSec: data.episode.durationSec, synced: false }
-  if (!canSyncOnDevice) return unsynced
+  if (!canSyncOnDevice) {
+    if (__DEV__) console.log('[listen] this build can’t download and line up episodes: streaming with the lesson’s own times')
+    return unsynced
+  }
   onStep({ step: 'downloading', progress: 0 })
   const uri = await downloadEpisode(data.episode.id, data.episode.audioUrl, (progress) => onStep({ step: 'downloading', progress }), signal)
   const local = { ...unsynced, url: uri }
@@ -108,6 +111,7 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
     await new Promise((r) => setTimeout(r, 16))
     const map = alignFingerprints(mine, theirs)
     const r = retimeLesson({ ...data.transcript, source: 'scribe' }, data.plan, map)
+    if (__DEV__) console.log('[listen] lined up with this copy:', { synced: r.synced, listenerDuration: map.listenerDuration, referenceDuration: data.episode.durationSec, file: uri.split('/').pop() })
     return { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map }
   } catch (e) {
     // Play the stream with the lesson's own times: never leave the learner unable to listen.
