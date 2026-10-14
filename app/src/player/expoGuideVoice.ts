@@ -25,7 +25,11 @@ export function expoGuideVoice(): GuideVoice {
       }
       stopCurrent()
       return new Promise<void>((resolve) => {
-        const p = createAudioPlayer(url, { updateInterval: 200 })
+        // keepAudioSessionActive: by default expo-audio switches the app's audio session off ~100 ms
+        // after a player stops. On a real iPhone that also silences the episode player (Track
+        // Player shares the same session): host clips faded out after a moment, and the episode
+        // stayed paused after the guide. The simulator doesn't enforce this, so it only showed on phones.
+        const p = createAudioPlayer(url, { updateInterval: 200, keepAudioSessionActive: true })
         player = p
         // Never leave the listen stuck on a clip that won't load or never reports finishing: give
         // up 15 s after starting, or 3 s after its length once that's known, and carry on.
