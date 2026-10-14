@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { cohortAlert, REFUSAL_MESSAGES } from '@polycast/core'
@@ -64,8 +65,11 @@ export function createApi(deps: ApiDeps) {
   })
 
   /** The weekly drop-off funnel, as counts. `week` is a Monday (YYYY-MM-DD); defaults to last week. */
+  // The token can also come as ?token=, because the morning email's fetch tool can't send headers.
+  // It only unlocks these counts (no personal data, read-only), so a token in a URL is acceptable here.
   app.get('/admin/funnel', async (c) => {
-    if (!deps.funnelToken || c.req.header('Authorization') !== `Bearer ${deps.funnelToken}`) return c.json({ error: 'unauthorised' }, 401)
+    const given = c.req.header('Authorization')?.replace(/^Bearer /, '') ?? c.req.query('token')
+    if (!deps.funnelToken || !given || !safeEqual(given, deps.funnelToken)) return c.json({ error: 'unauthorised' }, 401)
     const week = c.req.query('week') ?? lastMonday(new Date())
     if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return c.json({ error: 'week must be YYYY-MM-DD' }, 400)
     const funnel = await weeklyFunnel(sql, week)
@@ -207,3 +211,10 @@ async function notify(deps: ApiDeps, kind: string, message: string) {
 
 export type Api = ReturnType<typeof createApi>
 export type { Context }
+
+/** Compares secrets in constant time, so response timing can't reveal how much of a guess was right. */
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a)
+  const y = Buffer.from(b)
+  return x.length === y.length && timingSafeEqual(x, y)
+}

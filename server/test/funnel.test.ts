@@ -65,4 +65,10 @@ run('weekly funnel', () => {
     expect((await res.json()).funnel.signedUp).toBe(3)
     expect((await api().request('/admin/funnel?week=soon', { headers: { Authorization: 'Bearer t0ken' } })).status).toBe(400)
   })
+
+  it('also takes the token in the address, for the morning email', async () => {
+    expect((await api().request('/admin/funnel?week=2026-10-05&token=t0ken')).status).toBe(200)
+    expect((await api().request('/admin/funnel?week=2026-10-05&token=wrong')).status).toBe(401)
+    expect((await api().request('/admin/funnel?week=2026-10-05&token=')).status).toBe(401)
+  })
 })
