@@ -9,6 +9,7 @@ export interface EpisodeDetail {
   title: string
   duration_sec: number
   image: string | null
+  audio_url: string
   status: 'none' | 'preparing' | 'ready' | 'failed'
   difficulty: { label: string } | null
   podcasts: { title: string; artwork: string | null }
@@ -24,7 +25,7 @@ export interface ListenRow {
 
 export async function getEpisode(id: string): Promise<{ episode: EpisodeDetail; activeJob?: { id: string; stage: string | null } }> {
   if (config.demo) return demo.getEpisode(id)
-  const { data, error } = await supabase.from('episodes').select('id, title, duration_sec, image, status, difficulty, podcasts(title, artwork)').eq('id', id).single()
+  const { data, error } = await supabase.from('episodes').select('id, title, duration_sec, image, audio_url, status, difficulty, podcasts(title, artwork)').eq('id', id).single()
   if (error) throw new Error('We couldn’t load this episode.')
   const { data: job } = await supabase.from('prep_jobs').select('id, stage').eq('episode_id', id).in('status', ['queued', 'running']).order('created_at', { ascending: false }).limit(1).maybeSingle()
   return { episode: data as unknown as EpisodeDetail, activeJob: job ?? undefined }

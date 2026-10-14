@@ -33,8 +33,17 @@ const fingerprintFile = (episodeId: string) => new File(folder(), `${episodeId}.
 /** Whether this phone can download and line up episodes (not the web preview or an older build). */
 export const canSyncOnDevice = Platform.OS === 'ios' && PolycastFingerprint !== null
 
-/** Downloads the episode unless it's already here; reports progress from 0 to 1. */
-export async function downloadEpisode(episodeId: string, url: string, onProgress: (p: number) => void, signal?: AbortSignal): Promise<string> {
+type Inflight = { promise: Promise<string>; progress: number; listeners: Set<(p: number) => void> }
+/** Downloads in progress, by episode: the episode page and the player share one download. */
+const inflight = new Map<string, Inflight>()
+
+/** Whether the episode is already on this phone. */
+export function isDownloaded(episodeId: string, url: string): boolean {
+  const f = audioFile(episodeId, url)
+  return f.exists && f.size > 0
+}
+
+async function fetchEpisode(episodeId: string, url: string, onProgress: (p: number) => void): Promise<string> {
   folder().create({ idempotent: true, intermediates: true })
   // Builds from 13 Oct 2026 saved episodes as ".audio", which iOS can't open: clear those out.
   const unreadable = new File(folder(), `${episodeId}.audio`)
@@ -45,7 +54,6 @@ export async function downloadEpisode(episodeId: string, url: string, onProgress
   if (partial.exists) partial.delete()
   const task = new DownloadTask(url, partial, {
     onProgress: (p) => p.totalBytes > 0 && onProgress(Math.min(1, p.bytesWritten / p.totalBytes)),
-    signal,
   })
   const done = await task.downloadAsync()
   if (!done) throw new Error('The download was paused.')
@@ -54,6 +62,44 @@ export async function downloadEpisode(episodeId: string, url: string, onProgress
   const fp = fingerprintFile(episodeId)
   if (fp.exists) fp.delete()
   return file.uri
+}
+
+/**
+ * Downloads the episode unless it's already here, reporting progress from 0 to 1. If a download of
+ * this episode is already running (started from the episode page while the lesson is prepared),
+ * this joins it rather than starting another. Aborting only stops reporting progress to this caller.
+ */
+export function downloadEpisode(episodeId: string, url: string, onProgress: (p: number) => void, signal?: AbortSignal): Promise<string> {
+  let d = inflight.get(episodeId)
+  if (!d) {
+    const entry: Inflight = { progress: 0, listeners: new Set(), promise: undefined as unknown as Promise<string> }
+    entry.promise = fetchEpisode(episodeId, url, (p) => {
+      entry.progress = p
+      for (const l of entry.listeners) l(p)
+    }).finally(() => inflight.delete(episodeId))
+    inflight.set(episodeId, entry)
+    d = entry
+  }
+  const entry = d
+  entry.listeners.add(onProgress)
+  onProgress(entry.progress)
+  signal?.addEventListener('abort', () => entry.listeners.delete(onProgress))
+  return entry.promise.finally(() => entry.listeners.delete(onProgress))
+}
+
+/**
+ * Starts downloading (and fingerprinting) the learner's copy in the background while the lesson is
+ * prepared, so it's ready to play the moment the lesson is. Failures are quiet: the player retries.
+ */
+export function prefetchEpisode(episodeId: string, url: string, onProgress?: (p: number) => void): () => void {
+  if (!canSyncOnDevice) return () => {}
+  const abort = new AbortController()
+  void downloadEpisode(episodeId, url, onProgress ?? (() => {}), abort.signal)
+    .then((uri) => localFingerprint(episodeId, uri))
+    .catch((e) => {
+      if (__DEV__) console.log('[listen] background download didn’t finish; the player will try again', e)
+    })
+  return () => abort.abort()
 }
 
 function fromBase64(b64: string): Uint8Array {

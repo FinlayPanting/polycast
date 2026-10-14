@@ -8,6 +8,7 @@ export async function getEpisode(id: string): Promise<{ episode: EpisodeDetail }
       title: LISTEN.episode.title,
       duration_sec: 24 * 60,
       image: art.samtal as unknown as string,
+      audio_url: LISTEN.episode.audioUrl,
       status: 'ready',
       difficulty: { label: 'A2–B1, relaxed pace' },
       podcasts: { title: 'Svenska Samtal', artwork: art.samtal as unknown as string },

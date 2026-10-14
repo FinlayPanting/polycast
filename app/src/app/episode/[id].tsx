@@ -5,6 +5,7 @@ import { ScrollView, View } from 'react-native'
 import { Artwork, Button, Notice, Screen, Tag, Txt, minutes } from '../../components/ui'
 import { api, refusalOf } from '../../lib/api'
 import { guideName } from '../../lib/languages'
+import { prefetchEpisode } from '../../lib/episodeAudio'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
 import { getEpisode } from '../../lib/data'
@@ -27,6 +28,7 @@ export default function Episode() {
   const [stage, setStage] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ text: string; upgrade?: boolean }>()
+  const [downloaded, setDownloaded] = useState<number>()
 
   const { data: ep, reload } = useAsync(async () => {
     const { episode, activeJob } = await getEpisode(id)
@@ -56,6 +58,14 @@ export default function Episode() {
     }, 4000)
     return () => clearInterval(t)
   }, [jobId, reload, refreshProfile])
+
+  // While the lesson is being prepared, download the learner's copy alongside it, so the episode
+  // is ready to play as soon as the lesson is.
+  const preparingNow = Boolean(jobId) || ep?.status === 'preparing'
+  useEffect(() => {
+    if (!ep || !preparingNow || !ep.audio_url) return
+    return prefetchEpisode(ep.id, ep.audio_url, setDownloaded)
+  }, [ep, preparingNow])
 
   if (!ep) return <Screen />
 
@@ -117,6 +127,11 @@ export default function Episode() {
             <Txt variant="small" tone="quiet">
               This takes a few minutes. We’ll send you a notification when it’s ready, so you can leave this screen.
             </Txt>
+            {downloaded !== undefined ? (
+              <Txt variant="small" tone="quiet">
+                {downloaded >= 1 ? 'Episode saved to your phone.' : `Saving the episode to your phone: ${Math.round(downloaded * 100)}%`}
+              </Txt>
+            ) : null}
           </View>
         ) : (
           <View style={{ gap: space.md }}>
