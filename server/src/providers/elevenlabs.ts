@@ -1,4 +1,4 @@
-import type { Word } from '@polycast/core'
+import { applyEditedSpellings, scribeNameInstruction, type Word } from '@polycast/core'
 import { errorFromResponse, type Transcriber } from './types'
 
 interface ScribeWord {
@@ -24,7 +24,8 @@ export function wordsFromScribe(words: ScribeWord[]): Word[] {
  */
 export function scribeTranscriber(apiKey: string, fetchImpl: typeof fetch = fetch): Transcriber {
   return {
-    async transcribe({ audioUrl, language, durationSec, audio }) {
+    async transcribe({ audioUrl, language, durationSec, audio, names }) {
+      const instruction = names ? scribeNameInstruction(names) : undefined
       const form = new FormData()
       form.set('model_id', 'scribe_v2')
       if (audio) form.set('file', new Blob([audio as BlobPart], { type: 'audio/mpeg' }), 'episode.mp3')
@@ -33,16 +34,30 @@ export function scribeTranscriber(apiKey: string, fetchImpl: typeof fetch = fetc
       form.set('diarize', 'true')
       form.set('timestamps_granularity', 'word')
       form.set('tag_audio_events', 'false')
+      // Scribe applies this after transcribing and returns `edited_transcript` beside the original.
+      if (instruction) form.set('transcript_edit', instruction)
       const res = await fetchImpl('https://api.elevenlabs.io/v1/speech-to-text', {
         method: 'POST',
         headers: { 'xi-api-key': apiKey },
         body: form,
       })
       if (!res.ok) throw errorFromResponse('ElevenLabs Scribe', res.status, await res.text())
-      const json = (await res.json()) as { language_code?: string; words?: ScribeWord[] }
-      const words = wordsFromScribe(json.words ?? [])
-      const heard = words.at(-1)?.end ?? durationSec
-      return { words, detectedLanguage: json.language_code, usage: { transcriptionSec: Math.max(heard, durationSec) } }
+      const json = (await res.json()) as {
+        language_code?: string
+        words?: ScribeWord[]
+        edited_transcript?: { kind: 'transcript'; text: string } | { kind: 'error'; message?: string }
+      }
+      const original = wordsFromScribe(json.words ?? [])
+      // The timings describe the original words, so the edit only lends its spelling of names
+      // to words it swaps one for one. A failed edit leaves the original transcript as it was.
+      const edit = json.edited_transcript
+      const words = edit?.kind === 'transcript' ? applyEditedSpellings(original, edit.text, language).words : original
+      const heardSec = Math.max(original.at(-1)?.end ?? durationSec, durationSec)
+      return {
+        words,
+        detectedLanguage: json.language_code,
+        usage: { transcriptionSec: heardSec, ...(instruction ? { transcriptEditSec: Math.max(10, heardSec) } : {}) },
+      }
     },
   }
 }

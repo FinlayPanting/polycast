@@ -6,6 +6,7 @@ import {
   type Difficulty,
   type LessonPlan,
   type Transcript,
+  type ShowNames,
   type Usage,
   type Word,
 } from '@polycast/core'
@@ -35,6 +36,8 @@ export interface PrepareInput {
   savedTranscript?: Transcript
   /** The fingerprint an earlier attempt stored with that transcript, if any. */
   savedSyncUrl?: string
+  /** The show's title, hosts and recurring names, for spelling them right in the transcript. */
+  names?: ShowNames
 }
 
 export interface PrepareDeps {
@@ -97,7 +100,7 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
           audio = await withRetry(() => deps.downloadAudio!(input.audioUrl))
           syncUrl = await deps.storage.put(syncPath(input.episodeId), await deps.fingerprint(audio), 'application/octet-stream')
         }
-        const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec, audio }))
+        const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec, audio, names: input.names }))
         audio = undefined // never kept
         meter.add(result.usage)
         words = result.words

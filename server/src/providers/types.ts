@@ -1,9 +1,16 @@
-import type { Usage, Word } from '@polycast/core'
+import type { ShowNames, Usage, Word } from '@polycast/core'
 
 /** Turns episode audio into timed words. The audio streams from the publisher; Polycast never stores it. */
 export interface Transcriber {
   /** `audio`, when given, is transcribed instead of fetching `audioUrl`, so we know exactly which copy was heard. */
-  transcribe(input: { audioUrl: string; language: string; durationSec: number; audio?: Uint8Array }): Promise<{
+  transcribe(input: {
+    audioUrl: string
+    language: string
+    durationSec: number
+    audio?: Uint8Array
+    /** Show, host and recurring names, so they are spelt right. Word timings never change. */
+    names?: ShowNames
+  }): Promise<{
     words: Word[]
     detectedLanguage?: string
     usage: Partial<Usage>

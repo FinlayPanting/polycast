@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApi } from '../src/api'
-import { runJob } from '../src/worker'
+import { runJob, showNamesFor } from '../src/worker'
 import { claimNextJob, type Sql } from '../src/db'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
 import { draftFor, syntheticEpisode } from './fixtures'
@@ -112,6 +112,17 @@ run('API and worker', () => {
     const refused = await call(erik, 'POST', `/v1/episodes/${other.id}/prepare`)
     expect(refused.status).toBe(402)
     expect((await refused.json()).message).toMatch(/used your free episode/)
+  })
+
+  it('gathers a show’s title, hosts and recurring names for the transcriber', async () => {
+    const [p] = await sql`select id from podcasts where feed_url = ${FEED_URL}`
+    await sql`update podcasts set author = 'Anna och Erik' where id = ${p!.id}`
+    await sql`insert into episodes (podcast_id, guid, title, audio_url, duration_sec, language) values
+      (${p!.id}, 'n1', 'Fika med Lotta i Malmö', 'https://cdn.example.com/n1.mp3', 60, 'sv'),
+      (${p!.id}, 'n2', 'Ute med Lotta i Malmö', 'https://cdn.example.com/n2.mp3', 60, 'sv')`
+    expect(await showNamesFor(sql, p!.id)).toEqual({ showTitle: 'Svenska Samtal', hosts: ['Anna', 'Erik'], names: ['Lotta', 'Malmö'] })
+    await sql`delete from episodes where guid in ('n1', 'n2')`
+    await sql`update podcasts set author = 'Anna' where id = ${p!.id}`
   })
 
   it('shows Polycast picks, easy listening and the top chart on Discover', async () => {

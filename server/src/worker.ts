@@ -1,4 +1,4 @@
-import { costUSD, wordsFromPodcastJson, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
+import { costUSD, recurringNames, wordsFromPodcastJson, type ShowNames, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
 import { SpendCapReached, SpendGuard } from './budget'
 import { claimNextJob, completePreparation, failJob, queueSyncUpgrades, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
 import { EmptyTranscript, prepareEpisode, syncPath, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
@@ -30,6 +30,17 @@ async function feedWordsFor(deps: WorkerDeps, feedUrl: string, guid: string, lan
   }
 }
 
+/** The show's title, its hosts (the feed's author) and names that recur in its episode titles. */
+export async function showNamesFor(sql: Sql, podcastId: string): Promise<ShowNames> {
+  const [p] = await sql`select title, author from podcasts where id = ${podcastId}`
+  const titles = await sql`select title from episodes where podcast_id = ${podcastId} order by published desc nulls last limit 100`
+  const hosts = String(p?.author ?? '')
+    .split(/\s*(?:,|&|\+|\boch\b|\bund\b|\band\b|\bet\b|\by\b|\be\b)\s*/i)
+    .map((h) => h.trim())
+    .filter((h) => h.length > 1)
+  return { showTitle: p?.title ?? '', hosts, names: recurringNames(titles.map((t) => t.title as string)) }
+}
+
 export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' | 'retrying' | 'failed'> {
   const { sql } = deps
   const [ep] = await sql`select e.*, p.feed_url from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${job.episodeId}`
@@ -59,6 +70,7 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
         feedWords: saved ? undefined : await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
         savedTranscript: saved,
         savedSyncUrl: saved ? await deps.storage.exists?.(syncPath(job.episodeId)) : undefined,
+        names: saved ? undefined : await showNamesFor(sql, ep!.podcast_id),
       },
       {
         ...deps,

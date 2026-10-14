@@ -51,3 +51,7 @@ Plans carry `LESSON_PLAN_VERSION` (now 2). On start, the worker rewrites and re-
 with an older plan from their saved transcript, at Polycast's cost (about two minutes each).
 
 The introduction can be heard again from the player ("Hear the introduction again").
+
+## Scribe spells show and host names (14 Oct 2026, branch build/PC-1013-02, not yet live)
+
+Board item PC-1013-02. Every transcription sends Scribe a `transcript_edit` instruction (at most 2,000 characters) naming the show, its hosts (the feed's author, split on "och", "und", "&" and similar) and capitalised words that recur in two or more episode titles, and asks it to correct the spelling of names only. Word timings always describe Scribe's original words, so Polycast keeps those and takes an edited spelling only where the edit swaps one capitalised word for a similar-looking one (within 30% of its letters); anything added, dropped, merged or rephrased is ignored, and a failed edit leaves the original. Cost: ElevenLabs charges 30% on top of transcription for this (about $0.07 an hour, minimum 10 seconds a request), and calls the feature experimental. It is counted in the cost table and the spending cap, which puts an hour of new audio at about $0.84 (was about $0.77) and the worst-case 2-hour free episode at about $1.67.
