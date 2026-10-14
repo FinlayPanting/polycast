@@ -7,6 +7,7 @@ import { listListens } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
+import { isSavedForOffline } from '../../lib/offline'
 
 /** Episodes started or finished, most recent first, with where the learner left off. */
 export default function Library() {
@@ -28,7 +29,7 @@ export default function Library() {
         }
         renderItem={({ item }) => {
           const left = Math.max(0, item.episodes.duration_sec - item.position_sec)
-          const status = item.finished_at ? 'Finished' : `${minutes(left)} left`
+          const status = `${item.finished_at ? 'Finished' : `${minutes(left)} left`}${isSavedForOffline(item.episode_id) ? ' · On this phone' : ''}`
           return (
             <Row accessibilityLabel={`${item.episodes.title}, ${status}`} onPress={() => router.push(`/episode/${item.episode_id}`)}>
               <Artwork uri={item.episodes.image ?? item.episodes.podcasts.artwork} size={64} />

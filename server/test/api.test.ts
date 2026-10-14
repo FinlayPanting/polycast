@@ -90,6 +90,12 @@ run('API and worker', () => {
     expect(alerts).toContain(`ready: Tåget for ${anna}`)
     expect(await (await call(anna, 'GET', `/v1/jobs/${prep.jobId}`)).json()).toMatchObject({ status: 'done', stage: 'done' })
 
+    // Saving the lesson to her phone ahead of time doesn't count as starting it.
+    const lesson = await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()
+    expect(lesson.guided).toBe(true)
+    expect(lesson.plan.moments.length).toBeGreaterThan(5)
+    expect((await sql`select count(*)::int as n from listens where episode_id = ${episodeId}`)[0]!.n).toBe(0)
+
     const listen = await (await call(anna, 'POST', `/v1/episodes/${episodeId}/listen`)).json()
     expect(listen.guided).toBe(true)
     expect(listen.guidanceLevel).toBe('standard')

@@ -1,11 +1,12 @@
 import { FREE_EPISODE_MAX_SEC, PLUS_MONTHLY_SEC } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ScrollView, View } from 'react-native'
+import { Alert, ScrollView, View } from 'react-native'
 import { Artwork, Button, Notice, Screen, Tag, Txt, minutes } from '../../components/ui'
 import { api, refusalOf } from '../../lib/api'
 import { guideName } from '../../lib/languages'
-import { prefetchEpisode } from '../../lib/episodeAudio'
+import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
+import { downloadForOffline, isSavedForOffline, removeSaved } from '../../lib/offline'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
 import { getEpisode } from '../../lib/data'
@@ -30,9 +31,17 @@ export default function Episode() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ text: string; upgrade?: boolean }>()
   const [downloaded, setDownloaded] = useState<number>()
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState<GetReadyStep>()
+  const [saveError, setSaveError] = useState<string>()
+  const [preparedByMe, setPreparedByMe] = useState(false)
+  const [offline, setOffline] = useState(false)
 
   const { data: ep, reload } = useAsync(async () => {
-    const { episode, activeJob } = await getEpisode(id)
+    const { episode, activeJob, preparedByMe: mine, offline: isOffline } = await getEpisode(id)
+    setPreparedByMe(Boolean(mine))
+    setOffline(Boolean(isOffline))
+    setSaved(isSavedForOffline(episode.id))
     if (activeJob) {
       setJobId(activeJob.id)
       setStage(activeJob.stage ?? undefined)
@@ -50,6 +59,7 @@ export default function Episode() {
         if (job.status === 'done' || job.status === 'failed') {
           clearInterval(t)
           setJobId(undefined)
+          if (job.status === 'done') setPreparedByMe(true)
           if (job.status === 'failed') setMessage({ text: 'We couldn’t prepare this episode. Nothing was taken from your allowance. Please try again later.' })
           await Promise.all([reload(), refreshProfile()])
         }
@@ -67,6 +77,42 @@ export default function Episode() {
     if (!ep || !preparingNow || !ep.audio_url) return
     return prefetchEpisode(ep.id, ep.audio_url, setDownloaded)
   }, [ep, preparingNow])
+
+  // An episode this learner prepared saves itself to the phone (audio, lesson and the guide's
+  // voice) as soon as it's ready, so it plays offline from then on.
+  useEffect(() => {
+    if (ep?.status === 'ready' && preparedByMe && !saved && !saving && !saveError && !offline && canSyncOnDevice) void save()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ep?.status, preparedByMe, saved, offline])
+
+  async function save() {
+    if (!ep) return
+    setSaveError(undefined)
+    setSaving({ step: 'downloading', progress: 0 })
+    try {
+      await downloadForOffline(ep.id, setSaving)
+      setSaved(true)
+    } catch {
+      setSaveError('We couldn’t save this episode to your phone. Check your connection and try again.')
+    } finally {
+      setSaving(undefined)
+    }
+  }
+
+  function remove() {
+    if (!ep) return
+    Alert.alert('Remove the download?', 'It frees up space on your phone. You can download it again any time while you’re online.', [
+      { text: 'Keep it', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          removeSaved(ep.id, ep.audio_url)
+          setSaved(false)
+        },
+      },
+    ])
+  }
 
   if (!ep) return <Screen><Loading /></Screen>
 
@@ -121,6 +167,29 @@ export default function Episode() {
           <View style={{ gap: space.sm }}>
             <Button label={`Listen with ${guideName(profile?.guide_id)}`} onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1' } })} />
             <Button kind="secondary" label="Subtitles only" onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '0' } })} />
+            {canSyncOnDevice ? (
+              <View style={{ gap: space.xs, paddingTop: space.sm }} accessibilityLiveRegion="polite">
+                {saving ? (
+                  <Txt variant="small" tone="quiet">
+                    {saving.step === 'downloading'
+                      ? `Saving to your phone: the episode, ${Math.round(saving.progress * 100)}%`
+                      : saving.step === 'guide'
+                        ? `Saving to your phone: ${guideName(profile?.guide_id)}’s voice, ${Math.round(saving.progress * 100)}%`
+                        : 'Saving to your phone: lining up your lesson'}
+                  </Txt>
+                ) : saved ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+                    <Txt variant="small" tone="quiet" style={{ flex: 1 }}>
+                      Saved on this phone. Plays offline.
+                    </Txt>
+                    <Button kind="quiet" label="Remove download" onPress={remove} style={{ paddingHorizontal: 0 }} />
+                  </View>
+                ) : offline ? null : (
+                  <Button kind="quiet" label="Download for offline" onPress={() => void save()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
+                )}
+                {saveError ? <Txt variant="small" tone="quiet">{saveError}</Txt> : null}
+              </View>
+            ) : null}
           </View>
         ) : preparing ? (
           <View style={{ gap: space.sm, backgroundColor: p.raised, borderRadius: 18, padding: space.lg }} accessibilityLiveRegion="polite">

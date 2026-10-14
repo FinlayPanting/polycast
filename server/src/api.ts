@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { cohortAlert, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
-import { freeEpisodesClaimed, requestPreparation, startListen, type Sql } from './db'
+import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, type Sql } from './db'
 import { discoverShelves } from './discover'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { guideById } from './voices'
@@ -167,8 +167,13 @@ export function createApi(deps: ApiDeps) {
     return job ? c.json(job) : c.json({ error: 'Not found' }, 404)
   })
 
-  /** Everything the player needs for one episode: subtitles, and the lesson plan if the guide is on. */
-  app.post('/v1/episodes/:id/listen', async (c) => {
+  /**
+   * Everything the player needs for one episode: subtitles, and the lesson plan if the guide is on.
+   * `/listen` records that the learner started it; `/lesson` is the same, for saving it to the phone
+   * ahead of time, and records nothing.
+   */
+  for (const route of ['listen', 'lesson'] as const)
+  app.post(`/v1/episodes/:id/${route}`, async (c) => {
     const userId = c.get('userId')
     const episodeId = c.req.param('id')
     const body = await c.req.json().catch(() => ({}))
@@ -177,7 +182,7 @@ export function createApi(deps: ApiDeps) {
     const [episode] = await sql`select e.*, p.title as podcast_title, p.artwork from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
     if (!episode) return c.json({ error: 'Not found' }, 404)
     if (episode.status !== 'ready') return c.json({ error: 'This episode isn’t ready yet.', status: episode.status }, 409)
-    const { guided } = await startListen(sql, userId, episodeId, level)
+    const guided = route === 'listen' ? (await startListen(sql, userId, episodeId, level)).guided : await guideAllowed(sql, userId, episodeId, level)
     const [transcript] = await sql`select language, segments, words, glossary from transcripts where episode_id = ${episodeId}`
     const [plan] = guided
       ? await sql`select plan from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`

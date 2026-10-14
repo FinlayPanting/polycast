@@ -10,6 +10,7 @@ import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
+import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName } from '../../lib/languages'
@@ -147,15 +148,30 @@ export default function Listen() {
     const abort = new AbortController()
     ;(async () => {
       try {
-        const fetched = await api.listen(id, guide !== '0')
+        let d: ListenPayload
+        let synced = false
+        const fetched = await api.listen(id, guide !== '0').catch((e) => {
+          // No connection (or the server's away): play the copy saved on this phone, if there is one.
+          const saved = config.demo ? undefined : loadLesson(id)
+          if (!saved) throw e
+          plog('offline: playing the lesson saved on this phone')
+          return undefined
+        })
         if (disposed) return
-        // Download the learner's own copy and line the lesson up with it (adverts can differ).
-        const ready = config.demo ? undefined : await getEpisodeReady(fetched, (s) => !disposed && setGetReady(s), abort.signal)
-        if (disposed) return
+        if (fetched) {
+          // Download the learner's own copy and line the lesson up with it (adverts can differ).
+          const ready = config.demo ? undefined : await getEpisodeReady(fetched, (s) => !disposed && setGetReady(s), abort.signal)
+          if (disposed) return
+          d = ready ? readyPayload(fetched, ready) : fetched
+          synced = Boolean(ready?.synced)
+          // Keep it for offline listening (the guided version; subtitles-only leaves it alone).
+          if (ready && guide !== '0') saveLesson(d)
+        } else {
+          const saved = loadLesson(id)!.payload
+          d = guide === '0' ? { ...saved, guided: false } : saved
+          synced = true
+        }
         setGetReady(undefined)
-        const d: ListenPayload = ready
-          ? { ...fetched, transcript: ready.transcript, plan: ready.plan, episode: { ...fetched.episode, audioUrl: ready.url, durationSec: ready.durationSec } }
-          : fetched
         setData(d)
         const level = d.guidanceLevel ?? 'standard'
         const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
@@ -174,7 +190,7 @@ export default function Listen() {
         })
         listen.current = l
         setRemoteHandler((cmd) => void l.remote(cmd))
-        plog(`listen: ${d.episode.title} (${ready?.synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
+        plog(`listen: ${d.episode.title} (${synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
         if (!config.demo) await prepareGuideAudio()
         await l.start({ url: d.episode.audioUrl, title: d.episode.title, artist: d.episode.podcastTitle, artwork: d.episode.image ?? undefined, durationSec: d.episode.durationSec }, startAt)
 

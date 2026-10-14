@@ -293,6 +293,20 @@ export async function freeEpisodesClaimed(sql: Sql): Promise<number> {
 // ---------------------------------------------------------------- listening
 
 /** Whether a learner may hear the guide on this episode, and records the listen if so. */
+/**
+ * Whether the learner would get the guide on this episode, without recording a listen: used when
+ * the app downloads a lesson ahead of time, so saving it for offline doesn't use up the week's
+ * guided episode or count as a listen in the funnel.
+ */
+export async function guideAllowed(sql: Sql, userId: string, episodeId: string, guidanceLevel: string | null): Promise<boolean> {
+  if (guidanceLevel === null) return false
+  const [profile] = await sql`select plan from profiles where id = ${userId}`
+  if (!profile) return false
+  const [existing] = await sql`select guided from listens where user_id = ${userId} and episode_id = ${episodeId}`
+  const [count] = await sql`select count(*)::int as n from listens where user_id = ${userId} and guided and started_at >= ${weekStartUTC(new Date())}`
+  return mayUseGuide(profile.plan, count!.n, Boolean(existing?.guided))
+}
+
 export async function startListen(sql: Sql, userId: string, episodeId: string, guidanceLevel: string | null): Promise<{ guided: boolean }> {
   return sql.begin(async (tx) => {
     const [profile] = await tx`select plan from profiles where id = ${userId} for update`

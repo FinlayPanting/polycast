@@ -69,3 +69,7 @@ Finlay, after a 15-minute test on his iPhone: the guide cut in, said its piece a
 - The app saves every guide line to the phone with the episode, so the guide starts at once (fetching each line as it played took about a second, up to 14 seconds with the phone locked) and works offline.
 - Replaying a line or going back under a minute no longer makes the guide repeat a moment just heard; moments skipped by seeking forward still come back.
 - A Hands-on question asked while the phone is locked is read out, then the episode carries on after a 3-second pause instead of waiting for a tap that can't come.
+
+## Episodes saved for offline (14 Oct 2026, live)
+
+Finlay: once an episode is set up it should play without internet, be removable and re-downloadable, and preparing it should download everything, guide included. When a learner's own preparation finishes, the episode page saves the whole thing to the phone: their copy of the audio, the lesson lined up with it, and every guide line. Episodes others prepared get a "Download for offline" button; saved ones show "Saved on this phone" and "Remove download". Offline, the player, the episode page, the Library and the resume position all fall back to what's on the phone. Saving uses a new `POST /v1/episodes/:id/lesson`, which returns the same as `/listen` (with the same guide entitlement) but records nothing, so downloading ahead doesn't use a free learner's weekly guided episode or count in the funnel. A listen started offline isn't recorded on the server.

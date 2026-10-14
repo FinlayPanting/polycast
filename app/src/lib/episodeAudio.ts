@@ -215,9 +215,9 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
     if (__DEV__) console.log('[listen] lined up with this copy:', { synced: r.synced, listenerDuration: map.listenerDuration, referenceDuration: data.episode.durationSec, file: uri.split('/').pop() })
     ready = { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map }
   } catch (e) {
-    // Play the stream with the lesson's own times: never leave the learner unable to listen.
-    console.warn('Polycast: couldn’t line the lesson up with this copy; streaming with its own times', e)
-    ready = unsynced
+    // Play the downloaded copy with the lesson's own times: never leave the learner unable to listen.
+    console.warn('Polycast: couldn’t line the lesson up with this copy; playing it with the lesson’s own times', e)
+    ready = local
   }
   return withGuide(ready)
 }

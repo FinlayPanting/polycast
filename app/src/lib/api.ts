@@ -81,6 +81,8 @@ export const api = {
   prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
   listen: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, { guide }),
+  /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
+  lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
 }
 
