@@ -65,7 +65,7 @@ export function luminance(hex: string): number {
 }
 
 /** Dark bars get a light outline so they show on the dark background (Germany's black stripe). */
-export function needsOutline(hex: string, background: string = BRAND.ink): boolean {
+export function needsOutline(hex: string, background: string = BRAND.navy): boolean {
   const a = luminance(hex)
   const b = luminance(background)
   const contrast = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)

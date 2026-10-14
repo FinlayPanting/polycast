@@ -23,13 +23,14 @@ type Base = {
 }
 
 const dark: Base = {
-  bg: BRAND.ink,
-  raised: '#18181D',
-  sunken: '#08080A',
-  line: '#2A2A31',
+  // Navy, from Finlay's logo (Oct 2026), so the app matches its icon and launch screen.
+  bg: BRAND.navy,
+  raised: '#24243D',
+  sunken: '#12121F',
+  line: '#33334D',
   text: '#EDEBE7',
   quiet: '#9A98A3',
-  faint: '#86848F',
+  faint: '#9391A0',
   onAccent: BRAND.ink,
   playText: BRAND.orange,
   guideText: '#EE6FB8',
