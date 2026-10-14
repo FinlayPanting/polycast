@@ -10,6 +10,9 @@ import { useEffect } from 'react'
 import { useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { config } from '../lib/config'
+import { reportFirstOpen } from '../lib/firstOpen'
 import { configurePurchases } from '../lib/purchases'
 import { SessionProvider, useSession } from '../lib/session'
 import { usePalette } from '../theme'
@@ -25,6 +28,14 @@ function Routes() {
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync()
   }, [ready])
+  useEffect(() => {
+    if (config.demo) return
+    void reportFirstOpen({
+      getItem: (k) => AsyncStorage.getItem(k),
+      setItem: (k, v) => AsyncStorage.setItem(k, v),
+      post: async () => (await fetch(`${config.apiUrl}/events/first-open`, { method: 'POST' })).ok,
+    })
+  }, [])
   useEffect(() => {
     if (session) configurePurchases(session.user.id)
   }, [session])

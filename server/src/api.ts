@@ -4,6 +4,7 @@ import { cohortAlert, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { freeEpisodesClaimed, requestPreparation, startListen, type Sql } from './db'
 import { discoverShelves } from './discover'
+import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { guideById } from './voices'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -30,6 +31,8 @@ export interface ApiDeps {
   alert?: (kind: string, message: string) => Promise<void>
   /** Shared secret RevenueCat sends with subscription events. */
   revenueCatSecret?: string
+  /** Lets the morning email read the weekly funnel (counts only). Unset: the funnel isn't served. */
+  funnelToken?: string
 }
 
 type Env = { Variables: { userId: string } }
@@ -52,6 +55,21 @@ export function createApi(deps: ApiDeps) {
     await sql`insert into removal_requests (podcast_title, contact, message) values (${body.podcastTitle}, ${body.contact}, ${body.message ?? null})`
     await deps.alert?.('removal', `Removal request for "${body.podcastTitle}" from ${body.contact}`)
     return c.json({ ok: true })
+  })
+
+  // The app says this once per install, before sign-in. Nothing identifies the phone.
+  app.post('/events/first-open', async (c) => {
+    await countFirstOpen(sql)
+    return c.json({ ok: true })
+  })
+
+  /** The weekly drop-off funnel, as counts. `week` is a Monday (YYYY-MM-DD); defaults to last week. */
+  app.get('/admin/funnel', async (c) => {
+    if (!deps.funnelToken || c.req.header('Authorization') !== `Bearer ${deps.funnelToken}`) return c.json({ error: 'unauthorised' }, 401)
+    const week = c.req.query('week') ?? lastMonday(new Date())
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return c.json({ error: 'week must be YYYY-MM-DD' }, 400)
+    const funnel = await weeklyFunnel(sql, week)
+    return c.json({ funnel, text: funnelText(funnel) })
   })
 
   app.post('/webhooks/revenuecat', async (c) => {
@@ -172,6 +190,14 @@ export function createApi(deps: ApiDeps) {
   })
 
   return app
+}
+
+/** The Monday that starts the previous full week, UTC. */
+export function lastMonday(now: Date): string {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const sinceMonday = (d.getUTCDay() + 6) % 7
+  d.setUTCDate(d.getUTCDate() - sinceMonday - 7)
+  return d.toISOString().slice(0, 10)
 }
 
 async function notify(deps: ApiDeps, kind: string, message: string) {

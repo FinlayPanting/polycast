@@ -51,3 +51,7 @@ Plans carry `LESSON_PLAN_VERSION` (now 2). On start, the worker rewrites and re-
 with an older plan from their saved transcript, at Polycast's cost (about two minutes each).
 
 The introduction can be heard again from the player ("Hear the introduction again").
+
+## Weekly drop-off funnel (14 Oct 2026, branch build/PC-1012-09, not yet live)
+
+Board item PC-1012-09. Counts only, no tracking: the one new table, `first_opens` (migration 0004), is a daily counter the app bumps once per install with no identifier. Every other step is counted from tables Polycast already keeps, for the people who signed up in a given week: signed up, picked a language, started a guided listen, finished one, used the free episode, started Plus (has ever had a Plus period), came back (a listen updated at least 7 days after signing up). `GET /admin/funnel?week=YYYY-MM-DD` returns the counts and a plain-text version for the morning email, behind a `FUNNEL_TOKEN` Railway variable. To go live: run 0004 in Supabase, set `FUNNEL_TOKEN`, merge the branch, and give the morning email run the token.
