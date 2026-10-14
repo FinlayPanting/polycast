@@ -23,7 +23,7 @@
       "package": "com.finlaypanting.polycast",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundColor": "#0D0D0F"
+        "backgroundColor": "#1A1A30"
       }
     },
     "plugins": [
@@ -48,7 +48,7 @@
         {
           "image": "./assets/splash-icon.png",
           "imageWidth": 160,
-          "backgroundColor": "#0D0D0F"
+          "backgroundColor": "#1A1A30"
         }
       ],
       [
@@ -59,7 +59,7 @@
             "ios": "./assets/icons/flag-se.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-se.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -67,7 +67,7 @@
             "ios": "./assets/icons/flag-de.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-de.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -75,7 +75,7 @@
             "ios": "./assets/icons/flag-at.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-at.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -83,7 +83,7 @@
             "ios": "./assets/icons/flag-fr.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-fr.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -91,7 +91,7 @@
             "ios": "./assets/icons/flag-it.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-it.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -99,7 +99,7 @@
             "ios": "./assets/icons/flag-es.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-es.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -107,7 +107,7 @@
             "ios": "./assets/icons/flag-mx.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-mx.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -115,7 +115,7 @@
             "ios": "./assets/icons/flag-pt.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-pt.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -123,7 +123,7 @@
             "ios": "./assets/icons/flag-br.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-br.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -131,7 +131,7 @@
             "ios": "./assets/icons/flag-gb.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-gb.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           },
           {
@@ -139,7 +139,7 @@
             "ios": "./assets/icons/flag-us.png",
             "android": {
               "foregroundImage": "./assets/icons/flag-us.png",
-              "backgroundColor": "#0D0D0F"
+              "backgroundColor": "#1A1A30"
             }
           }
         ]

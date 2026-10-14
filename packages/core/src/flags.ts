@@ -9,7 +9,13 @@ export const BRAND = {
   magenta: '#D23193',
   violet: '#7F6FA4',
   ink: '#0D0D0F',
+  /** Background of the app icon and logo tile (Finlay's logo, Oct 2026). */
+  navy: '#1A1A30',
 } as const
+
+/** The logo tile: the mark is 105 tall on a 151 square, centred (Finlay's logo file). */
+export const ICON_BACKGROUND = BRAND.navy
+export const ICON_MARK_HEIGHT = 105 / 151
 
 export const POLE_COLOUR = BRAND.orange
 
@@ -59,7 +65,7 @@ export function luminance(hex: string): number {
 }
 
 /** Dark bars get a light outline so they show on the dark background (Germany's black stripe). */
-export function needsOutline(hex: string, background = BRAND.ink): boolean {
+export function needsOutline(hex: string, background: string = BRAND.ink): boolean {
   const a = luminance(hex)
   const b = luminance(background)
   const contrast = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)

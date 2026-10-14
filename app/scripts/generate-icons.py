@@ -5,7 +5,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 data = json.load(sys.stdin)
-INK = data["ink"]
+INK = data["ink"]  # the icon background: navy, from Finlay's logo
+MARK = data["markHeight"]  # 105 / 151, from Finlay's logo
 POLE = data["pole"]
 out = Path(__file__).resolve().parent.parent / "assets" / "icons"
 out.mkdir(parents=True, exist_ok=True)
@@ -18,7 +19,8 @@ OUTLINED = {c.upper() for c in data["outlined"]}  # decided by needsOutline() in
 def outline_needed(hex_):
     return hex_.upper() in OUTLINED
 
-def draw(colours, size=1024, background=True, mark_height=0.55):
+def draw(colours, size=1024, background=True, mark_height=None):
+    mark_height = mark_height or MARK
     img = Image.new("RGBA", (size, size), INK if background else (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     s = size * mark_height / 105
