@@ -3,6 +3,7 @@ import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { cohortAlert, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
+import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, type Sql } from './db'
 import { discoverShelves } from './discover'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
@@ -34,6 +35,8 @@ export interface ApiDeps {
   revenueCatSecret?: string
   /** Lets the morning email read the weekly funnel (counts only). Unset: the funnel isn't served. */
   funnelToken?: string
+  /** Resolves host names before fetching a show's feed; tests pass a fake. Default: DNS. */
+  lookupHost?: LookupHost
 }
 
 type Env = { Variables: { userId: string } }
@@ -136,7 +139,7 @@ export function createApi(deps: ApiDeps) {
     if (known?.removed) return c.json({ error: 'This show isn’t available on Polycast.' }, 404)
     let podcastId: string
     try {
-      podcastId = (await syncFeed(sql, deps.fetch, feedUrl, apple)).podcastId
+      podcastId = (await syncFeed(sql, deps.fetch, feedUrl, apple, { lookupHost: deps.lookupHost })).podcastId
     } catch {
       if (!known) return c.json({ error: 'We couldn’t load this show right now.' }, 502)
       podcastId = known.id // serve what we have

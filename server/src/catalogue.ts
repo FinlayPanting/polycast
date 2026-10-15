@@ -19,17 +19,27 @@ import {
 } from '@polycast/core'
 import { createHash } from 'node:crypto'
 import type { Sql } from './db'
+import { POLYCAST_UA, safeFetch, type LookupHost } from './safeFetch'
 
 export type Fetch = typeof fetch
 
 /** How many recent episodes of a show are listed. */
 const EPISODES_KEPT = 50
 
-/** Fetches a feed and stores the show and its recent episodes. Returns the podcast id. */
-export async function syncFeed(sql: Sql, f: Fetch, feedUrl: string, apple?: Partial<PodcastSummary>): Promise<{ podcastId: string; feed: Feed }> {
-  const res = await f(feedUrl, { headers: { 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' } })
+/**
+ * Fetches a feed and stores the show and its recent episodes. Returns the podcast id. The address
+ * comes from the app, so it is fetched safely: public addresses only, within a time and size limit.
+ */
+export async function syncFeed(
+  sql: Sql,
+  f: Fetch,
+  feedUrl: string,
+  apple?: Partial<PodcastSummary>,
+  opts: { lookupHost?: LookupHost } = {},
+): Promise<{ podcastId: string; feed: Feed }> {
+  const res = await safeFetch(feedUrl, { fetch: f, lookupHost: opts.lookupHost, headers: POLYCAST_UA })
   if (!res.ok) throw new Error(`Feed returned ${res.status}`)
-  const feed = parseFeed(await res.text())
+  const feed = parseFeed(new TextDecoder().decode(res.body))
   const language = feed.language ?? null
   const [p] = await sql`
     insert into podcasts (apple_id, feed_url, title, author, artwork, language)

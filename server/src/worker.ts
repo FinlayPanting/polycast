@@ -5,6 +5,7 @@ import { EmptyTranscript, prepareEpisode, syncPath, voiceForGuide, type PrepareD
 import { ProviderError } from './providers/types'
 import { guideById } from './voices'
 import { ensureWelcomeAudio } from './welcome'
+import { POLYCAST_UA, safeFetch, type LookupHost } from './safeFetch'
 
 export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
   sql: Sql
@@ -12,6 +13,8 @@ export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
   /** Tells the learner their episode is ready (Expo push). */
   notifyReady?: (userId: string, episodeTitle: string, episodeId: string) => Promise<void>
   alert?: (kind: string, message: string) => Promise<void>
+  /** Resolves host names before fetching a feed or the transcript it names; tests pass a fake. Default: DNS. */
+  lookupHost?: LookupHost
 }
 
 async function guard(deps: WorkerDeps): Promise<SpendGuard> {
@@ -22,10 +25,16 @@ async function guard(deps: WorkerDeps): Promise<SpendGuard> {
 /** Looks for a word-timed transcript in the episode's feed, so transcription can be skipped. */
 async function feedWordsFor(deps: WorkerDeps, feedUrl: string, guid: string, language: string) {
   try {
-    const feed = parseFeed(await (await deps.fetch(feedUrl)).text())
+    // Both addresses come from outside (the app, then the feed), so both are fetched safely.
+    const get = async (url: string) => {
+      const res = await safeFetch(url, { fetch: deps.fetch, lookupHost: deps.lookupHost, headers: POLYCAST_UA })
+      if (!res.ok) throw new Error(`${url} returned ${res.status}`)
+      return new TextDecoder().decode(res.body)
+    }
+    const feed = parseFeed(await get(feedUrl))
     const link = pickTimedTranscript(feed.episodes.find((e) => e.guid === guid)?.transcripts ?? [], language)
     if (!link?.type.includes('json')) return undefined
-    return wordsFromPodcastJson(await (await deps.fetch(link.url)).json())
+    return wordsFromPodcastJson(JSON.parse(await get(link.url)))
   } catch {
     return undefined
   }

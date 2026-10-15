@@ -25,6 +25,9 @@ const fakeFetch: typeof fetch = async (input) => {
   return new Response('not found', { status: 404 })
 }
 
+/** Every test host resolves to a public address. */
+const publicHost = async () => ['93.184.216.34']
+
 run('API and worker', () => {
   let sql: Sql
   let drop: () => Promise<void>
@@ -37,7 +40,7 @@ run('API and worker', () => {
 
   /** The token is just the user id here; production verifies a Supabase token. */
   const api = () =>
-    createApi({ sql, verify: async (t) => (t.startsWith('bad') ? undefined : t), fetch: fakeFetch, alert: async (k, m) => void alerts.push(`${k}: ${m}`) })
+    createApi({ sql, verify: async (t) => (t.startsWith('bad') ? undefined : t), fetch: fakeFetch, lookupHost: publicHost, alert: async (k, m) => void alerts.push(`${k}: ${m}`) })
 
   async function learner(): Promise<string> {
     const id = randomUUID()
@@ -53,6 +56,7 @@ run('API and worker', () => {
     return {
       sql,
       fetch: fakeFetch,
+      lookupHost: publicHost,
       transcriber: mockTranscriber(ep.words),
       text: mockText((req) =>
         req.prompt.includes('Translate these lines')
@@ -102,6 +106,18 @@ run('API and worker', () => {
     expect(listen.episode.audioUrl).toBe('https://cdn.example.com/1.mp3')
     expect(listen.transcript.segments.length).toBeGreaterThan(10)
     expect(listen.plan.moments.length).toBeGreaterThan(5)
+  })
+
+  it('refuses to load a show from a private address, without fetching it', async () => {
+    const fetched: string[] = []
+    const spy: typeof fetch = async (input, init) => (fetched.push(String(input)), fakeFetch(input, init))
+    const guarded = createApi({ sql, verify: async (t) => t, fetch: spy, lookupHost: async (h) => (h === 'internal.example' ? ['10.0.0.5'] : ['93.184.216.34']) })
+    const user = await learner()
+    for (const feedUrl of ['http://169.254.169.254/latest/meta-data', 'https://internal.example/feed.xml', 'http://[fd12::1]:8080/', 'file:///etc/passwd']) {
+      const res = await guarded.request('/v1/podcasts/open', { method: 'POST', headers: { Authorization: `Bearer ${user}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ feedUrl }) })
+      expect(res.status).toBe(502)
+    }
+    expect(fetched).toEqual([])
   })
 
   it('serves a ready episode free to the next learner, and explains refusals in plain English', async () => {
