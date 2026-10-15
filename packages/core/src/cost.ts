@@ -1,7 +1,9 @@
 /**
  * List prices in US dollars, checked 12 Oct 2026 (spec Research tab). Update here when providers change prices.
+ * Google doubles its Gemini 3.8 prices on 1 Jan 2027 (ai.google.dev/gemini-api/docs/pricing, checked
+ * 15 Oct 2026), so there are two tables and the date picks one: see `pricesOn`.
  */
-export const PRICES = {
+export const PRICES_2026 = {
   /** ElevenLabs Scribe v2, per second of audio ($0.22 an hour). */
   transcriptionPerSec: 0.22 / 3600,
   /**
@@ -10,16 +12,36 @@ export const PRICES = {
    */
   transcriptEditPerSec: (0.3 * 0.22) / 3600,
   /**
-   * Gemini 3.8 Flash at the standard rate, per token (2026 price; Google lists a rise on 1 Jan 2027).
+   * Gemini 3.8 Flash at the standard rate, per token ($0.75 in, $3.75 out per million until 31 Dec 2026).
    * Not batch: batch targets up to 24 hours, too slow for a learner waiting on their episode.
    */
   textInPerToken: 0.75 / 1e6,
   textOutPerToken: 3.75 / 1e6,
   /** Gemini 3.8 Flash TTS, per audio second of output (25 tokens a second at $9 per million). */
   ttsPerAudioSec: (25 * 9) / 1e6,
+  /** Gemini 3.8 Flash-Lite TTS, per audio second ($6 per million audio tokens). Only the audition uses it. */
+  ttsLitePerAudioSec: (25 * 6) / 1e6,
   /** Google Cloud Text-to-Speech, Chirp 3 HD voices, per character ($30 per million; first 1M a month free). */
   ttsPerChar: 30 / 1e6,
-} as const
+}
+
+export type PriceTable = typeof PRICES_2026
+
+/** From 1 Jan 2027 (UTC): Gemini 3.8 Flash $1.50 in, $7.50 out; Flash TTS $18 and Flash-Lite TTS $12 per million audio tokens. */
+export const PRICES_2027: PriceTable = {
+  ...PRICES_2026,
+  textInPerToken: 1.5 / 1e6,
+  textOutPerToken: 7.5 / 1e6,
+  ttsPerAudioSec: (25 * 18) / 1e6,
+  ttsLitePerAudioSec: (25 * 12) / 1e6,
+}
+
+export const PRICES_2027_FROM = Date.UTC(2027, 0, 1)
+
+/** The price table in force at a moment (by default, now). */
+export function pricesOn(at: Date = new Date()): PriceTable {
+  return at.getTime() >= PRICES_2027_FROM ? PRICES_2027 : PRICES_2026
+}
 
 /** Guide speech runs at about 15 characters a second, for estimating per-character voices. */
 export const SPEECH_CHARS_PER_SEC = 15
@@ -48,7 +70,9 @@ export function addUsage(a: Usage, b: Partial<Usage>): Usage {
   }
 }
 
-export function costUSD(u: Usage): number {
+/** What a job's usage costs at the prices in force at `at` (by default, now). */
+export function costUSD(u: Usage, at: Date = new Date()): number {
+  const PRICES = pricesOn(at)
   return (
     u.transcriptionSec * PRICES.transcriptionPerSec +
     u.textInTokens * PRICES.textInPerToken +
@@ -78,6 +102,6 @@ export function estimatePrepUsage(durationSec: number, opts: { feedTranscript?: 
   }
 }
 
-export function estimatePrepCostUSD(durationSec: number, opts: { feedTranscript?: boolean } = {}): number {
-  return costUSD(estimatePrepUsage(durationSec, opts))
+export function estimatePrepCostUSD(durationSec: number, opts: { feedTranscript?: boolean; at?: Date } = {}): number {
+  return costUSD(estimatePrepUsage(durationSec, opts), opts.at)
 }

@@ -32,3 +32,6 @@ prepared
 # App build output
 app/dist
 app/dist-preview
+
+# Voice audition takes (pnpm --filter @polycast/server audition-voices)
+audition/
