@@ -4,6 +4,7 @@ import { claimNextJob, completePreparation, failJob, queueSyncUpgrades, reclaimS
 import { EmptyTranscript, prepareEpisode, syncPath, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
 import { ProviderError } from './providers/types'
 import { guideById } from './voices'
+import { ensureWelcomeAudio } from './welcome'
 
 export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
   sql: Sql
@@ -107,6 +108,11 @@ export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal
   let lastReclaim = 0
   const upgraded = await queueSyncUpgrades(deps.sql).catch((e) => (console.error('worker: sync upgrade check failed', e), 0))
   if (upgraded) console.log(`worker: preparing ${upgraded} older episode(s) again so they follow each listener's adverts`)
+  // The guide's welcome, voiced once per language before anyone hears it.
+  await guard(deps)
+    .then((g) => ensureWelcomeAudio({ speech: deps.speech, storage: deps.storage, guard: g, log: console.log }))
+    .then((v) => v.length && console.log(`worker: voiced the welcome for ${v.join(', ')}`))
+    .catch((e) => console.error('worker: welcome voicing failed', e instanceof Error ? e.message : e))
   while (!opts.signal?.aborted) {
     try {
       if (Date.now() - lastReclaim > 60_000) {

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { InterestPicker } from '../../components/InterestPicker'
 import { Button, Screen, Txt } from '../../components/ui'
+import { WelcomeFromGuide } from '../../components/WelcomeFromGuide'
 import { languageName } from '../../lib/languages'
 import { space } from '../../theme'
 
@@ -16,6 +17,7 @@ export default function ChooseInterests() {
     <Screen edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         <Button kind="quiet" label="Back" onPress={() => router.back()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0, marginTop: space.md }} />
+        {language ? <WelcomeFromGuide language={language} /> : null}
         <Txt variant="title">What do you enjoy?</Txt>
         <Txt tone="quiet">Pick a few and we’ll find {language ? languageName(language) : ''} shows about them. You can change these any time.</Txt>
         <InterestPicker value={interests} onChange={setInterests} />
