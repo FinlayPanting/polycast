@@ -201,4 +201,21 @@ run('API and worker', () => {
     expect(res.status).toBe(200)
     expect(alerts.some((a) => a.startsWith('removal:'))).toBe(true)
   })
+
+  it('caps the removal form’s fields and how often one address can send it', async () => {
+    const before = alerts.filter((a) => a.startsWith('removal:')).length
+    const form = api()
+    const send = (body: unknown, ip = '203.0.113.7') =>
+      form.request('/removal-requests', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Real-IP': ip }, body: JSON.stringify(body) })
+    expect((await send({ podcastTitle: 'x'.repeat(201), contact: 'a@b.c' })).status).toBe(400)
+    expect((await send({ podcastTitle: 'Show', contact: 'a@b.c', message: 'x'.repeat(2001) })).status).toBe(400)
+    expect((await send({ podcastTitle: { $gt: '' }, contact: 'a@b.c' })).status).toBe(400)
+    for (let i = 0; i < 5; i++) expect((await send({ podcastTitle: 'Show', contact: 'a@b.c' })).status).toBe(200)
+    const limited = await send({ podcastTitle: 'Show', contact: 'a@b.c' })
+    expect(limited.status).toBe(429)
+    expect((await limited.json()).error).toMatch(/try again in an hour/)
+    // Someone else can still reach Finlay.
+    expect((await send({ podcastTitle: 'Show', contact: 'c@d.e' }, '198.51.100.9')).status).toBe(200)
+    expect(alerts.filter((a) => a.startsWith('removal:')).length - before).toBe(6)
+  })
 })

@@ -8,6 +8,7 @@ import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, typ
 import { discoverShelves } from './discover'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { guideById } from './voices'
+import { clientAddress, rateLimiter } from './rateLimit'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
 
@@ -41,6 +42,9 @@ export interface ApiDeps {
 
 type Env = { Variables: { userId: string } }
 
+/** Limits on the public removal form. */
+export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
+
 export function createApi(deps: ApiDeps) {
   const { sql } = deps
   const app = new Hono<Env>()
@@ -53,11 +57,23 @@ export function createApi(deps: ApiDeps) {
   app.get('/health', (c) => c.json({ ok: true }))
 
   // Creators can ask for removal without an account (spec: Creators and rights).
+  // It's public and every request pings Finlay's phone, so fields are capped and each address
+  // gets a few requests an hour (with an overall ceiling, in case many addresses join in).
+  const removalPerAddress = rateLimiter(REMOVAL_LIMITS.perAddressPerHour, 60 * 60_000)
+  const removalOverall = rateLimiter(REMOVAL_LIMITS.overallPerHour, 60 * 60_000)
   app.post('/removal-requests', async (c) => {
     const body = await c.req.json().catch(() => ({}))
-    if (!body.podcastTitle || !body.contact) return c.json({ error: 'Please give the show’s name and a way to reach you.' }, 400)
-    await sql`insert into removal_requests (podcast_title, contact, message) values (${body.podcastTitle}, ${body.contact}, ${body.message ?? null})`
-    await deps.alert?.('removal', `Removal request for "${body.podcastTitle}" from ${body.contact}`)
+    const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+    const podcastTitle = text(body?.podcastTitle)
+    const contact = text(body?.contact)
+    const message = text(body?.message) || null
+    if (!podcastTitle || !contact) return c.json({ error: 'Please give the show’s name and a way to reach you.' }, 400)
+    if (podcastTitle.length > REMOVAL_LIMITS.title || contact.length > REMOVAL_LIMITS.contact || (message?.length ?? 0) > REMOVAL_LIMITS.message)
+      return c.json({ error: `Please keep the show’s name and contact under ${REMOVAL_LIMITS.title} characters, and the message under ${REMOVAL_LIMITS.message}.` }, 400)
+    if (!removalPerAddress.hit(clientAddress((n) => c.req.header(n))) || !removalOverall.hit('all'))
+      return c.json({ error: 'We’ve had a few requests from you already. Please try again in an hour.' }, 429)
+    await sql`insert into removal_requests (podcast_title, contact, message) values (${podcastTitle}, ${contact}, ${message})`
+    await deps.alert?.('removal', `Removal request for "${podcastTitle}" from ${contact}`)
     return c.json({ ok: true })
   })
 
