@@ -323,3 +323,28 @@ function retimeMoment(m: GuideMoment, map: SyncMap): GuideMoment {
   }
   return { ...m, at, clips, audio }
 }
+
+/** Stretches shorter than this aren't called adverts (a pause, a jingle, a matching wobble). */
+export const MIN_ADVERT_SEC = 15
+
+/**
+ * The stretches of the listener's copy that aren't in ours: usually the adverts their host stitched
+ * in for them. In listener time, in order. Display only: nothing is skipped automatically.
+ */
+export function listenerOnlyStretches(map: SyncMap, minSec = MIN_ADVERT_SEC): { start: number; end: number }[] {
+  if (map.coverage < MIN_SYNC_COVERAGE || !map.segments.length) return []
+  const shared = map.segments.map((s) => ({ start: s.refStart + s.offset, end: s.refEnd + s.offset })).sort((a, b) => a.start - b.start)
+  const out: { start: number; end: number }[] = []
+  let cursor = 0
+  for (const s of shared) {
+    if (s.start - cursor >= minSec) out.push({ start: cursor, end: s.start })
+    cursor = Math.max(cursor, s.end)
+  }
+  if (map.listenerDuration - cursor >= minSec) out.push({ start: cursor, end: map.listenerDuration })
+  return out
+}
+
+/** The advert stretch `t` falls in, if any. */
+export function advertAt(adverts: { start: number; end: number }[] | undefined, t: number): { start: number; end: number } | undefined {
+  return adverts?.find((a) => t >= a.start && t < a.end)
+}

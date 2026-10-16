@@ -170,13 +170,13 @@ export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSumm
 export function topChart(sql: Sql, f: Fetch, language: string): Promise<PodcastSummary[]> {
   const countries = TOP_CHART_COUNTRIES[language]
   if (!countries?.length) return Promise.resolve([])
-  // A new cache key, so charts cached before the language check aren't served.
-  return cachedChart(sql, language, 'top:in-language', async () => {
+  // A new cache key, so charts cached before shows carried their chart place aren't served.
+  return cachedChart(sql, language, 'top:in-language:ranked', async () => {
     const charts = await Promise.all(
       countries.map(async (country) => {
         const res = await f(appleChartUrl(country, 50))
         if (!res.ok) throw new Error(`Apple chart returned ${res.status}`)
-        return parseAppleChart(await res.json())
+        return parseAppleChart(await res.json(), country)
       }),
     )
     return (await keepShowsInLanguage(sql, f, interleaveCharts(charts), language)).slice(0, 50)

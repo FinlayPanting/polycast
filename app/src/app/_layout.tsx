@@ -13,6 +13,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { config } from '../lib/config'
 import { reportFirstOpen } from '../lib/firstOpen'
+import { tidyDownloads } from '../lib/episodeAudio'
+import { savedWordEpisodes } from '../lib/words'
 import { configurePurchases } from '../lib/purchases'
 import { SessionProvider, useSession } from '../lib/session'
 import { usePalette } from '../theme'
@@ -39,6 +41,14 @@ function Routes() {
   useEffect(() => {
     if (session) configurePurchases(session.user.id)
   }, [session])
+  // Once a launch: tidy downloads untouched for 30 days, keeping any a saved word comes from.
+  // If the saved words can't be read (offline), nothing is removed.
+  useEffect(() => {
+    if (!session || config.demo) return
+    savedWordEpisodes()
+      .then((keep) => tidyDownloads(keep))
+      .catch(() => {})
+  }, [session?.user.id])
 
   if (!ready) return null
   return (

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Linking, Platform, useColorScheme, View } from 'react-native'
 import { Mark } from '../components/Mark'
 import { Button, Screen, Txt } from '../components/ui'
+import { REAL_HOST_LINE } from '../lib/copy'
 import { useSession } from '../lib/session'
 import { space } from '../theme'
 
@@ -21,6 +22,9 @@ export default function Welcome() {
         </Txt>
         <Txt tone="quiet" style={{ maxWidth: 320 }}>
           Learn a language through the podcasts people there actually listen to, with subtitles and a guide at your side.
+        </Txt>
+        <Txt variant="small" tone="faint" style={{ maxWidth: 320 }}>
+          {REAL_HOST_LINE}
         </Txt>
       </View>
 

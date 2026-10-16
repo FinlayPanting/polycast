@@ -95,6 +95,12 @@ export function createApi(deps: ApiDeps) {
     return c.json({ funnel, text: funnelText(funnel) })
   })
 
+  /** SQL condition: does a purchase at `at` start a new Plus period for this profile? */
+  const newPeriod = (at: Date | null) =>
+    at
+      ? sql`(plus_period_start is null or ${at}::timestamptz > plus_period_start)`
+      : sql`(plus_period_start is null or plus_period_start < now() - interval '27 days')`
+
   app.post('/webhooks/revenuecat', async (c) => {
     if (!deps.revenueCatSecret || c.req.header('Authorization') !== `Bearer ${deps.revenueCatSecret}`) return c.json({ error: 'unauthorised' }, 401)
     const { event } = await c.req.json()
@@ -103,11 +109,16 @@ export function createApi(deps: ApiDeps) {
     const active = ['INITIAL_PURCHASE', 'RENEWAL', 'UNCANCELLATION', 'PRODUCT_CHANGE'].includes(event.type)
     const ended = event.type === 'EXPIRATION'
     if (active) {
-      // A new paid month starts a fresh 5 hours.
+      // A new paid month starts a fresh 5 hours, but only once: RevenueCat can deliver the same event
+      // more than once, so a period starts only if this purchase began after the current one. The
+      // purchase time comes from the event; without one, the current month must be over (27+ days).
       const renewing = event.type === 'INITIAL_PURCHASE' || event.type === 'RENEWAL'
+      const purchasedMs = Number(event.purchased_at_ms)
+      const purchasedAt = Number.isFinite(purchasedMs) && purchasedMs > 0 ? new Date(Math.min(purchasedMs, Date.now())) : null
       await sql`update profiles set plan = 'plus',
-        plus_period_start = case when ${renewing} then now() else coalesce(plus_period_start, now()) end,
-        plus_used_sec = case when ${renewing} then 0 else plus_used_sec end
+        plus_used_sec = case when ${renewing} and ${newPeriod(purchasedAt)} then 0 else plus_used_sec end,
+        plus_period_start = case when ${renewing} and ${newPeriod(purchasedAt)} then coalesce(${purchasedAt}::timestamptz, now())
+          else coalesce(plus_period_start, ${purchasedAt}::timestamptz, now()) end
         where id = ${userId}`
     } else if (ended) {
       await sql`update profiles set plan = 'free' where id = ${userId}`
@@ -196,7 +207,7 @@ export function createApi(deps: ApiDeps) {
     const userId = c.get('userId')
     const episodeId = c.req.param('id')
     const body = await c.req.json().catch(() => ({}))
-    const [profile] = await sql`select guide_id, guidance_level from profiles where id = ${userId}`
+    const [profile] = await sql`select guide_id, guidance_level, plan from profiles where id = ${userId}`
     const level = body.guide === false ? null : (profile?.guidance_level ?? 'standard')
     const [episode] = await sql`select e.*, p.title as podcast_title, p.artwork from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
     if (!episode) return c.json({ error: 'Not found' }, 404)
@@ -212,6 +223,8 @@ export function createApi(deps: ApiDeps) {
       guided,
       guidanceLevel: guided ? level : null,
       plan: plan?.plan ?? null,
+      // This is the free episode a free learner chose: its wrap-up gently mentions Plus.
+      freeEpisode: profile?.plan !== 'plus' && (await sql`select 1 from prep_jobs where episode_id = ${episodeId} and requested_by = ${userId} and charge = 'freeEpisode' limit 1`).length > 0,
       // Lets the app line the lesson up with the learner's own copy of the episode.
       syncUrl: plan?.plan?.syncUrl ?? (await sql`select plan->>'syncUrl' as url from lesson_plans where episode_id = ${episodeId} and plan ? 'syncUrl' limit 1`)[0]?.url ?? null,
     })

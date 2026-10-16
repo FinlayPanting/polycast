@@ -106,6 +106,11 @@ run('API and worker', () => {
     expect(listen.episode.audioUrl).toBe('https://cdn.example.com/1.mp3')
     expect(listen.transcript.segments.length).toBeGreaterThan(10)
     expect(listen.plan.moments.length).toBeGreaterThan(5)
+    // It was her free episode, so its wrap-up can mention Plus; once she has Plus, it doesn't.
+    expect(listen.freeEpisode).toBe(true)
+    await sql`update profiles set plan = 'plus' where id = ${anna}`
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()).freeEpisode).toBe(false)
+    await sql`update profiles set plan = 'free' where id = ${anna}`
   })
 
   it('refuses to load a show from a private address, without fetching it', async () => {
@@ -125,6 +130,8 @@ run('API and worker', () => {
     const opened = await (await call(erik, 'POST', '/v1/podcasts/open', { feedUrl: FEED_URL })).json()
     const ready = opened.episodes.find((e: any) => e.status === 'ready')
     expect(await (await call(erik, 'POST', `/v1/episodes/${ready.id}/prepare`)).json()).toEqual({ status: 'ready' })
+    // Someone else's free episode isn't his.
+    expect((await (await call(erik, 'POST', `/v1/episodes/${ready.id}/lesson`)).json()).freeEpisode).toBe(false)
 
     // Erik uses his free episode on the other one; a third request is refused with a reason.
     const other = opened.episodes.find((e: any) => e.status !== 'ready')
@@ -156,6 +163,7 @@ run('API and worker', () => {
     expect(shelves.map((s: any) => s.id)).toEqual(['picks', 'easy', 'top', 'favourites'])
     expect(shelves[0].shows[0]).toMatchObject({ title: 'Svenska Samtal', readyEpisodes: 1 })
     expect(shelves[2].shows[0].artwork).toBe('https://img/600x600bb.jpg')
+    expect(shelves[2].shows[0].chart).toEqual({ rank: 1, country: 'se' })
   })
 
   it('reads the learner\'s saved interests for Discover', async () => {
@@ -217,5 +225,35 @@ run('API and worker', () => {
     // Someone else can still reach Finlay.
     expect((await send({ podcastTitle: 'Show', contact: 'c@d.e' }, '198.51.100.9')).status).toBe(200)
     expect(alerts.filter((a) => a.startsWith('removal:')).length - before).toBe(6)
+  })
+
+  it('gives a fresh 5 Plus hours once per paid month, however often RevenueCat repeats an event', async () => {
+    const max = await learner()
+    const hook = (event: Record<string, unknown>) =>
+      createApi({ sql, verify: async () => undefined, fetch: fakeFetch, revenueCatSecret: 's3cret' }).request('/webhooks/revenuecat', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer s3cret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: { app_user_id: max, ...event } }),
+      })
+    const used = async () => (await sql`select plus_used_sec, plus_period_start from profiles where id = ${max}`)[0]!
+    const sept = Date.parse('2026-09-01T10:00:00Z')
+    const oct = Date.parse('2026-10-01T10:00:00Z')
+
+    await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
+    expect((await used()).plus_period_start.toISOString()).toBe('2026-09-01T10:00:00.000Z')
+    await sql`update profiles set plus_used_sec = 3600 where id = ${max}`
+    // The same purchase delivered again: hours stay used.
+    await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
+    expect((await used()).plus_used_sec).toBe(3600)
+
+    await hook({ type: 'RENEWAL', id: 'e2', purchased_at_ms: oct })
+    expect(await used()).toMatchObject({ plus_used_sec: 0 })
+    await sql`update profiles set plus_used_sec = 1800 where id = ${max}`
+    await hook({ type: 'RENEWAL', id: 'e2', purchased_at_ms: oct })
+    await hook({ type: 'RENEWAL', id: 'e2-late-copy', purchased_at_ms: sept })
+    // An event without a purchase time can't reset a month that's still running.
+    await hook({ type: 'RENEWAL', id: 'e3' })
+    expect((await used()).plus_used_sec).toBe(1800)
+    expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
   })
 })

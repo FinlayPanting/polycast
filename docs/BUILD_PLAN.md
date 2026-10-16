@@ -16,7 +16,7 @@ Target: public App Store launch before the On Air Fest pitch (aim 23 Oct 2026). 
 - Offline downloads for Plus (spec: My library). Not built yet; left off the Plus screen until it is.
 - Starter shelf: a script to add Finlay's picks and pre-prepare their recent episodes through Gemini's batch service.
 - Website pages the app links to: privacy policy, terms, creators (removal requests). Needs the domain decision.
-- App Store listing: screenshots, description, privacy labels, reviewer demo account.
+- App Store listing: screenshots, description (first draft in docs/APP_STORE.md), privacy labels, reviewer demo account.
 - On a real iPhone: background play with the screen locked, headphone presses, the guide's voice over a paused episode, Sign in with Apple, purchases. The two audio libraries share the iPhone's audio session; if they fight, swap the guide's voice onto the track player (one file to change).
 - One server test (Discover shelves) failed once in about a dozen runs and hasn't reproduced; watch for it.
 

@@ -68,6 +68,10 @@ export interface ListenPayload {
   episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number }
   transcript: { language: string; segments: Segment[]; words: Word[]; glossary?: Record<string, GlossEntry> }
   guided: boolean
+  /** Set on the phone, not by the server: the advert breaks in the learner's own copy. */
+  adverts?: { start: number; end: number }[]
+  /** The free episode this (free) learner chose: its wrap-up gently mentions Plus. */
+  freeEpisode?: boolean
   guidanceLevel: 'light' | 'standard' | 'handsOn' | null
   plan: LessonPlan | null
   /** Fingerprint of the copy we transcribed, to line the lesson up with the learner's copy. */
