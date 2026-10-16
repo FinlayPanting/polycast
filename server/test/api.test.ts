@@ -218,4 +218,34 @@ run('API and worker', () => {
     expect((await send({ podcastTitle: 'Show', contact: 'c@d.e' }, '198.51.100.9')).status).toBe(200)
     expect(alerts.filter((a) => a.startsWith('removal:')).length - before).toBe(6)
   })
+
+  it('gives a fresh 5 Plus hours once per paid month, however often RevenueCat repeats an event', async () => {
+    const max = await learner()
+    const hook = (event: Record<string, unknown>) =>
+      createApi({ sql, verify: async () => undefined, fetch: fakeFetch, revenueCatSecret: 's3cret' }).request('/webhooks/revenuecat', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer s3cret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: { app_user_id: max, ...event } }),
+      })
+    const used = async () => (await sql`select plus_used_sec, plus_period_start from profiles where id = ${max}`)[0]!
+    const sept = Date.parse('2026-09-01T10:00:00Z')
+    const oct = Date.parse('2026-10-01T10:00:00Z')
+
+    await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
+    expect((await used()).plus_period_start.toISOString()).toBe('2026-09-01T10:00:00.000Z')
+    await sql`update profiles set plus_used_sec = 3600 where id = ${max}`
+    // The same purchase delivered again: hours stay used.
+    await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
+    expect((await used()).plus_used_sec).toBe(3600)
+
+    await hook({ type: 'RENEWAL', id: 'e2', purchased_at_ms: oct })
+    expect(await used()).toMatchObject({ plus_used_sec: 0 })
+    await sql`update profiles set plus_used_sec = 1800 where id = ${max}`
+    await hook({ type: 'RENEWAL', id: 'e2', purchased_at_ms: oct })
+    await hook({ type: 'RENEWAL', id: 'e2-late-copy', purchased_at_ms: sept })
+    // An event without a purchase time can't reset a month that's still running.
+    await hook({ type: 'RENEWAL', id: 'e3' })
+    expect((await used()).plus_used_sec).toBe(1800)
+    expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
+  })
 })

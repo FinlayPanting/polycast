@@ -97,3 +97,7 @@ Board item PC-1013-05. `POST /removal-requests` is public and every request aler
 ## Real host, real show (16 Oct 2026)
 
 Board item PC-1013-06. The welcome screen (the first thing a new learner sees) now carries, under the tagline, "The host is real. Mia and Leo only step in when the host pauses." The same line opens the guide paragraph of a first draft App Store description in `docs/APP_STORE.md`; it lives in `app/src/lib/copy.ts` and a test keeps the two identical. Simplest placement picked: one quiet line on the welcome screen rather than a new onboarding step.
+
+## RevenueCat repeats can't reset Plus hours (16 Oct 2026)
+
+Board item PC-1013-10. RevenueCat may deliver the same event more than once. A purchase or renewal now starts a new Plus period (fresh 5 hours) only if its `purchased_at_ms` is later than the current period's start, and the period start is set from that purchase time rather than the moment the message arrived. An event without a purchase time only resets a period that started 27 or more days ago. No new table was needed, so there's no migration; the allowance itself is unchanged.

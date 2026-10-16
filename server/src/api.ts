@@ -95,6 +95,12 @@ export function createApi(deps: ApiDeps) {
     return c.json({ funnel, text: funnelText(funnel) })
   })
 
+  /** SQL condition: does a purchase at `at` start a new Plus period for this profile? */
+  const newPeriod = (at: Date | null) =>
+    at
+      ? sql`(plus_period_start is null or ${at}::timestamptz > plus_period_start)`
+      : sql`(plus_period_start is null or plus_period_start < now() - interval '27 days')`
+
   app.post('/webhooks/revenuecat', async (c) => {
     if (!deps.revenueCatSecret || c.req.header('Authorization') !== `Bearer ${deps.revenueCatSecret}`) return c.json({ error: 'unauthorised' }, 401)
     const { event } = await c.req.json()
@@ -103,11 +109,16 @@ export function createApi(deps: ApiDeps) {
     const active = ['INITIAL_PURCHASE', 'RENEWAL', 'UNCANCELLATION', 'PRODUCT_CHANGE'].includes(event.type)
     const ended = event.type === 'EXPIRATION'
     if (active) {
-      // A new paid month starts a fresh 5 hours.
+      // A new paid month starts a fresh 5 hours, but only once: RevenueCat can deliver the same event
+      // more than once, so a period starts only if this purchase began after the current one. The
+      // purchase time comes from the event; without one, the current month must be over (27+ days).
       const renewing = event.type === 'INITIAL_PURCHASE' || event.type === 'RENEWAL'
+      const purchasedMs = Number(event.purchased_at_ms)
+      const purchasedAt = Number.isFinite(purchasedMs) && purchasedMs > 0 ? new Date(Math.min(purchasedMs, Date.now())) : null
       await sql`update profiles set plan = 'plus',
-        plus_period_start = case when ${renewing} then now() else coalesce(plus_period_start, now()) end,
-        plus_used_sec = case when ${renewing} then 0 else plus_used_sec end
+        plus_used_sec = case when ${renewing} and ${newPeriod(purchasedAt)} then 0 else plus_used_sec end,
+        plus_period_start = case when ${renewing} and ${newPeriod(purchasedAt)} then coalesce(${purchasedAt}::timestamptz, now())
+          else coalesce(plus_period_start, ${purchasedAt}::timestamptz, now()) end
         where id = ${userId}`
     } else if (ended) {
       await sql`update profiles set plan = 'free' where id = ${userId}`
