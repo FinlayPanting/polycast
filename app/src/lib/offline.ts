@@ -20,7 +20,7 @@ const positionFile = (episodeId: string) => new File(folder(), `${episodeId}.pos
 
 /** The player's payload once the episode and the guide's lines are on the phone. */
 export function readyPayload(fetched: ListenPayload, ready: ReadyEpisode): ListenPayload {
-  return { ...fetched, transcript: ready.transcript, plan: ready.plan, episode: { ...fetched.episode, audioUrl: ready.url, durationSec: ready.durationSec } }
+  return { ...fetched, transcript: ready.transcript, plan: ready.plan, adverts: ready.adverts ?? [], episode: { ...fetched.episode, audioUrl: ready.url, durationSec: ready.durationSec } }
 }
 
 const isOnPhone = (uri: string) => uri.startsWith('file:') || uri.startsWith('/')

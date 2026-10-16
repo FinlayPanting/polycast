@@ -4,8 +4,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { space, usePalette } from '../theme'
 import { clock, Txt } from './ui'
 
-/** The playhead, with a small mark wherever the guide will step in. Drag or tap to move. */
-export function Scrubber({ position, duration, markers, onSeek }: { position: number; duration: number; markers: number[]; onSeek: (sec: number) => void }) {
+/**
+ * The playhead, with a small mark wherever the guide will step in and a soft band over each advert
+ * break in the learner's copy. Drag or tap to move, adverts included.
+ */
+export function Scrubber({ position, duration, markers, adverts = [], onSeek }: { position: number; duration: number; markers: number[]; adverts?: { start: number; end: number }[]; onSeek: (sec: number) => void }) {
   const p = usePalette()
   const [width, setWidth] = useState(1)
   const [drag, setDrag] = useState<number>()
@@ -32,13 +35,18 @@ export function Scrubber({ position, duration, markers, onSeek }: { position: nu
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel="Playback position"
-      accessibilityValue={{ text: `${clock(position)} of ${clock(duration)}` }}
+      accessibilityValue={{ text: `${clock(position)} of ${clock(duration)}${adverts.some((a) => position >= a.start && position < a.end) ? ', advert break' : ''}` }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(e) => onSeek(position + (e.nativeEvent.actionName === 'increment' ? 30 : -15))}
     >
       <GestureDetector gesture={Gesture.Exclusive(pan, tap)}>
         <View onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)} style={{ height: 28, justifyContent: 'center' }}>
           <View style={{ height: 4, borderRadius: 2, backgroundColor: p.line }} />
+          {duration > 0
+            ? adverts.map((a, i) => (
+                <View key={`ad${i}`} style={{ position: 'absolute', left: `${(a.start / duration) * 100}%`, width: `${((a.end - a.start) / duration) * 100}%`, height: 8, borderRadius: 4, backgroundColor: p.line, opacity: 0.9 }} />
+              ))
+            : null}
           <View style={{ position: 'absolute', height: 4, borderRadius: 2, backgroundColor: p.play, width: `${frac * 100}%` }} />
           {markers.map((m, i) => (
             <View key={i} style={{ position: 'absolute', left: `${(m / duration) * 100}%`, width: 3, height: 10, marginLeft: -1.5, borderRadius: 1.5, backgroundColor: m <= shown ? p.play : p.guide, opacity: 0.9 }} />

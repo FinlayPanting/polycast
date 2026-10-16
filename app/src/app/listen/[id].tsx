@@ -1,4 +1,4 @@
-import { findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment } from '@polycast/core'
+import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -271,6 +271,7 @@ export default function Listen() {
   const l = listen.current
   const guideOn = state.phase === 'guide' || state.phase === 'question'
   const playing = state.phase === 'playing' || guideOn
+  const advert = advertAt(data.adverts, state.position)
   const nextMode: Record<SubtitleMode, SubtitleMode> = { both: 'target', target: 'none', none: 'both' }
   const modeLabel: Record<SubtitleMode, string> = { both: 'Both languages', target: 'Target language only', none: 'Subtitles off' }
 
@@ -309,6 +310,15 @@ export default function Listen() {
       ) : null}
 
       <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
+        {advert && !guideOn ? (
+          <View style={{ alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg }}>
+            <Txt tone="quiet">Advert break</Txt>
+            <Txt variant="small" tone="faint" style={{ textAlign: 'center' }}>
+              {guideName(profile?.guide_id)} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
+            </Txt>
+            <Button kind="quiet" label="Skip to the end of the advert" onPress={() => void l?.seek(advert.end)} />
+          </View>
+        ) : null}
         {segmentAt(data.transcript.segments, state.position) < 0 ? (
           <View style={{ alignItems: 'center' }}>
             <Artwork uri={data.episode.image} size={guideOn ? 168 : 260} radius={22} />
@@ -347,7 +357,7 @@ export default function Listen() {
           <NextGuide guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
         ) : null}
 
-        <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} onSeek={(s) => void l?.seek(s)} />
+        <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} adverts={data.adverts} onSeek={(s) => void l?.seek(s)} />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Control icon="text.bubble" label={`Subtitles: ${modeLabel[mode]}. Change`} onPress={() => setMode(nextMode[mode])} size={22} />

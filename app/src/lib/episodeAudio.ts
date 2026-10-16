@@ -1,4 +1,4 @@
-import { alignFingerprints, retimeLesson, type LessonPlan, type SyncMap } from '@polycast/core'
+import { alignFingerprints, listenerOnlyStretches, retimeLesson, type LessonPlan, type SyncMap } from '@polycast/core'
 import { Directory, DownloadTask, File, Paths } from 'expo-file-system'
 import { Platform } from 'react-native'
 import { PolycastFingerprint } from '../../modules/polycast-fingerprint'
@@ -201,6 +201,8 @@ export interface ReadyEpisode {
   /** Whether the lesson was lined up with this copy. */
   synced: boolean
   map?: SyncMap
+  /** Stretches of this copy the lesson can't match (usually adverts stitched in for this listener). */
+  adverts?: { start: number; end: number }[]
 }
 
 /**
@@ -231,7 +233,7 @@ export async function getEpisodeReady(data: ListenPayload, onStep: (s: GetReadyS
     const map = alignFingerprints(mine, theirs)
     const r = retimeLesson({ ...data.transcript, source: 'scribe' }, data.plan, map)
     if (__DEV__) console.log('[listen] lined up with this copy:', { synced: r.synced, listenerDuration: map.listenerDuration, referenceDuration: data.episode.durationSec, file: uri.split('/').pop() })
-    ready = { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map }
+    ready = { url: uri, transcript: r.transcript, plan: r.plan, durationSec: map.listenerDuration || data.episode.durationSec, synced: r.synced, map, adverts: r.synced ? listenerOnlyStretches(map) : [] }
   } catch (e) {
     // Play the downloaded copy with the lesson's own times: never leave the learner unable to listen.
     console.warn('Polycast: couldn’t line the lesson up with this copy; playing it with the lesson’s own times', e)
