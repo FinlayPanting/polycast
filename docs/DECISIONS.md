@@ -97,3 +97,7 @@ Board item PC-1013-05. `POST /removal-requests` is public and every request aler
 ## Real host, real show (16 Oct 2026)
 
 Board item PC-1013-06. The welcome screen (the first thing a new learner sees) now carries, under the tagline, "The host is real. Mia and Leo only step in when the host pauses." The same line opens the guide paragraph of a first draft App Store description in `docs/APP_STORE.md`; it lives in `app/src/lib/copy.ts` and a test keeps the two identical. Simplest placement picked: one quiet line on the welcome screen rather than a new onboarding step.
+
+## New-episode nudges (built 16 Oct 2026, waiting on migration 0006)
+
+Board item PC-1013-08. Every 3 hours the server re-reads the feeds of shows a learner finished in the last 60 days, then sends each learner who has notifications on at most one push a week: "New <show> is out. Get it ready?", for the newest episode published in the last week, after they finished that show and after their last nudge, that they haven't started. Simplest options picked: only between 09:00 and 19:00 UTC (daytime across Europe); the learner's last nudge is a single new `profiles.last_nudged_at` column (migration `0006_new_episode_nudges.sql`), marked before sending so a failed push can't lead to two; no separate on/off setting beyond iOS's own notification switch. Tapping any Polycast notification (this or "your episode is ready") now opens that episode's page.

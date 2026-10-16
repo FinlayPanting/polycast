@@ -13,6 +13,7 @@ import type { Storage } from './providers/types'
 import { Agent, setGlobalDispatcher } from 'undici'
 import { perMinute } from './retry'
 import { jobInProgress, workLoop } from './worker'
+import { refreshFinishedShows, sendNudges, type Push } from './nudges'
 
 // Node's fetch gives up if a reply takes over 5 minutes to start. Transcribing a long episode
 // can take longer than that, so allow 20 minutes.
@@ -65,6 +66,16 @@ function expoPush(sqlLookup: (userId: string) => Promise<string | undefined>) {
   }
 }
 
+/** Any notification through Expo's push service. */
+const expoSend: Push = async (to, title, body, data) => {
+  const res = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, title, body, data }),
+  })
+  if (!res.ok) throw new Error(`Expo push failed: ${res.status}`)
+}
+
 /** Keeps the guide's voice requests under the provider's per-minute limit. */
 function pacedSpeech<S extends { synthesize: (...a: any[]) => Promise<any> }>(speech: S, rpm: number): S {
   return { ...speech, synthesize: perMinute(speech.synthesize.bind(speech), rpm) }
@@ -102,6 +113,19 @@ async function main() {
       notifyReady: expoPush(async (id) => (await sql`select push_token from profiles where id = ${id}`)[0]?.push_token ?? undefined),
     }, { signal: stopping.signal })
     console.log('Worker running')
+
+    // New-episode nudges: every 3 hours, re-read finished shows' feeds, then send what's due.
+    const nudgeRound = async () => {
+      try {
+        await refreshFinishedShows(sql, fetch)
+        const sent = await sendNudges(sql, expoSend)
+        if (sent) console.log(`Sent ${sent} new-episode nudges`)
+      } catch (e) {
+        console.error('nudge round failed', e)
+      }
+    }
+    const nudgeTimer = setInterval(() => void nudgeRound(), 3 * 60 * 60_000)
+    stopping.signal.addEventListener('abort', () => clearInterval(nudgeTimer))
   }
 
   // Railway stops the old server on every deploy. Hand an unfinished job back to the queue so
