@@ -248,4 +248,16 @@ run('API and worker', () => {
     expect((await used()).plus_used_sec).toBe(1800)
     expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
   })
+
+  it('revokes Sign in with Apple when an account is deleted, and deletes even if Apple says no', async () => {
+    for (const appleSays of [true, false]) {
+      const gone = await learner()
+      const codes: string[] = []
+      const withApple = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, revokeApple: async (code) => (codes.push(code), appleSays) })
+      const res = await withApple.request('/v1/account', { method: 'DELETE', headers: { Authorization: `Bearer ${gone}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ appleAuthorizationCode: 'c-1' }) })
+      expect(res.status).toBe(200)
+      expect(codes).toEqual(['c-1'])
+      expect(await sql`select 1 from profiles where id = ${gone}`).toHaveLength(0)
+    }
+  })
 })

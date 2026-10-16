@@ -5,6 +5,7 @@
 import { serve } from '@hono/node-server'
 import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
 import { createApi, supabaseVerifier } from './api'
+import { appleRevoker } from './appleRevoke'
 import { connect, releaseJob } from './db'
 import { scribeTranscriber } from './providers/elevenlabs'
 import { geminiSpeech, geminiText } from './providers/gemini'
@@ -77,7 +78,10 @@ async function main() {
   const alert = webhookAlert(process.env.ALERT_WEBHOOK_URL)
   const podcastIndex = process.env.PODCAST_INDEX_KEY ? { key: process.env.PODCAST_INDEX_KEY, secret: need('PODCAST_INDEX_SECRET') } : undefined
 
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
+  const appleKey = process.env.APPLE_SIGNIN_KEY
+    ? { teamId: need('APPLE_TEAM_ID'), keyId: need('APPLE_SIGNIN_KEY_ID'), privateKey: process.env.APPLE_SIGNIN_KEY, clientId: need('APPLE_CLIENT_ID') }
+    : undefined
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN, revokeApple: appleKey ? appleRevoker(appleKey) : undefined })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)

@@ -22,6 +22,8 @@ vi.mock('expo-file-system', () => {
     uri: string
     constructor(_: unknown, name: string) { this.uri = `/docs/${name}` }
     create() {}
+    get exists() { return [...files.keys()].some((k) => k.startsWith(`${this.uri}/`)) }
+    delete() { for (const k of [...files.keys()]) if (k.startsWith(`${this.uri}/`)) files.delete(k) }
   }
   class DownloadTask {
     constructor(private url: string, private to: File, private o: { onProgress: (p: { bytesWritten: number; totalBytes: number }) => void }) {}
@@ -76,5 +78,16 @@ describe('downloadEpisode', () => {
     expect(first.at(-1)).toBe(0)
     tasks[0]!.finish()
     expect(await b).toContain('ep3.mp3')
+  })
+
+  it('clears every download from the phone when the account is deleted', async () => {
+    const { clearAllDownloads, downloadEpisode, isDownloaded } = await import('./episodeAudio')
+    const done = downloadEpisode('ep4', 'https://x.test/ep4.mp3', () => {})
+    tasks[0]!.finish()
+    await done
+    expect(isDownloaded('ep4', 'https://x.test/ep4.mp3')).toBe(true)
+    clearAllDownloads()
+    expect(isDownloaded('ep4', 'https://x.test/ep4.mp3')).toBe(false)
+    clearAllDownloads() // nothing left: still fine
   })
 })

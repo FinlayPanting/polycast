@@ -8,6 +8,7 @@ import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, typ
 import { discoverShelves } from './discover'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { guideById } from './voices'
+import type { RevokeApple } from './appleRevoke'
 import { clientAddress, rateLimiter } from './rateLimit'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -38,6 +39,8 @@ export interface ApiDeps {
   funnelToken?: string
   /** Resolves host names before fetching a show's feed; tests pass a fake. Default: DNS. */
   lookupHost?: LookupHost
+  /** Revokes a learner's Sign in with Apple link on account deletion. Unset until Finlay adds the key. */
+  revokeApple?: RevokeApple
 }
 
 type Env = { Variables: { userId: string } }
@@ -137,6 +140,10 @@ export function createApi(deps: ApiDeps) {
 
   /** Deletes the learner's account and everything tied to it (spec: Privacy; App Store requirement). */
   app.delete('/v1/account', async (c) => {
+    // Apple's rules: let go of the Sign in with Apple link too. Best effort, never blocks the deletion.
+    const body = await c.req.json().catch(() => ({}))
+    const code = typeof body?.appleAuthorizationCode === 'string' ? body.appleAuthorizationCode : undefined
+    if (code && deps.revokeApple && !(await deps.revokeApple(code))) console.error('Sign in with Apple was not revoked for a deleted account')
     // Profiles, saved words and listens cascade from the auth user. Shared catalogue data stays.
     await sql`delete from auth.users where id = ${c.get('userId')}`
     return c.json({ ok: true })

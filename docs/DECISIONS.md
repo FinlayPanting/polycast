@@ -101,3 +101,7 @@ Board item PC-1013-06. The welcome screen (the first thing a new learner sees) n
 ## RevenueCat repeats can't reset Plus hours (16 Oct 2026)
 
 Board item PC-1013-10. RevenueCat may deliver the same event more than once. A purchase or renewal now starts a new Plus period (fresh 5 hours) only if its `purchased_at_ms` is later than the current period's start, and the period start is set from that purchase time rather than the moment the message arrived. An event without a purchase time only resets a period that started 27 or more days ago. No new table was needed, so there's no migration; the allowance itself is unchanged.
+
+## Sign in with Apple is let go when an account is deleted (built 16 Oct 2026, waiting on a key)
+
+Board item PC-1014-01. When a learner who signed in with Apple deletes their account, the app asks Apple for a fresh authorisation code (Apple's own sheet), sends it with `DELETE /v1/account`, and the server exchanges it for a token and revokes it (`server/src/appleRevoke.ts`), as Apple's account-deletion rules ask. Revoking is best effort: if the learner cancels Apple's sheet or Apple refuses, the account is still deleted. After the server deletes the account, the app removes every downloaded episode, guide line and saved lesson from the phone. The revoke needs a Sign in with Apple key in Railway (`APPLE_TEAM_ID`, `APPLE_SIGNIN_KEY_ID`, `APPLE_SIGNIN_KEY`, `APPLE_CLIENT_ID`); without them the server skips it.

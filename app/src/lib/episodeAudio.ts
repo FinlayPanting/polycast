@@ -232,6 +232,12 @@ export function localOrStream(episodeId: string | undefined, streamUrl: string):
   return f.exists ? f.uri : streamUrl
 }
 
+/** Removes every downloaded episode, guide line and saved lesson from the phone (account deletion). */
+export function clearAllDownloads(): void {
+  const dir = folder()
+  if (dir.exists) dir.delete()
+}
+
 /** Removes a downloaded episode (and its fingerprint) from the phone. */
 export function removeDownload(episodeId: string, url: string): void {
   for (const f of [audioFile(episodeId, url), fingerprintFile(episodeId)]) if (f.exists) f.delete()

@@ -83,7 +83,7 @@ export const api = {
   listen: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, { guide }),
   /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
-  deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
+  deleteAccount: (appleAuthorizationCode?: string) => call<{ ok: true }>('DELETE', '/v1/account', appleAuthorizationCode ? { appleAuthorizationCode } : undefined),
 }
 
 /** A refusal from the server, with its plain-English message, if this error is one. */

@@ -6,7 +6,10 @@ import { Alert, Linking, Pressable, ScrollView, Share, View } from 'react-native
 import { InterestPicker } from '../../components/InterestPicker'
 import { Mark } from '../../components/Mark'
 import { Button, Screen, Txt, minutes } from '../../components/ui'
+import * as AppleAuthentication from 'expo-apple-authentication'
 import { api } from '../../lib/api'
+import { deleteAccount } from '../../lib/deleteAccount'
+import { clearAllDownloads } from '../../lib/episodeAudio'
 import { GUIDANCE, GUIDES, LANGUAGES, languageName } from '../../lib/languages'
 import { useSession, type ProfilePrefs } from '../../lib/session'
 import { MIN_TAP, space, usePalette } from '../../theme'
@@ -49,7 +52,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function You() {
   const p = usePalette()
-  const { profile, updatePrefs, signOut } = useSession()
+  const { profile, session, updatePrefs, signOut } = useSession()
   const [error, setError] = useState<string>()
   if (!profile) return <Screen><Loading /></Screen>
 
@@ -146,15 +149,20 @@ export default function You() {
             kind="quiet"
             label="Delete my account"
             onPress={() =>
-              Alert.alert('Delete your account?', 'This removes your profile, saved words and listening history for good. If you have Plus, cancel it in your iPhone’s Settings too.', [
+              Alert.alert('Delete your account?', 'This removes your profile, saved words, listening history and downloaded episodes for good. If you have Plus, cancel it in your iPhone’s Settings too.', [
                 { text: 'Keep my account', style: 'cancel' },
                 {
                   text: 'Delete',
                   style: 'destructive',
                   onPress: async () => {
                     try {
-                      await api.deleteAccount()
-                      await signOut()
+                      await deleteAccount({
+                        signedInWithApple: session?.user.app_metadata?.provider === 'apple',
+                        appleAuthorizationCode: async () => (await AppleAuthentication.signInAsync({ requestedScopes: [] })).authorizationCode ?? undefined,
+                        deleteOnServer: (code) => api.deleteAccount(code),
+                        clearDownloads: clearAllDownloads,
+                        signOut,
+                      })
                     } catch {
                       setError('Your account couldn’t be deleted just now. Please try again.')
                     }
