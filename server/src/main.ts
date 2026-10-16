@@ -7,6 +7,7 @@ import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
 import { createApi, supabaseVerifier } from './api'
 import { connect, releaseJob } from './db'
 import { scribeTranscriber } from './providers/elevenlabs'
+import { openrouterScribeTranscriber } from './providers/openrouter'
 import { geminiSpeech, geminiText } from './providers/gemini'
 import { googleChirpSpeech } from './providers/googleTts'
 import type { Storage } from './providers/types'
@@ -88,7 +89,8 @@ async function main() {
     void workLoop({
       sql,
       fetch,
-      transcriber: scribeTranscriber(need('ELEVENLABS_API_KEY')),
+      // TRANSCRIBER=openrouter sends Scribe through OpenRouter (cheaper; no name-spelling edit).
+      transcriber: process.env.TRANSCRIBER === 'openrouter' ? openrouterScribeTranscriber(need('OPENROUTER_API_KEY')) : scribeTranscriber(need('ELEVENLABS_API_KEY')),
       text: geminiText(gemini),
       // Chirp 3 HD voices (Google Cloud TTS, 200 requests a minute) when its key is set; otherwise
       // Gemini's voices, which AI Studio caps at 10 a minute and 100 a day on Tier 1.

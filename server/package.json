@@ -9,7 +9,8 @@
     "prepare-episode": "tsx src/cli/prepare.ts",
     "audition-voices": "tsx src/cli/audition.ts",
     "start": "tsx src/main.ts",
-    "test:db": "PG_TEST_URL=${PG_TEST_URL:-postgres://postgres@localhost:54329/postgres} vitest run"
+    "test:db": "PG_TEST_URL=${PG_TEST_URL:-postgres://postgres@localhost:54329/postgres} vitest run",
+    "compare-transcription": "tsx src/cli/compareTranscription.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
