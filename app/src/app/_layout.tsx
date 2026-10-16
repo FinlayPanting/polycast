@@ -3,7 +3,8 @@ import { Figtree_500Medium } from '@expo-google-fonts/figtree/500Medium'
 import { Figtree_600SemiBold } from '@expo-google-fonts/figtree/600SemiBold'
 import { Figtree_700Bold } from '@expo-google-fonts/figtree/700Bold'
 import { useFonts } from 'expo-font'
-import { Stack } from 'expo-router'
+import { router, Stack } from 'expo-router'
+import * as Notifications from 'expo-notifications'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
@@ -13,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { config } from '../lib/config'
 import { reportFirstOpen } from '../lib/firstOpen'
+import { routeForNotification } from '../lib/notificationRoute'
 import { tidyDownloads } from '../lib/episodeAudio'
 import { savedWordEpisodes } from '../lib/words'
 import { configurePurchases } from '../lib/purchases'
@@ -41,6 +43,13 @@ function Routes() {
   useEffect(() => {
     if (session) configurePurchases(session.user.id)
   }, [session])
+  // Tapping "your episode is ready" or "new episode is out" opens that episode's page.
+  const lastResponse = Notifications.useLastNotificationResponse()
+  useEffect(() => {
+    if (!ready || !signedIn || !onboarded || !lastResponse) return
+    const route = routeForNotification(lastResponse.notification.request.content.data)
+    if (route) router.push(route as any)
+  }, [ready, signedIn, onboarded, lastResponse])
   // Once a launch: tidy downloads untouched for 30 days, keeping any a saved word comes from.
   // If the saved words can't be read (offline), nothing is removed.
   useEffect(() => {
