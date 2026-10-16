@@ -1,17 +1,18 @@
 import { router } from 'expo-router'
 import { FlatList, Pressable, View } from 'react-native'
+import { chartTag } from '@polycast/core'
 import type { Shelf, ShelfEpisode } from '../lib/api'
 import { space } from '../theme'
 import { Artwork, minutes, Tag, Txt } from './ui'
 
-type Show = { key: string; title: string; author?: string | null; artwork?: string | null; note?: string; why?: string; open: () => void }
+type Show = { key: string; title: string; author?: string | null; artwork?: string | null; note?: string; why?: string; rank?: string; open: () => void }
 
 function showsOf(shelf: Shelf): Show[] {
   if (!('shows' in shelf)) return []
   return (shelf.shows as any[]).map((s) => {
     if ('podcastId' in s)
       return { key: s.podcastId, title: s.title, author: s.author, artwork: s.artwork, note: s.readyEpisodes ? `${s.readyEpisodes} ready` : undefined, open: () => router.push({ pathname: '/show', params: { podcastId: s.podcastId } }) }
-    if ('appleId' in s) return { key: `a${s.appleId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, open: () => router.push({ pathname: '/show', params: { appleId: s.appleId } }) }
+    if ('appleId' in s) return { key: `a${s.appleId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, rank: chartTag(s.chart), open: () => router.push({ pathname: '/show', params: { appleId: s.appleId } }) }
     return { key: `p${s.podcastIndexId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, open: () => router.push({ pathname: '/show', params: { feedUrl: s.feedUrl } }) }
   })
 }
@@ -20,9 +21,14 @@ const TILE = 148
 
 function ShowTile({ show }: { show: Show }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${show.title}${show.author ? `, ${show.author}` : ''}${show.why ? `. ${show.why}` : ''}`} onPress={show.open} style={({ pressed }) => ({ width: TILE, gap: space.sm, opacity: pressed ? 0.75 : 1 })}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${show.title}${show.author ? `, ${show.author}` : ''}${show.rank ? `. ${show.rank}` : ''}${show.why ? `. ${show.why}` : ''}`} onPress={show.open} style={({ pressed }) => ({ width: TILE, gap: space.sm, opacity: pressed ? 0.75 : 1 })}>
       <Artwork uri={show.artwork} size={TILE} radius={14} />
       <View style={{ gap: 2 }}>
+        {show.rank ? (
+          <View style={{ alignSelf: 'flex-start', marginBottom: 2 }}>
+            <Tag label={show.rank} tone="level" />
+          </View>
+        ) : null}
         <Txt variant="smallStrong" numberOfLines={2}>
           {show.title}
         </Txt>

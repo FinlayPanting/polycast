@@ -132,6 +132,8 @@ export interface PodcastSummary {
   artwork: string
   feedUrl?: string
   genres: string[]
+  /** Its place in a country's Apple top chart, when it came from one. */
+  chart?: { rank: number; country: string }
 }
 
 export function itunesSearchUrl(query: string, country?: string, limit = 25): string {
@@ -220,14 +222,35 @@ export function largerArtwork(url: string, size = 600): string {
   return url.replace(/\/\d+x\d+(bb)?\.(jpg|png|webp)$/, `/${size}x${size}bb.$2`)
 }
 
-export function parseAppleChart(json: any): PodcastSummary[] {
-  return (json?.feed?.results ?? []).map((r: any) => ({
+/** Reads an Apple chart; given its country, each show keeps its place in it. */
+export function parseAppleChart(json: any, country?: string): PodcastSummary[] {
+  return (json?.feed?.results ?? []).map((r: any, i: number) => ({
     appleId: String(r.id),
     title: r.name ?? '',
     author: r.artistName ?? '',
     artwork: r.artworkUrl100 ? largerArtwork(r.artworkUrl100) : '',
     genres: (r.genres ?? []).map((g: any) => g.name).filter(Boolean),
+    ...(country ? { chart: { rank: i + 1, country } } : {}),
   }))
+}
+
+/** Countries whose charts Polycast reads, as a learner would say them. */
+export const CHART_COUNTRY_NAMES: Record<string, string> = {
+  se: 'Sweden',
+  de: 'Germany',
+  es: 'Spain',
+  mx: 'Mexico',
+  fr: 'France',
+  it: 'Italy',
+  pt: 'Portugal',
+  br: 'Brazil',
+  gb: 'the UK',
+}
+
+/** "No. 1 in Germany", for a show's place in its country's chart. */
+export function chartTag(chart: { rank: number; country: string } | undefined): string | undefined {
+  const where = chart && CHART_COUNTRY_NAMES[chart.country]
+  return where && chart.rank >= 1 ? `No. ${chart.rank} in ${where}` : undefined
 }
 
 // ---- Podcast Index trending (category charts) ----

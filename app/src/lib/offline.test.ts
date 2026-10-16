@@ -28,12 +28,13 @@ vi.mock('./api', () => ({
 }))
 vi.mock('./episodeAudio', () => ({
   canSyncOnDevice: true,
+  episodesFolder: () => ({ uri: '/docs/episodes' }),
   removeDownload: (id: string) => files.delete(`/docs/episodes/${id}.mp3`),
   getEpisodeReady: async (data: ListenPayload, onStep: (s: unknown) => void) => {
     readyCalls++
     onStep({ step: 'downloading', progress: 0.5 })
     files.set(`/docs/episodes/${data.episode.id}.mp3`, 'audio')
-    return { url: `file:///docs/episodes/${data.episode.id}.mp3`, transcript: data.transcript, plan: data.plan, durationSec: 100, synced: true }
+    return { url: `file:///docs/episodes/${data.episode.id}.mp3`, transcript: data.transcript, plan: data.plan, durationSec: 100, synced: true, adverts: [{ start: 0, end: 30 }] }
   },
 }))
 
@@ -63,6 +64,8 @@ describe('saving episodes for offline listening', () => {
     expect(a).toBe(b)
     expect(steps).toEqual([{ step: 'downloading', progress: 0.5 }])
     expect(loadLesson('ep')?.payload.episode.audioUrl).toBe('file:///docs/episodes/ep.mp3')
+    // The advert breaks found in this copy travel with it, so they show offline too.
+    expect(loadLesson('ep')?.payload.adverts).toEqual([{ start: 0, end: 30 }])
   })
 
   it('only keeps lessons whose audio is on the phone', async () => {

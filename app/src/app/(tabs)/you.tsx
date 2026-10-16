@@ -7,6 +7,8 @@ import { InterestPicker } from '../../components/InterestPicker'
 import { Mark } from '../../components/Mark'
 import { Button, Screen, Txt, minutes } from '../../components/ui'
 import { api } from '../../lib/api'
+import { clearAllDownloads, downloadsSize } from '../../lib/episodeAudio'
+import { formatSize } from '../../lib/storage'
 import { GUIDANCE, GUIDES, LANGUAGES, languageName } from '../../lib/languages'
 import { useSession, type ProfilePrefs } from '../../lib/session'
 import { MIN_TAP, space, usePalette } from '../../theme'
@@ -50,6 +52,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function You() {
   const p = usePalette()
   const { profile, updatePrefs, signOut } = useSession()
+  const [usedBytes, setUsedBytes] = useState(() => downloadsSize())
   const [error, setError] = useState<string>()
   if (!profile) return <Screen><Loading /></Screen>
 
@@ -134,6 +137,32 @@ export default function You() {
             {error}
           </Txt>
         ) : null}
+
+        <Section title="Downloads">
+          <Txt tone="quiet">{usedBytes > 0 ? `Polycast is using ${formatSize(usedBytes)} on this phone for downloaded episodes.` : 'No episodes are downloaded on this phone.'}</Txt>
+          <Txt variant="small" tone="faint">
+            Downloads stay out of your iCloud backup, and ones you haven’t played for 30 days are tidied away, unless a saved word comes from them.
+          </Txt>
+          {usedBytes > 0 ? (
+            <Button
+              kind="secondary"
+              label="Clear downloads"
+              onPress={() =>
+                Alert.alert('Clear downloads?', 'Episodes will download again when you play them. Saved words keep their meanings, but their clips won’t play until their episodes are downloaded again.', [
+                  { text: 'Keep them', style: 'cancel' },
+                  {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: () => {
+                      clearAllDownloads()
+                      setUsedBytes(downloadsSize())
+                    },
+                  },
+                ])
+              }
+            />
+          ) : null}
+        </Section>
 
         <Section title="Account">
           <Button kind="secondary" label="Privacy policy" onPress={() => Linking.openURL('https://polycast.app/privacy')} />

@@ -6,6 +6,7 @@ import { View } from 'react-native'
 import { Button, Screen, Txt } from '../components/ui'
 import { useSession } from '../lib/session'
 import { useAsync } from '../lib/useAsync'
+import { CLIP_GONE } from '../lib/storage'
 import { listWords, recordReview } from '../lib/words'
 import { space, usePalette } from '../theme'
 
@@ -38,7 +39,7 @@ export default function Review() {
   const [revealed, setRevealed] = useState(false)
   const play = useHostClip()
   const due = (data ?? []).filter((w) => isDue(w.review, new Date().toISOString())).slice(0, 20)
-  const word = due[index] as (SavedWord & { audioUrl?: string }) | undefined
+  const word = due[index] as (SavedWord & { audioUrl?: string; clipGone?: boolean }) | undefined
 
   useEffect(() => {
     if (word?.audioUrl) void play(word.audioUrl, word.source.clip.start, word.source.clip.end)
@@ -79,7 +80,13 @@ export default function Review() {
               “{word.source.sentence}”
             </Txt>
           ) : null}
-          {word.audioUrl ? <Button kind="secondary" label="Hear it again" onPress={() => void play(word.audioUrl!, word.source.clip.start, word.source.clip.end)} style={{ alignSelf: 'flex-start' }} /> : null}
+          {word.audioUrl ? (
+            <Button kind="secondary" label="Hear it again" onPress={() => void play(word.audioUrl!, word.source.clip.start, word.source.clip.end)} style={{ alignSelf: 'flex-start' }} />
+          ) : word.clipGone ? (
+            <Txt variant="small" tone="faint">
+              {CLIP_GONE}
+            </Txt>
+          ) : null}
           {revealed ? (
             <Txt variant="heading" style={{ color: p.savedText }}>
               {word.meaning}

@@ -5,6 +5,8 @@ import {
   FINGERPRINT_HOP,
   FingerprintBuilder,
   fingerprintFromPcm,
+  advertAt,
+  listenerOnlyStretches,
   retimeLesson,
   toListenerTime,
   type SyncMap,
@@ -70,6 +72,21 @@ describe('matching a listener\'s copy with different adverts', () => {
     expect(toListenerTime(map, 640)).toBeNull()
     expect(toListenerTime(map, 1000)).toBe(940)
     expect(toListenerTime(map, 2500)).toBe(2485)
+  })
+
+  it('finds their adverts (the parts of their copy that aren\'t in ours) for the scrubber', () => {
+    const ads = listenerOnlyStretches(map)
+    expect(ads).toHaveLength(2)
+    expect(ads[0]!.start).toBe(0)
+    expect(Math.abs(ads[0]!.end - 30)).toBeLessThan(1.5)
+    expect(Math.abs(ads[1]!.start - 1830)).toBeLessThan(1.5)
+    expect(Math.abs(ads[1]!.end - 1875)).toBeLessThan(1.5)
+    expect(advertAt(ads, 1850)).toBe(ads[1])
+    expect(advertAt(ads, 1000)).toBeUndefined()
+  })
+
+  it('finds no adverts when the match can\'t be trusted', () => {
+    expect(listenerOnlyStretches({ segments: [{ refStart: 0, refEnd: 10, offset: 0 }], coverage: 0.3, listenerDuration: 100 })).toEqual([])
   })
 
   it('is fast enough for a phone: an hour of audio in well under a second here', () => {
