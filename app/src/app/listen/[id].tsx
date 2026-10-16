@@ -11,6 +11,7 @@ import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
+import { plusInvite } from '../../lib/plusInvite'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName } from '../../lib/languages'
@@ -72,12 +73,13 @@ function WordSheet({ word, onSave, onClose, saved }: { word?: { form: string; le
 }
 
 /** After the episode: the wrap-up questions and the words gathered on the way. */
-function WrapUp({ data, savedThisListen, onDone }: { data: ListenPayload; savedThisListen: string[]; onDone: () => void }) {
+function WrapUp({ data, savedThisListen, listenedSec, onDone }: { data: ListenPayload; savedThisListen: string[]; listenedSec: number; onDone: () => void }) {
   const p = usePalette()
   const questions = data.plan?.wrapUpQuestions ?? []
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const right = Object.entries(answers).filter(([i, a]) => questions[Number(i)]?.answerIndex === a).length
   const all = questions.length > 0 && Object.keys(answers).length === questions.length
+  const invite = plusInvite(data.freeEpisode, listenedSec, savedThisListen.length)
   return (
     <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
       <Mark height={44} />
@@ -103,6 +105,12 @@ function WrapUp({ data, savedThisListen, onDone }: { data: ListenPayload; savedT
           <Txt variant="small" tone="faint">
             They’ll come back for a quick review tomorrow.
           </Txt>
+        </View>
+      ) : null}
+      {invite ? (
+        <View style={{ backgroundColor: p.raised, borderRadius: 18, padding: space.md, gap: space.sm }}>
+          <Txt>{invite.summary}</Txt>
+          <Button kind="secondary" label={invite.offer} onPress={() => router.push('/plus')} />
         </View>
       ) : null}
       <Button label="Done" onPress={onDone} />
@@ -258,7 +266,7 @@ export default function Listen() {
       </Screen>
     )
   }
-  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} onDone={close} /></Screen>
+  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={close} /></Screen>
 
   const l = listen.current
   const guideOn = state.phase === 'guide' || state.phase === 'question'

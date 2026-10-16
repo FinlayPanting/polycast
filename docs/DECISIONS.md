@@ -105,3 +105,7 @@ Board item PC-1013-10. RevenueCat may deliver the same event more than once. A p
 ## 'No. 1 in Germany' on the Top charts shelf (16 Oct 2026)
 
 Board item PC-1014-07. Shows on the Top charts shelf carry a small tag with their place in the country's Apple Podcasts top 50 (the chart the shelf is built from, per the spec), e.g. "No. 1 in Germany"; Spanish and Portuguese shows name Spain, Mexico, Portugal or Brazil, whichever chart they came from. The place is the show's rank in the full country chart, before Polycast drops shows in other languages, so it matches what people there see. The board's evidence quoted Spotify's chart; Polycast reads Apple's, so the numbers can differ from Spotify's. The chart cache key changed to `top:in-language:ranked`, so the first Discover load per language after this deploy re-reads Apple's chart.
+
+## Gentle Plus card after the free episode (16 Oct 2026)
+
+Board item PC-1013-09, as the spec says ("the wrap-up at its end is where the gentle invitation to Plus appears"). `/listen` and `/lesson` now return `freeEpisode`: true when a learner on the free plan is listening to the episode their own free episode prepared. Its wrap-up then shows, above Done, a quiet card: "You listened for 42 minutes and kept 6 words." and a "Keep going with Plus: 5 hours a month" button that opens the Plus screen. Minutes are where the listen ended (capped at the episode's length); words are those kept during this listen. No price, countdown or reminder; it never shows again for that learner once they have Plus.

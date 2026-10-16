@@ -207,7 +207,7 @@ export function createApi(deps: ApiDeps) {
     const userId = c.get('userId')
     const episodeId = c.req.param('id')
     const body = await c.req.json().catch(() => ({}))
-    const [profile] = await sql`select guide_id, guidance_level from profiles where id = ${userId}`
+    const [profile] = await sql`select guide_id, guidance_level, plan from profiles where id = ${userId}`
     const level = body.guide === false ? null : (profile?.guidance_level ?? 'standard')
     const [episode] = await sql`select e.*, p.title as podcast_title, p.artwork from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
     if (!episode) return c.json({ error: 'Not found' }, 404)
@@ -223,6 +223,8 @@ export function createApi(deps: ApiDeps) {
       guided,
       guidanceLevel: guided ? level : null,
       plan: plan?.plan ?? null,
+      // This is the free episode a free learner chose: its wrap-up gently mentions Plus.
+      freeEpisode: profile?.plan !== 'plus' && (await sql`select 1 from prep_jobs where episode_id = ${episodeId} and requested_by = ${userId} and charge = 'freeEpisode' limit 1`).length > 0,
       // Lets the app line the lesson up with the learner's own copy of the episode.
       syncUrl: plan?.plan?.syncUrl ?? (await sql`select plan->>'syncUrl' as url from lesson_plans where episode_id = ${episodeId} and plan ? 'syncUrl' limit 1`)[0]?.url ?? null,
     })

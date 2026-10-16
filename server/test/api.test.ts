@@ -106,6 +106,11 @@ run('API and worker', () => {
     expect(listen.episode.audioUrl).toBe('https://cdn.example.com/1.mp3')
     expect(listen.transcript.segments.length).toBeGreaterThan(10)
     expect(listen.plan.moments.length).toBeGreaterThan(5)
+    // It was her free episode, so its wrap-up can mention Plus; once she has Plus, it doesn't.
+    expect(listen.freeEpisode).toBe(true)
+    await sql`update profiles set plan = 'plus' where id = ${anna}`
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()).freeEpisode).toBe(false)
+    await sql`update profiles set plan = 'free' where id = ${anna}`
   })
 
   it('refuses to load a show from a private address, without fetching it', async () => {
@@ -125,6 +130,8 @@ run('API and worker', () => {
     const opened = await (await call(erik, 'POST', '/v1/podcasts/open', { feedUrl: FEED_URL })).json()
     const ready = opened.episodes.find((e: any) => e.status === 'ready')
     expect(await (await call(erik, 'POST', `/v1/episodes/${ready.id}/prepare`)).json()).toEqual({ status: 'ready' })
+    // Someone else's free episode isn't his.
+    expect((await (await call(erik, 'POST', `/v1/episodes/${ready.id}/lesson`)).json()).freeEpisode).toBe(false)
 
     // Erik uses his free episode on the other one; a third request is refused with a reason.
     const other = opened.episodes.find((e: any) => e.status !== 'ready')

@@ -68,6 +68,8 @@ export interface ListenPayload {
   episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number }
   transcript: { language: string; segments: Segment[]; words: Word[]; glossary?: Record<string, GlossEntry> }
   guided: boolean
+  /** The free episode this (free) learner chose: its wrap-up gently mentions Plus. */
+  freeEpisode?: boolean
   guidanceLevel: 'light' | 'standard' | 'handsOn' | null
   plan: LessonPlan | null
   /** Fingerprint of the copy we transcribed, to line the lesson up with the learner's copy. */
