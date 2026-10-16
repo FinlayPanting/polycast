@@ -28,6 +28,7 @@ vi.mock('./api', () => ({
 }))
 vi.mock('./episodeAudio', () => ({
   canSyncOnDevice: true,
+  episodesFolder: () => ({ uri: '/docs/episodes' }),
   removeDownload: (id: string) => files.delete(`/docs/episodes/${id}.mp3`),
   getEpisodeReady: async (data: ListenPayload, onStep: (s: unknown) => void) => {
     readyCalls++

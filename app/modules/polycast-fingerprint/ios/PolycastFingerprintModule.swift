@@ -20,6 +20,20 @@ public class PolycastFingerprintModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PolycastFingerprint")
 
+    /// Keeps a file or folder (a file:// URI) out of the iPhone's iCloud backup. Downloaded episodes
+    /// can be fetched again, so Apple's storage guidance says they shouldn't fill people's backups.
+    Function("excludeFromBackup") { (uri: String) -> Bool in
+      guard var url = URL(string: uri) else { return false }
+      var values = URLResourceValues()
+      values.isExcludedFromBackup = true
+      do {
+        try url.setResourceValues(values)
+        return true
+      } catch {
+        return false
+      }
+    }
+
     /// Fingerprints a downloaded episode (a file:// URI). Returns the frames as base64.
     AsyncFunction("fingerprint") { (uri: String) async throws -> String in
       guard let url = URL(string: uri) else { throw FingerprintFailedException("not a file address") }

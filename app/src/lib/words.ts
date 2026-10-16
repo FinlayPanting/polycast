@@ -1,4 +1,4 @@
-import { localOrStream } from './episodeAudio'
+import { clipAudio } from './episodeAudio'
 import { newReview, nextReview, normalizeToken, type Clip, type ReviewState, type SavedWord } from '@polycast/core'
 import { config } from './config'
 import { supabase } from './supabase'
@@ -53,7 +53,10 @@ export async function saveWord(
   if (error) throw new Error('Couldn’t save that word. Check your connection and try again.')
 }
 
-export async function listWords(language: string): Promise<(SavedWord & { audioUrl?: string })[]> {
+/** A saved word with where its clip plays from; `clipGone` when its episode copy has left the phone. */
+export type WordWithClip = SavedWord & { audioUrl?: string; clipGone?: boolean }
+
+export async function listWords(language: string): Promise<WordWithClip[]> {
   if (config.demo) return DEMO_WORDS
   const { data } = await supabase
     .from('saved_words')
@@ -62,7 +65,8 @@ export async function listWords(language: string): Promise<(SavedWord & { audioU
     .order('created_at', { ascending: false })
   return ((data ?? []) as unknown as (Row & { episodes: { audio_url: string } | null })[]).map((r) => {
     const saved = toSaved(r)
-    return { ...saved, audioUrl: r.episodes?.audio_url ? localOrStream(saved.source.episodeId, r.episodes.audio_url) : undefined }
+    const audioUrl = r.episodes?.audio_url ? clipAudio(saved.source.episodeId, r.episodes.audio_url) : undefined
+    return { ...saved, audioUrl, clipGone: Boolean(r.episodes?.audio_url) && !audioUrl }
   })
 }
 
@@ -70,4 +74,12 @@ export async function recordReview(userId: string, word: SavedWord, result: 'got
   if (config.demo) return
   const review = nextReview(word.review, result, new Date().toISOString())
   await supabase.from('saved_words').update({ review }).eq('user_id', userId).eq('language', word.language).eq('lemma', word.lemma)
+}
+
+/** Episodes the learner's saved words come from: their downloads are kept when tidying. */
+export async function savedWordEpisodes(): Promise<Set<string>> {
+  if (config.demo) return new Set()
+  const { data, error } = await supabase.from('saved_words').select('episode_id')
+  if (error) throw error
+  return new Set(((data ?? []) as { episode_id: string | null }[]).flatMap((r) => (r.episode_id ? [r.episode_id] : [])))
 }

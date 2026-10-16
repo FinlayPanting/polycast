@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const files = new Map<string, number>()
+const modified = new Map<string, number>()
+const excluded: string[] = []
 let tasks: { url: string; progress: (p: { bytesWritten: number; totalBytes: number }) => void; finish: () => void }[] = []
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
-vi.mock('../../modules/polycast-fingerprint', () => ({ PolycastFingerprint: { fingerprint: async () => '' } }))
+vi.mock('../../modules/polycast-fingerprint', () => ({ PolycastFingerprint: { fingerprint: async () => '', excludeFromBackup: (uri: string) => (excluded.push(uri), true) } }))
 vi.mock('expo-file-system', () => {
   class File {
     uri: string
@@ -13,6 +15,8 @@ vi.mock('expo-file-system', () => {
     }
     get exists() { return files.has(this.uri) }
     get size() { return files.get(this.uri) ?? 0 }
+    get name() { return this.uri.slice(this.uri.lastIndexOf('/') + 1) }
+    get lastModified() { return modified.get(this.uri) ?? Date.now() }
     delete() { files.delete(this.uri) }
     write() { files.set(this.uri, 1) }
     textSync() { return '' }
@@ -22,6 +26,9 @@ vi.mock('expo-file-system', () => {
     uri: string
     constructor(_: unknown, name: string) { this.uri = `/docs/${name}` }
     create() {}
+    get exists() { return [...files.keys()].some((k) => k.startsWith(`${this.uri}/`)) }
+    delete() { for (const k of [...files.keys()]) if (k.startsWith(`${this.uri}/`)) files.delete(k) }
+    list() { return [...files.keys()].filter((k) => k.startsWith(`${this.uri}/`)).map((k) => new File(k)) }
   }
   class DownloadTask {
     constructor(private url: string, private to: File, private o: { onProgress: (p: { bytesWritten: number; totalBytes: number }) => void }) {}
@@ -36,6 +43,8 @@ vi.mock('expo-file-system', () => {
 
 beforeEach(() => {
   files.clear()
+  modified.clear()
+  excluded.length = 0
   tasks = []
 })
 
@@ -76,5 +85,42 @@ describe('downloadEpisode', () => {
     expect(first.at(-1)).toBe(0)
     tasks[0]!.finish()
     expect(await b).toContain('ep3.mp3')
+  })
+
+  it('keeps the downloads folder out of iCloud backup', async () => {
+    const { downloadEpisode } = await import('./episodeAudio')
+    const done = downloadEpisode('ep5', 'https://x.test/ep5.mp3', () => {})
+    tasks[0]!.finish()
+    await done
+    expect(excluded).toEqual(['/docs/episodes'])
+  })
+
+  it('tidies downloads untouched for 30 days unless a saved word needs them, and reports the space used', async () => {
+    const { downloadsSize, tidyDownloads } = await import('./episodeAudio')
+    const old = '11111111-1111-4111-8111-111111111111'
+    const needed = '22222222-2222-4222-8222-222222222222'
+    const recent = '33333333-3333-4333-8333-333333333333'
+    const now = Date.parse('2026-10-16T12:00:00Z')
+    for (const [id, daysAgo] of [[old, 40], [needed, 40], [recent, 3]] as const) {
+      files.set(`/docs/episodes/${id}.mp3`, 50_000_000)
+      modified.set(`/docs/episodes/${id}.mp3`, now - daysAgo * 86_400_000)
+    }
+    expect(downloadsSize()).toBe(150_000_000)
+    expect(tidyDownloads(new Set([needed]), now)).toEqual([old])
+    expect([...files.keys()].sort()).toEqual([`/docs/episodes/${needed}.mp3`, `/docs/episodes/${recent}.mp3`])
+  })
+
+  it('plays a saved word’s clip only from the copy it was timed on', async () => {
+    const { clipAudio } = await import('./episodeAudio')
+    files.set('/docs/episodes/ep6.mp3', 10)
+    expect(clipAudio('ep6', 'https://x.test/ep6.mp3')).toBe('/docs/episodes/ep6.mp3')
+    expect(clipAudio('ep7', 'https://x.test/ep7.mp3')).toBeUndefined()
+  })
+
+  it('clears every download', async () => {
+    const { clearAllDownloads, downloadsSize } = await import('./episodeAudio')
+    files.set('/docs/episodes/ep8.mp3', 10)
+    clearAllDownloads()
+    expect(downloadsSize()).toBe(0)
   })
 })

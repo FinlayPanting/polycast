@@ -1,6 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system'
 import { api, type ListenPayload } from './api'
-import { canSyncOnDevice, getEpisodeReady, removeDownload, type GetReadyStep, type ReadyEpisode } from './episodeAudio'
+import { canSyncOnDevice, episodesFolder, getEpisodeReady, removeDownload, type GetReadyStep, type ReadyEpisode } from './episodeAudio'
 
 /**
  * Episodes saved for offline listening: the learner's copy of the audio, the guide's lines and the
@@ -27,7 +27,7 @@ const isOnPhone = (uri: string) => uri.startsWith('file:') || uri.startsWith('/'
 
 export function saveLesson(payload: ListenPayload): void {
   if (!isOnPhone(payload.episode.audioUrl)) return // only a copy that plays offline is worth keeping
-  folder().create({ idempotent: true, intermediates: true })
+  episodesFolder()
   lessonFile(payload.episode.id).write(JSON.stringify({ savedAt: new Date().toISOString(), payload } satisfies SavedLesson))
 }
 
@@ -97,7 +97,7 @@ export function downloadForOffline(episodeId: string, onStep: (s: GetReadyStep) 
 /** Where the learner is in an episode, kept on the phone too, so resuming works offline. */
 export function savePositionLocally(episodeId: string, sec: number): void {
   try {
-    folder().create({ idempotent: true, intermediates: true })
+    episodesFolder()
     positionFile(episodeId).write(String(Math.round(sec)))
   } catch {
     // Not important enough to interrupt listening.

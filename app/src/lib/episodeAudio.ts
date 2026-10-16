@@ -3,6 +3,7 @@ import { Directory, DownloadTask, File, Paths } from 'expo-file-system'
 import { Platform } from 'react-native'
 import { PolycastFingerprint } from '../../modules/polycast-fingerprint'
 import type { ListenPayload } from './api'
+import { staleEpisodes, totalSize, type FolderEntry } from './storage'
 
 /**
  * The learner's own copy of an episode, on their phone.
@@ -16,6 +17,23 @@ import type { ListenPayload } from './api'
 export type GetReadyStep = { step: 'downloading'; progress: number } | { step: 'syncing' } | { step: 'guide'; progress: number }
 
 const folder = () => new Directory(Paths.document, 'episodes')
+
+/**
+ * The downloads folder, created if needed and kept out of iCloud backup: episodes can always be
+ * downloaded again, and at 50 to 100 MB each they'd fill people's backups (Apple's storage guidance).
+ */
+export function episodesFolder(): Directory {
+  const dir = folder()
+  dir.create({ idempotent: true, intermediates: true })
+  if (typeof PolycastFingerprint?.excludeFromBackup === 'function') {
+    try {
+      PolycastFingerprint.excludeFromBackup(dir.uri)
+    } catch {
+      // Older builds or an odd file system: the download still works, it's just backed up.
+    }
+  }
+  return dir
+}
 const AUDIO_TYPES = ['mp3', 'm4a', 'aac', 'mp4', 'wav', 'ogg', 'opus'] as const
 
 /**
@@ -44,7 +62,7 @@ export function isDownloaded(episodeId: string, url: string): boolean {
 }
 
 async function fetchEpisode(episodeId: string, url: string, onProgress: (p: number) => void): Promise<string> {
-  folder().create({ idempotent: true, intermediates: true })
+  episodesFolder()
   // Builds from 13 Oct 2026 saved episodes as ".audio", which iOS can't open: clear those out.
   const unreadable = new File(folder(), `${episodeId}.audio`)
   if (unreadable.exists) unreadable.delete()
@@ -230,6 +248,66 @@ export function localOrStream(episodeId: string | undefined, streamUrl: string):
   if (!episodeId || Platform.OS === 'web') return streamUrl
   const f = audioFile(episodeId, streamUrl)
   return f.exists ? f.uri : streamUrl
+}
+
+/** Removes every downloaded episode, guide line and saved lesson from the phone (account deletion). */
+export function clearAllDownloads(): void {
+  const dir = folder()
+  if (dir.exists) dir.delete()
+}
+
+/** What's in the downloads folder: each entry's size and when it was last changed. */
+function folderEntries(): FolderEntry[] {
+  const dir = folder()
+  if (!dir.exists) return []
+  return dir.list().map((e) =>
+    e instanceof File
+      ? { name: e.name, size: e.size ?? 0, modifiedMs: e.lastModified ?? undefined }
+      : { name: e.name, size: e.size ?? 0, modifiedMs: e.info().modificationTime ?? undefined },
+  )
+}
+
+/** Bytes Polycast's downloads take on this phone. */
+export function downloadsSize(): number {
+  try {
+    return totalSize(folderEntries())
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Removes downloads untouched for 30 days, except episodes a saved word needs (its clip is timed on
+ * that copy) and any download in progress. Returns the episodes removed.
+ */
+export function tidyDownloads(keep: Set<string>, nowMs = Date.now()): string[] {
+  const removed: string[] = []
+  try {
+    const dir = folder()
+    if (!dir.exists) return []
+    const busy = new Set([...keep, ...inflight.keys()])
+    const stale = new Set(staleEpisodes(folderEntries(), busy, nowMs))
+    for (const e of dir.list()) {
+      const id = e.name.slice(0, 36)
+      if (stale.has(id)) e.delete()
+    }
+    removed.push(...stale)
+  } catch {
+    // Tidying is housekeeping: never let it break the app.
+  }
+  return removed
+}
+
+/**
+ * Where a saved word's clip plays from. On an iPhone the clip is timed on the learner's own copy,
+ * so if that copy is gone a fresh stream (perhaps with different adverts) would play the wrong
+ * moment: undefined then, and review says so. Elsewhere it streams.
+ */
+export function clipAudio(episodeId: string | undefined, streamUrl: string): string | undefined {
+  if (!canSyncOnDevice) return localOrStream(episodeId, streamUrl)
+  if (!episodeId) return undefined
+  const f = audioFile(episodeId, streamUrl)
+  return f.exists ? f.uri : undefined
 }
 
 /** Removes a downloaded episode (and its fingerprint) from the phone. */
