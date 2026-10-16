@@ -93,3 +93,7 @@ Board item PC-1013-04. A show's feed address comes from the app, and a feed can 
 ## Spam guard on the removal form (16 Oct 2026)
 
 Board item PC-1013-05. `POST /removal-requests` is public and every request alerts Finlay, so the server now takes only text fields, trimmed, with the show's name and contact up to 200 characters and the message up to 2,000, and allows 5 requests per address per hour plus 30 an hour overall, after which it answers 429 "Please try again in an hour." Limits live in memory (`server/src/rateLimit.ts`), which is fine for one Railway process; a restart forgets them. The address is Railway's `X-Real-IP`, else the last `X-Forwarded-For` entry, because earlier entries can be made up by the caller. Still to do, needing Finlay: migration `0005` (on branch `build/PC-1013-05`) stops anonymous visitors inserting into `removal_requests` directly through Supabase.
+
+## Real host, real show (16 Oct 2026)
+
+Board item PC-1013-06. The welcome screen (the first thing a new learner sees) now carries, under the tagline, "The host is real. Mia and Leo only step in when the host pauses." The same line opens the guide paragraph of a first draft App Store description in `docs/APP_STORE.md`; it lives in `app/src/lib/copy.ts` and a test keeps the two identical. Simplest placement picked: one quiet line on the welcome screen rather than a new onboarding step.
