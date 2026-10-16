@@ -4,6 +4,7 @@ import {
   itunesSearchUrl,
   largerArtwork,
   parseAppleChart,
+  chartTag,
   parseDuration,
   parseFeed,
   parseItunesResults,
@@ -74,6 +75,15 @@ describe('Apple search and charts', () => {
     const chart = parseAppleChart({ feed: { results: [{ id: '99', name: 'Rättegångspodden', artistName: 'X', artworkUrl100: 'https://is1.mzstatic.com/a/b/100x100bb.jpg', genres: [{ name: 'Verkliga brott' }] }] } })
     expect(chart[0]).toEqual({ appleId: '99', title: 'Rättegångspodden', author: 'X', artwork: 'https://is1.mzstatic.com/a/b/600x600bb.jpg', genres: ['Verkliga brott'] })
     expect(largerArtwork('https://x/y/100x100.png', 300)).toBe('https://x/y/300x300bb.png')
+  })
+
+  it("keeps each show's place in its country's chart, for a 'No. 1 in Germany' tag", () => {
+    const chart = parseAppleChart({ feed: { results: [{ id: '1', name: 'Gemischtes Hack' }, { id: '2', name: 'Kaulitz Hills' }] } }, 'de')
+    expect(chart.map((s) => s.chart)).toEqual([{ rank: 1, country: 'de' }, { rank: 2, country: 'de' }])
+    expect(chartTag(chart[0]!.chart)).toBe('No. 1 in Germany')
+    expect(chartTag({ rank: 3, country: 'gb' })).toBe('No. 3 in the UK')
+    expect(chartTag(undefined)).toBeUndefined()
+    expect(chartTag({ rank: 1, country: 'zz' })).toBeUndefined()
   })
 })
 

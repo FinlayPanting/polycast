@@ -156,6 +156,7 @@ run('API and worker', () => {
     expect(shelves.map((s: any) => s.id)).toEqual(['picks', 'easy', 'top', 'favourites'])
     expect(shelves[0].shows[0]).toMatchObject({ title: 'Svenska Samtal', readyEpisodes: 1 })
     expect(shelves[2].shows[0].artwork).toBe('https://img/600x600bb.jpg')
+    expect(shelves[2].shows[0].chart).toEqual({ rank: 1, country: 'se' })
   })
 
   it('reads the learner\'s saved interests for Discover', async () => {
