@@ -338,7 +338,7 @@ run('API and worker', () => {
     expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
   })
 
-  it("sends Polycast's own re-preparations through the batch service, and never a learner's request", async () => {
+  it("sends Polycast's own re-preparations through the batch service quietly, and never a learner's request", async () => {
     const ben = await learner()
     const opened = await (await call(ben, 'POST', '/v1/podcasts/open', { appleId: '555' })).json()
     const episodeId = opened.episodes[1].id
@@ -349,6 +349,8 @@ run('API and worker', () => {
     const withBatch: WorkerDeps = { ...w, batchText: () => counted }
     expect(await runJob(withBatch, (await claimNextJob(sql, 'learners'))!)).toBe('done')
     expect(batchCalls).toBe(0)
+    expect(alerts.filter((a) => a === `ready: Fikan for ${ben}`)).toHaveLength(1)
+    const [first] = await sql`select ready_at from episodes where id = ${episodeId}`
 
     // An older episode without a fingerprint is prepared again at Polycast's cost.
     await sql`update lesson_plans set plan = plan - 'syncUrl' where episode_id = ${episodeId}`
@@ -357,5 +359,9 @@ run('API and worker', () => {
     expect(replan.episodeId).toBe(episodeId)
     expect(await runJob(withBatch, replan)).toBe('done')
     expect(batchCalls).toBeGreaterThan(0)
+    // Nobody is told 'Your episode is ready' again, and it doesn't jump up 'recently ready'.
+    expect(alerts.filter((a) => a.startsWith('ready: Fikan'))).toHaveLength(1)
+    const [after] = await sql`select ready_at from episodes where id = ${episodeId}`
+    expect(after!.ready_at.getTime()).toBe(first!.ready_at.getTime())
   })
 })

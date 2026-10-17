@@ -161,3 +161,7 @@ Board item PC-1015-09. After the wrap-up of a guided episode, Mia or Leo says on
 ## Crash reports from the first TestFlight (17 Oct 2026)
 
 Board item PC-1015-10. The app uses EAS Observe (`expo-observe` 57.0.25, Expo's own service, free plan up to 100,000 events a month): the root layout is wrapped in `ObserveRoot` and configured in `app/src/lib/observe.ts` with expo-router timings, nothing about the learner attached, and nothing sent from debug builds; Finlay's personal-team test builds report under the `test` environment. Reports go to the app's EAS project, which exists once `eas init` has linked the app (needed for the first TestFlight build anyway); until then the native module finds no project id and sends nothing. App Store privacy answers gain Crash Data and Performance Data, not linked to the user (docs/APP_STORE.md). Simplest option picked: no in-app setting to turn it off, as no personal data is sent.
+
+## No false "Your episode is ready" after a re-prep (17 Oct 2026)
+
+Board item PC-1016-02. When a job finishes, only the learner whose request it was hears "Your episode is ready"; Polycast's own re-preparations (after a guide update or for the fingerprint) tell nobody, since those learners were told the first time. An episode's `ready_at` now keeps the first time it was ready, so a quiet re-prep doesn't move it to the top of "recently ready" on Discover. Simplest option picked: a second learner who asked while the episode was already preparing still isn't pushed (as before; they have no job of their own).

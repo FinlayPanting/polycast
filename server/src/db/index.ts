@@ -181,7 +181,8 @@ export async function completePreparation(
       insert into lesson_plans (episode_id, guide_id, version, plan)
       values (${episodeId}, ${result.guideId}, ${result.plan.version}, ${tx.json(result.plan as any)})
       on conflict (episode_id, guide_id) do update set plan = excluded.plan, version = excluded.version`
-    await tx`update episodes set status = 'ready', ready_at = now(), difficulty = ${tx.json(result.difficulty as any)} where id = ${episodeId}`
+    // ready_at stays the first time it was ready, so a quiet re-prep doesn't jump it up 'recently ready'.
+    await tx`update episodes set status = 'ready', ready_at = coalesce(ready_at, now()), difficulty = ${tx.json(result.difficulty as any)} where id = ${episodeId}`
     await tx`update prep_jobs set status = 'done', stage = 'done', finished_at = now(), cost_usd = ${costUSD(result.usage)} where id = ${jobId}`
   })
 }

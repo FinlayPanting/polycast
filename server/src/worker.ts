@@ -109,9 +109,12 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
       },
     )
     await completePreparation(sql, job.id, { ...result, guideId: guide.id })
-    // Everyone waiting on this episode hears it's ready.
-    const waiting = await sql`select distinct requested_by from prep_jobs where episode_id = ${job.episodeId} and requested_by is not null`
-    for (const w of waiting) await deps.notifyReady?.(w.requested_by, ep!.title, job.episodeId).catch(() => {})
+    // The learner whose request this was hears it's ready. Polycast's own re-preparations tell
+    // nobody: those learners heard the first time, and an unwanted push gets notifications switched off.
+    if (!job.background) {
+      const [mine] = await sql`select requested_by from prep_jobs where id = ${job.id} and requested_by is not null`
+      if (mine) await deps.notifyReady?.(mine.requested_by, ep!.title, job.episodeId).catch(() => {})
+    }
     return 'done'
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
