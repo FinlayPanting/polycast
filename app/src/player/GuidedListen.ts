@@ -94,6 +94,7 @@ export class GuidedListen {
   async start(track: Parameters<EpisodeAudio['load']>[0], startAt = 0): Promise<void> {
     await this.o.audio.load(track, startAt)
     if (startAt > 0) this.timeline.seek(startAt)
+    this.lastSaved = startAt
     this.unsubscribe.push(this.o.audio.onProgress((p) => void this.onProgress(p)))
     this.unsubscribe.push(this.o.audio.onEnded(() => void this.onEnded()))
     this.set({ phase: 'playing', position: startAt })
@@ -115,7 +116,8 @@ export class GuidedListen {
     }
     if (this.state.phase !== 'playing') return
     this.set({ position })
-    if (position - this.lastSaved >= 15) {
+    // Either direction: after jumping back from 30:00 to 5:00, the new place is saved straight away.
+    if (Math.abs(position - this.lastSaved) >= 15) {
       this.lastSaved = position
       this.o.onSavePosition?.(position)
     }
@@ -322,6 +324,8 @@ export class GuidedListen {
     const position = await this.o.audio.position()
     const due = this.timeline.tick(Number.POSITIVE_INFINITY).filter((m) => m.kind === 'wrapUp')
     if (due.length > 0 && this.state.phase === 'playing') {
+      // A skip of an earlier moment is over by now; it mustn't silence the wrap-up.
+      this.skipRequested = false
       this.set({ phase: 'guide', moment: due[0], position })
       this.timeline.markPlayed(due[0]!.id)
       for (const step of playSteps(due[0]!)) if (step.kind === 'speech' && !this.skipRequested) await this.o.voice.play(step.url)

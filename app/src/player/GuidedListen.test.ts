@@ -327,3 +327,42 @@ describe('questions and the lock screen', () => {
     expect(audio.playing).toBe(true)
   })
 })
+
+describe('saving progress and the wrap-up', () => {
+  const wrapUp: GuideMoment = {
+    id: 'wrap',
+    kind: 'wrapUp',
+    at: 30,
+    minLevel: 'light',
+    script: 'That was the episode.',
+    clips: [],
+    audio: { parts: [{ kind: 'speech', url: 'wrap.m4a', durationSec: 1 }], durationSec: 1 },
+  }
+
+  it('saves the new place soon after the learner jumps backwards', async () => {
+    const audio = fakeAudio()
+    const saved: number[] = []
+    const listen = new GuidedListen({ audio, voice: fakeVoice(), moments: [], segments, sleep: async () => {}, onSavePosition: (s) => saved.push(s) })
+    await listen.start(track, 1800)
+    await audio.advance(16)
+    expect(saved.at(-1)).toBeGreaterThanOrEqual(1815)
+    await listen.seek(300)
+    await audio.advance(0.5)
+    expect(saved.at(-1)).toBeLessThan(310)
+  })
+
+  it('still plays the wrap-up after the learner skipped the last moment', async () => {
+    const audio = fakeAudio()
+    const voice = fakeVoice()
+    const listen = new GuidedListen({ audio, voice, moments: [spotlight, wrapUp], segments, sleep: async () => {} })
+    await listen.start(track)
+    await audio.advance(10)
+    listen.skipGuide()
+    await flush()
+    expect(listen.current.phase).toBe('playing')
+    await audio.end()
+    expect(voice.played).toContain('wrap.m4a')
+    await voice.finishCurrent()
+    expect(listen.current.phase).toBe('finished')
+  })
+})
