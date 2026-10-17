@@ -21,3 +21,7 @@ The host is real. Mia and Leo only step in when the host pauses.
 - Every episode streams from the show's own feed, so creators keep their listeners
 
 Free: every ready episode with subtitles and the guide on one episode a week. Plus: the guide on everything and up to 5 hours of new episodes a month.
+
+## Privacy label: crash data (17 Oct 2026)
+
+The app sends crash reports and start-up timings through EAS Observe (PC-1015-10). In App Store Connect's App Privacy answers, declare **Diagnostics → Crash Data** and **Performance Data**: used for App Functionality, **not linked** to the user, **not used for tracking**. No account id, email or listening data is attached.

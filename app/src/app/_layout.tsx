@@ -12,7 +12,10 @@ import { useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import Constants from 'expo-constants'
+import { Observe, ObserveRoot } from 'expo-observe'
 import { config } from '../lib/config'
+import { observeConfig } from '../lib/observe'
 import { reportFirstOpen } from '../lib/firstOpen'
 import { routeForNotification } from '../lib/notificationRoute'
 import { tidyDownloads } from '../lib/episodeAudio'
@@ -84,7 +87,14 @@ function Routes() {
   )
 }
 
-export default function RootLayout() {
+// Crash reports (PC-1015-10); see lib/observe.ts for what is and isn't sent.
+try {
+  Observe.configure(observeConfig({ testBuild: Boolean(Constants.expoConfig?.extra?.testBuild) }))
+} catch {
+  // Never let crash reporting stop the app opening.
+}
+
+function RootLayout() {
   const [fontsLoaded] = useFonts({ Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold })
   const scheme = useColorScheme()
   if (!fontsLoaded) return null
@@ -99,3 +109,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   )
 }
+
+export default ObserveRoot.wrap(RootLayout)
