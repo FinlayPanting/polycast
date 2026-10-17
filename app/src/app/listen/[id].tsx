@@ -11,6 +11,7 @@ import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
+import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
@@ -189,8 +190,9 @@ export default function Listen() {
         let d: ListenPayload
         let synced = false
         const fetched = await api.listen(id, guide !== '0').catch((e) => {
-          // No connection (or the server's away): play the copy saved on this phone, if there is one.
-          const saved = config.demo ? undefined : loadLesson(id)
+          // No connection, a time-out or the server's away: play the copy saved on this phone, if
+          // there is one. A clear answer from the server (say, the show was removed) is shown instead.
+          const saved = config.demo || !isOfflineError(e) ? undefined : loadLesson(id)
           if (!saved) throw e
           plog('offline: playing the lesson saved on this phone')
           return undefined

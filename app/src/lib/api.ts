@@ -2,6 +2,7 @@ import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Refusal, Segme
 import { config } from './config'
 import { demoCall } from '../demo/api'
 import { supabase } from './supabase'
+import { fetchWithTimeout, REQUEST_TIMEOUT_MS } from './net'
 
 export class ApiError extends Error {
   constructor(
@@ -13,15 +14,16 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   if (config.demo) return demoCall<T>(method, path)
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
-  const res = await fetch(`${config.apiUrl}${path}`, {
+  // A time limit, so weak Wi-Fi fails (and a saved copy can play) instead of hanging.
+  const res = await fetchWithTimeout(fetch, `${config.apiUrl}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  }, timeoutMs)
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new ApiError(json.message ?? json.error ?? 'Something went wrong. Please try again.', res.status, json)
   return json as T
@@ -81,7 +83,8 @@ export interface ListenPayload {
 export const api = {
   discover: (language: string) => call<{ shelves: Shelf[] }>('GET', `/v1/discover/${language}`),
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
-  openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show),
+  // Opening a show re-reads its feed on the server, which may take up to 15 seconds itself.
+  openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show, 25_000),
   prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
   listen: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, { guide }),

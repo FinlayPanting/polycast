@@ -63,7 +63,9 @@ describe('saving episodes for offline listening', () => {
     expect(readyCalls).toBe(1)
     expect(a).toBe(b)
     expect(steps).toEqual([{ step: 'downloading', progress: 0.5 }])
-    expect(loadLesson('ep')?.payload.episode.audioUrl).toBe('file:///docs/episodes/ep.mp3')
+    expect(loadLesson('ep')?.payload.episode.audioUrl).toBe('/docs/episodes/ep.mp3')
+    // Saved relative to the downloads folder, so it's still found after iOS moves the app's folder.
+    expect(files.get('/docs/episodes/ep.lesson.json')).toContain('"audioUrl":"polycast-episodes:ep.mp3"')
     // The advert breaks found in this copy travel with it, so they show offline too.
     expect(loadLesson('ep')?.payload.adverts).toEqual([{ start: 0, end: 30 }])
   })
@@ -83,6 +85,18 @@ describe('saving episodes for offline listening', () => {
     expect(isSavedForOffline('ep')).toBe(false)
     expect(listSavedLessons()).toEqual([])
     expect([...files.keys()]).toEqual([])
+  })
+
+  it('finds a lesson saved by an older build, from before an app update moved the folder', async () => {
+    const { loadLesson } = await import('./offline')
+    files.set('/docs/episodes/old.mp3', 'audio')
+    const old = payload('old', 'file:///var/mobile/Containers/Data/Application/AAAA/Documents/episodes/old.mp3')
+    old.plan = { moments: [{ id: 'm', audio: { durationSec: 1, parts: [{ kind: 'speech', url: 'file:///var/mobile/Containers/Data/Application/AAAA/Documents/episodes/old-guide/x.m4a', durationSec: 1 }, { kind: 'clip', clipIndex: 0 }] } }] } as any
+    files.set('/docs/episodes/old.lesson.json', JSON.stringify({ savedAt: '2026-10-10T10:00:00Z', payload: old }))
+    const found = loadLesson('old')!
+    expect(found.payload.episode.audioUrl).toBe('/docs/episodes/old.mp3')
+    expect(found.payload.plan!.moments[0]!.audio!.parts[0]).toMatchObject({ url: '/docs/episodes/old-guide/x.m4a' })
+    expect(found.payload.plan!.moments[0]!.audio!.parts[1]).toEqual({ kind: 'clip', clipIndex: 0 })
   })
 
   it('remembers where the learner is, on the phone', async () => {
