@@ -8,11 +8,12 @@ import { createApi, supabaseVerifier } from './api'
 import { connect, releaseJob } from './db'
 import { scribeTranscriber } from './providers/elevenlabs'
 import { geminiSpeech, geminiText } from './providers/gemini'
+import { geminiBatchText } from './providers/geminiBatch'
 import { googleChirpSpeech } from './providers/googleTts'
 import type { Storage } from './providers/types'
 import { Agent, setGlobalDispatcher } from 'undici'
 import { perMinute } from './retry'
-import { jobInProgress, workLoop } from './worker'
+import { jobsInProgress, workLoop } from './worker'
 import { refreshFinishedShows, sendNudges, type Push } from './nudges'
 
 // Node's fetch gives up if a reply takes over 5 minutes to start. Transcribing a long episode
@@ -101,6 +102,8 @@ async function main() {
       fetch,
       transcriber: scribeTranscriber(need('ELEVENLABS_API_KEY')),
       text: geminiText(gemini),
+      // Re-plans after a guide update go through Gemini's batch service at half price (PC-1015-07).
+      batchText: process.env.GEMINI_BATCH === 'false' ? undefined : (maxWaitMs) => geminiBatchText(gemini, undefined, fetch, { maxWaitMs }),
       // Chirp 3 HD voices (Google Cloud TTS, 200 requests a minute) when its key is set; otherwise
       // Gemini's voices, which AI Studio caps at 10 a minute and 100 a day on Tier 1.
       speech: process.env.GOOGLE_TTS_API_KEY
@@ -132,9 +135,9 @@ async function main() {
   // the new server picks it up, instead of leaving it "running" with nobody working on it.
   const shutdown = async (signal: string) => {
     stopping.abort()
-    const job = jobInProgress()
-    console.log(`${signal}: shutting down${job ? `, returning job ${job} to the queue` : ''}`)
-    if (job) await releaseJob(sql, job).catch((e) => console.error('could not release job', e))
+    const jobs = jobsInProgress()
+    console.log(`${signal}: shutting down${jobs.length ? `, returning ${jobs.join(', ')} to the queue` : ''}`)
+    for (const job of jobs) await releaseJob(sql, job).catch((e) => console.error('could not release job', e))
     await sql.end({ timeout: 5 }).catch(() => {})
     process.exit(0)
   }

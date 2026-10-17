@@ -17,6 +17,9 @@ export const PRICES_2026 = {
    */
   textInPerToken: 0.75 / 1e6,
   textOutPerToken: 3.75 / 1e6,
+  /** Gemini 3.8 Flash through the batch service: half the standard rate. Used only for re-plans nobody waits on. */
+  batchTextInPerToken: 0.375 / 1e6,
+  batchTextOutPerToken: 1.875 / 1e6,
   /** Gemini 3.8 Flash TTS, per audio second of output (25 tokens a second at $9 per million). */
   ttsPerAudioSec: (25 * 9) / 1e6,
   /** Gemini 3.8 Flash-Lite TTS, per audio second ($6 per million audio tokens). Only the audition uses it. */
@@ -32,6 +35,8 @@ export const PRICES_2027: PriceTable = {
   ...PRICES_2026,
   textInPerToken: 1.5 / 1e6,
   textOutPerToken: 7.5 / 1e6,
+  batchTextInPerToken: 0.75 / 1e6,
+  batchTextOutPerToken: 3.75 / 1e6,
   ttsPerAudioSec: (25 * 18) / 1e6,
   ttsLitePerAudioSec: (25 * 12) / 1e6,
 }
@@ -55,6 +60,9 @@ export interface Usage {
   ttsChars?: number
   /** Audio seconds that also had Scribe's name-spelling edit applied. */
   transcriptEditSec?: number
+  /** Gemini tokens sent through the batch service (half price). */
+  batchTextInTokens?: number
+  batchTextOutTokens?: number
 }
 
 export const ZERO_USAGE: Usage = { transcriptionSec: 0, textInTokens: 0, textOutTokens: 0, ttsAudioSec: 0 }
@@ -67,6 +75,8 @@ export function addUsage(a: Usage, b: Partial<Usage>): Usage {
     ttsAudioSec: a.ttsAudioSec + (b.ttsAudioSec ?? 0),
     ttsChars: (a.ttsChars ?? 0) + (b.ttsChars ?? 0),
     transcriptEditSec: (a.transcriptEditSec ?? 0) + (b.transcriptEditSec ?? 0),
+    batchTextInTokens: (a.batchTextInTokens ?? 0) + (b.batchTextInTokens ?? 0),
+    batchTextOutTokens: (a.batchTextOutTokens ?? 0) + (b.batchTextOutTokens ?? 0),
   }
 }
 
@@ -79,7 +89,9 @@ export function costUSD(u: Usage, at: Date = new Date()): number {
     u.textOutTokens * PRICES.textOutPerToken +
     u.ttsAudioSec * PRICES.ttsPerAudioSec +
     (u.ttsChars ?? 0) * PRICES.ttsPerChar +
-    (u.transcriptEditSec ?? 0) * PRICES.transcriptEditPerSec
+    (u.transcriptEditSec ?? 0) * PRICES.transcriptEditPerSec +
+    (u.batchTextInTokens ?? 0) * PRICES.batchTextInPerToken +
+    (u.batchTextOutTokens ?? 0) * PRICES.batchTextOutPerToken
   )
 }
 

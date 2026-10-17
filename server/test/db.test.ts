@@ -289,6 +289,40 @@ run('database', () => {
       expect(await queueSyncUpgrades(sql)).toBe(0)
     })
 
+    it("keeps Polycast's re-plans in their own lane, apart from learners' requests", async () => {
+      const a = await learner()
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      const [job] = await sql`select id from prep_jobs where episode_id = ${ep}`
+      const result = fakeResult(ep, 'mia')
+      ;(result.plan as any).syncUrl = 'https://s/sync.fp'
+      result.plan.version = LESSON_PLAN_VERSION - 1
+      await sql`update prep_jobs set status = 'running' where id = ${job!.id}`
+      await completePreparation(sql, job!.id, result)
+      await queueSyncUpgrades(sql)
+      const fresh = await episode()
+      await requestPreparation(sql, await learner(), fresh, 'mia')
+
+      const learnerJob = (await claimNextJob(sql, 'learners'))!
+      expect(learnerJob.episodeId).toBe(fresh)
+      expect(learnerJob.background).toBe(false)
+      expect(await claimNextJob(sql, 'learners')).toBeUndefined()
+      const replan = (await claimNextJob(sql, 'background'))!
+      expect(replan.episodeId).toBe(ep)
+      expect(replan.background).toBe(true)
+      expect(await claimNextJob(sql, 'background')).toBeUndefined()
+    })
+
+    it('leaves a voice pass for a second guide with the learners, though Polycast pays for it', async () => {
+      const [a, b] = [await learner(), await learner()]
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      await completePreparation(sql, (await claimNextJob(sql))!.id, fakeResult(ep))
+      await requestPreparation(sql, b, ep, 'leo')
+      expect(await claimNextJob(sql, 'background')).toBeUndefined()
+      expect((await claimNextJob(sql, 'learners'))!.kind).toBe('voice')
+    })
+
     it('picks up a job a dead server left running, and gives up after the last attempt', async () => {
       const a = await learner()
       const ep = await episode()

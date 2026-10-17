@@ -1,8 +1,9 @@
 import { costUSD, recurringNames, wordsFromPodcastJson, type ShowNames, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
 import { SpendCapReached, SpendGuard } from './budget'
-import { claimNextJob, completePreparation, failJob, queueSyncUpgrades, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
+import { claimNextJob, completePreparation, type JobLane, failJob, queueSyncUpgrades, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
 import { EmptyTranscript, prepareEpisode, syncPath, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
-import { ProviderError } from './providers/types'
+import { ProviderError, type TextModel } from './providers/types'
+import { batchFirst } from './providers/geminiBatch'
 import { guideById } from './voices'
 import { ensureWelcomeAudio } from './welcome'
 import { POLYCAST_UA, safeFetch, type LookupHost } from './safeFetch'
@@ -15,7 +16,18 @@ export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
   alert?: (kind: string, message: string) => Promise<void>
   /** Resolves host names before fetching a feed or the transcript it names; tests pass a fake. Default: DNS. */
   lookupHost?: LookupHost
+  /**
+   * Gemini's batch service (half price), for Polycast's own re-preparations only. Given the most a
+   * call may wait. When set, those jobs run in a second loop so learners' requests never queue
+   * behind a batch.
+   */
+  batchText?: (maxWaitMs: number) => TextModel
 }
+
+/** The most a background job waits on batches in total, well inside the one-hour stale-job limit. */
+export const BATCH_JOB_BUDGET_MS = 20 * 60_000
+/** The most any one batch call waits before falling back to the standard rate. */
+export const BATCH_CALL_MAX_MS = 10 * 60_000
 
 async function guard(deps: WorkerDeps): Promise<SpendGuard> {
   const cap = Number(await getSetting(deps.sql, 'daily_cap_usd', 10))
@@ -68,6 +80,11 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
     const [requester] = await sql`select native_language from profiles p join prep_jobs j on j.requested_by = p.id where j.id = ${job.id}`
     const nativeLanguage: string = requester?.native_language ?? 'en'
     const saved = await savedTranscript(sql, job.episodeId, nativeLanguage)
+    const batch = deps.batchText
+    const text =
+      job.background && batch
+        ? batchFirst((ms) => batch(Math.min(ms, BATCH_CALL_MAX_MS)), deps.text, Date.now() + BATCH_JOB_BUDGET_MS, { log: (m) => console.log(`job ${job.id}: ${m}`) })
+        : deps.text
     const result = await prepareEpisode(
       {
         jobId: job.id,
@@ -84,6 +101,7 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
       },
       {
         ...deps,
+        text,
         guard: g,
         onStage: (s) => setJobStage(sql, job.id, s),
         saveTranscript: (t) => saveTranscript(sql, job.episodeId, nativeLanguage, t),
@@ -104,11 +122,33 @@ export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' 
   }
 }
 
-let currentJob: string | undefined
+const inProgress = new Set<string>()
 
-/** The job this process is working on, so shutdown can hand it back to the queue. */
-export function jobInProgress(): string | undefined {
-  return currentJob
+/** The jobs this process is working on, so shutdown can hand them back to the queue. */
+export function jobsInProgress(): string[] {
+  return [...inProgress]
+}
+
+async function claimAndRun(deps: WorkerDeps, lane: JobLane): Promise<boolean> {
+  const job = await claimNextJob(deps.sql, lane)
+  if (!job) return false
+  inProgress.add(job.id)
+  const outcome = await runJob(deps, job).finally(() => inProgress.delete(job.id))
+  console.log(`job ${job.id} (${job.kind}${job.background ? ', background' : ''}) → ${outcome}`)
+  return true
+}
+
+async function laneLoop(deps: WorkerDeps, lane: JobLane, poll: number, signal: AbortSignal | undefined, beforeEach?: () => Promise<void>) {
+  while (!signal?.aborted) {
+    try {
+      await beforeEach?.()
+      if (!(await claimAndRun(deps, lane))) await new Promise((r) => setTimeout(r, poll))
+    } catch (err) {
+      // A database hiccup (or a database not yet set up) must not take the API down with it.
+      console.error(`worker (${lane}): could not claim or run a job, retrying shortly`, err instanceof Error ? err.message : err)
+      await new Promise((r) => setTimeout(r, Math.max(poll, 10_000)))
+    }
+  }
 }
 
 /** Runs queued jobs until stopped, polling when the queue is empty. */
@@ -122,25 +162,13 @@ export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal
     .then((g) => ensureWelcomeAudio({ speech: deps.speech, storage: deps.storage, guard: g, log: console.log }))
     .then((v) => v.length && console.log(`worker: voiced the welcome for ${v.join(', ')}`))
     .catch((e) => console.error('worker: welcome voicing failed', e instanceof Error ? e.message : e))
-  while (!opts.signal?.aborted) {
-    try {
-      if (Date.now() - lastReclaim > 60_000) {
-        lastReclaim = Date.now()
-        const n = await reclaimStaleJobs(deps.sql)
-        if (n) console.log(`worker: put ${n} abandoned job(s) back in the queue`)
-      }
-      const job = await claimNextJob(deps.sql)
-      if (!job) {
-        await new Promise((r) => setTimeout(r, poll))
-        continue
-      }
-      currentJob = job.id
-      const outcome = await runJob(deps, job).finally(() => (currentJob = undefined))
-      console.log(`job ${job.id} (${job.kind}) → ${outcome}`)
-    } catch (err) {
-      // A database hiccup (or a database not yet set up) must not take the API down with it.
-      console.error('worker: could not claim or run a job, retrying shortly', err instanceof Error ? err.message : err)
-      await new Promise((r) => setTimeout(r, Math.max(poll, 10_000)))
-    }
+  const reclaim = async () => {
+    if (Date.now() - lastReclaim <= 60_000) return
+    lastReclaim = Date.now()
+    const n = await reclaimStaleJobs(deps.sql)
+    if (n) console.log(`worker: put ${n} abandoned job(s) back in the queue`)
   }
+  if (!deps.batchText) return laneLoop(deps, 'all', poll, opts.signal, reclaim)
+  // Re-preparations wait on the batch service in their own loop; learners' requests never queue behind them.
+  await Promise.all([laneLoop(deps, 'learners', poll, opts.signal, reclaim), laneLoop(deps, 'background', poll, opts.signal)])
 }

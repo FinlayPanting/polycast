@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApi, LEARNER_LIMITS, SLOW_DOWN } from '../src/api'
-import { runJob, showNamesFor } from '../src/worker'
-import { claimNextJob, type Sql } from '../src/db'
+import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
+import type { TextModel } from '../src/providers/types'
+import { claimNextJob, queueSyncUpgrades, type Sql } from '../src/db'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
 import { draftFor, syntheticEpisode } from './fixtures'
 import { freshDatabase, PG_TEST_URL } from './pg'
@@ -335,5 +336,26 @@ run('API and worker', () => {
     await hook({ type: 'RENEWAL', id: 'e3' })
     expect((await used()).plus_used_sec).toBe(1800)
     expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
+  })
+
+  it("sends Polycast's own re-preparations through the batch service, and never a learner's request", async () => {
+    const ben = await learner()
+    const opened = await (await call(ben, 'POST', '/v1/podcasts/open', { appleId: '555' })).json()
+    const episodeId = opened.episodes[1].id
+    await call(ben, 'POST', `/v1/episodes/${episodeId}/prepare`)
+    let batchCalls = 0
+    const w = worker()
+    const counted: TextModel = { generateJson: <T,>(i: Parameters<TextModel['generateJson']>[0]) => (batchCalls++, w.text.generateJson<T>(i)) }
+    const withBatch: WorkerDeps = { ...w, batchText: () => counted }
+    expect(await runJob(withBatch, (await claimNextJob(sql, 'learners'))!)).toBe('done')
+    expect(batchCalls).toBe(0)
+
+    // An older episode without a fingerprint is prepared again at Polycast's cost.
+    await sql`update lesson_plans set plan = plan - 'syncUrl' where episode_id = ${episodeId}`
+    expect(await queueSyncUpgrades(sql)).toBeGreaterThanOrEqual(1)
+    const replan = (await claimNextJob(sql, 'background'))!
+    expect(replan.episodeId).toBe(episodeId)
+    expect(await runJob(withBatch, replan)).toBe('done')
+    expect(batchCalls).toBeGreaterThan(0)
   })
 })

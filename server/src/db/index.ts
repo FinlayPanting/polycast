@@ -134,15 +134,28 @@ export interface ClaimedJob {
   episodeId: string
   guideId: string
   attempts: number
+  /** One of Polycast's own re-preparations, which can use the slower, cheaper batch service. */
+  background?: boolean
 }
 
 /** Takes the oldest queued job. SKIP LOCKED lets several workers run without picking the same job. */
-export async function claimNextJob(sql: Sql): Promise<ClaimedJob | undefined> {
+/**
+ * Which jobs a worker loop takes. Background jobs are Polycast's own re-preparations (charge 'none',
+ * kind 'prepare'), queued by queueSyncUpgrades; nobody asked for them just now. Everything else is
+ * a learner's request.
+ */
+export type JobLane = 'all' | 'learners' | 'background'
+
+export async function claimNextJob(sql: Sql, lane: JobLane = 'all'): Promise<ClaimedJob | undefined> {
+  const filter =
+    lane === 'background' ? sql`and kind = 'prepare' and charge = 'none'` : lane === 'learners' ? sql`and not (kind = 'prepare' and charge = 'none')` : sql``
   const [job] = await sql`
     update prep_jobs set status = 'running', started_at = now(), attempts = attempts + 1
-    where id = (select id from prep_jobs where status = 'queued' order by created_at for update skip locked limit 1)
-    returning id, kind, episode_id, guide_id, attempts`
-  return job ? { id: job.id, kind: job.kind, episodeId: job.episode_id, guideId: job.guide_id, attempts: job.attempts } : undefined
+    where id = (select id from prep_jobs where status = 'queued' ${filter} order by created_at for update skip locked limit 1)
+    returning id, kind, episode_id, guide_id, attempts, charge`
+  return job
+    ? { id: job.id, kind: job.kind, episodeId: job.episode_id, guideId: job.guide_id, attempts: job.attempts, background: job.kind === 'prepare' && job.charge === 'none' }
+    : undefined
 }
 
 export async function setJobStage(sql: Sql, jobId: string, stage: string): Promise<void> {
