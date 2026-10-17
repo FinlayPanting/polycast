@@ -5,7 +5,7 @@
   "scripts": {
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
-    "check": "pnpm typecheck && pnpm test"
+    "check": "pnpm typecheck && pnpm test && node scripts/audit.mjs"
   },
   "devDependencies": {
     "typescript": "~5.8.3"
