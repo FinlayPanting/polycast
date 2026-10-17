@@ -104,7 +104,16 @@ run('database', () => {
       expect(words).toHaveLength(0)
       expect(profiles.map((r) => r.id)).toEqual([a])
       await expect(asLearner(a, (tx) => tx`insert into saved_words (user_id, language, lemma, meaning, clip, review) values (${b}, 'sv', 'x', 'x', '{}', '{}')`)).rejects.toThrow(/row-level security/)
-      await asLearner(a, (tx) => tx`insert into listens (user_id, episode_id) values (${a}, ${ep})`)
+      // Listens start on the server (it checks the guide allowance); the learner only moves along them.
+      await expect(asLearner(a, (tx) => tx`insert into listens (user_id, episode_id, guided) values (${a}, ${ep}, true)`)).rejects.toThrow(/permission denied/)
+      await sql`insert into listens (user_id, episode_id, guided) values (${a}, ${ep}, true), (${b}, ${ep}, false)`
+      await asLearner(a, (tx) => tx`update listens set position_sec = 42, updated_at = now(), finished_at = now() where user_id = ${a} and episode_id = ${ep}`)
+      expect((await sql`select position_sec from listens where user_id = ${a}`)[0]!.position_sec).toBe(42)
+      expect(await asLearner(a, (tx) => tx`select user_id from listens`)).toEqual([{ user_id: a }])
+      await expect(asLearner(a, (tx) => tx`update listens set guided = false where user_id = ${a}`)).rejects.toThrow(/permission denied/)
+      await expect(asLearner(a, (tx) => tx`delete from listens where user_id = ${a}`)).rejects.toThrow(/permission denied/)
+      await expect(asLearner(a, (tx) => tx`select * from lesson_plans`)).rejects.toThrow(/permission denied/)
+      await expect(asLearner(a, (tx) => tx`select * from transcripts`)).rejects.toThrow(/permission denied/)
     })
 
     it('lets learners read the catalogue but never write it, and hides removed shows', async () => {
