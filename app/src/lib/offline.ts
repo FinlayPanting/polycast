@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system'
 import { api, type ListenPayload } from './api'
+import { fromStoredPath, toStoredPath } from './net'
 import { canSyncOnDevice, episodesFolder, getEpisodeReady, removeDownload, type GetReadyStep, type ReadyEpisode } from './episodeAudio'
 
 /**
@@ -25,10 +26,21 @@ export function readyPayload(fetched: ListenPayload, ready: ReadyEpisode): Liste
 
 const isOnPhone = (uri: string) => uri.startsWith('file:') || uri.startsWith('/')
 
+/** The payload with every address on the phone (episode audio, guide lines) mapped by `f`. */
+function mapFiles(payload: ListenPayload, f: (uri: string) => string): ListenPayload {
+  const plan = payload.plan && {
+    ...payload.plan,
+    moments: payload.plan.moments.map((m) => (m.audio ? { ...m, audio: { ...m.audio, parts: m.audio.parts.map((p) => (p.kind === 'speech' ? { ...p, url: f(p.url) } : p)) } } : m)),
+  }
+  return { ...payload, plan, episode: { ...payload.episode, audioUrl: f(payload.episode.audioUrl) } }
+}
+
 export function saveLesson(payload: ListenPayload): void {
   if (!isOnPhone(payload.episode.audioUrl)) return // only a copy that plays offline is worth keeping
-  episodesFolder()
-  lessonFile(payload.episode.id).write(JSON.stringify({ savedAt: new Date().toISOString(), payload } satisfies SavedLesson))
+  const dir = episodesFolder()
+  // Files are remembered relative to the downloads folder: iOS moves it on every app update.
+  const stored = mapFiles(payload, (uri) => toStoredPath(uri, dir.uri))
+  lessonFile(payload.episode.id).write(JSON.stringify({ savedAt: new Date().toISOString(), payload: stored } satisfies SavedLesson))
 }
 
 /** The saved lesson, if it and its audio are still on the phone. */
@@ -36,7 +48,9 @@ export function loadLesson(episodeId: string): SavedLesson | undefined {
   try {
     const f = lessonFile(episodeId)
     if (!f.exists) return undefined
-    const saved = JSON.parse(f.textSync()) as SavedLesson
+    const stored = JSON.parse(f.textSync()) as SavedLesson
+    const base = folder().uri
+    const saved = { ...stored, payload: mapFiles(stored.payload, (uri) => fromStoredPath(uri, base)) }
     const audio = new File(saved.payload.episode.audioUrl)
     return audio.exists ? saved : undefined
   } catch {

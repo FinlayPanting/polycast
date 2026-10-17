@@ -117,6 +117,88 @@ describe('a guided listen', () => {
     expect(voice.played).toHaveLength(2)
   })
 
+  it('pauses the guide mid-sentence and picks up the same moment on play', async () => {
+    const { audio, voice, listen } = setup([spotlight])
+    await listen.start(track)
+    await audio.advance(10)
+    expect(voice.played).toEqual(['guide-1.m4a'])
+    await listen.pause()
+    await flush()
+    expect(listen.current.phase).toBe('paused')
+    expect(audio.playing).toBe(false)
+    await audio.advance(5) // time passes; nothing carries on while paused
+    expect(voice.played).toEqual(['guide-1.m4a'])
+    expect(audio.playing).toBe(false)
+
+    await listen.resume()
+    await flush()
+    expect(listen.current.phase).toBe('guide')
+    // The interrupted line starts again, then the moment carries on as usual.
+    expect(voice.played).toEqual(['guide-1.m4a', 'guide-1.m4a'])
+    await voice.finishCurrent()
+    expect(audio.playing).toBe(true) // the host clip
+    await audio.advance(1.5)
+    await voice.finishCurrent()
+    expect(voice.played).toEqual(['guide-1.m4a', 'guide-1.m4a', 'guide-2.m4a'])
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.log.at(-2)).toBe('seek 8.0')
+  })
+
+  it('pausing during the host clip holds it, and play hears the clip again', async () => {
+    const { audio, voice, listen } = setup([spotlight])
+    await listen.start(track)
+    await audio.advance(10)
+    await voice.finishCurrent() // host clip starts
+    expect(audio.playing).toBe(true)
+    await audio.advance(0.5)
+    await listen.remote('pause') // headphones
+    await flush()
+    expect(listen.current.phase).toBe('paused')
+    expect(audio.playing).toBe(false)
+    await audio.advance(3)
+    expect(voice.played).toEqual(['guide-1.m4a'])
+    await listen.remote('play')
+    await flush()
+    expect(audio.playing).toBe(true)
+    expect(audio.log.filter((l) => /^seek 5\.[89]$/.test(l))).toHaveLength(2)
+    await audio.advance(1.5)
+    expect(voice.played).toEqual(['guide-1.m4a', 'guide-2.m4a'])
+  })
+
+  it('holds a waiting question while paused, and an answer given then waits for play', async () => {
+    const { audio, voice, listen } = setup([question])
+    await listen.start(track)
+    await audio.advance(20)
+    await voice.finishCurrent()
+    expect(listen.current.phase).toBe('question')
+    await listen.pause()
+    expect(listen.current.phase).toBe('paused')
+    listen.answer(0)
+    await flush()
+    expect(listen.current.answer?.correct).toBe(true) // the answer shows
+    expect(listen.current.phase).toBe('paused') // but it stays paused until play
+    expect(audio.playing).toBe(false)
+    await listen.resume()
+    await flush()
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.playing).toBe(true)
+  })
+
+  it('moving the playhead while paused in the guide skips it and picks up there on play', async () => {
+    const { audio, voice, listen } = setup([spotlight])
+    await listen.start(track)
+    await audio.advance(10)
+    await listen.pause()
+    await listen.seek(15)
+    await flush()
+    expect(audio.playing).toBe(false)
+    await listen.resume()
+    await flush()
+    expect(voice.played).toEqual(['guide-1.m4a'])
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.pos).toBe(15)
+  })
+
   it('skips the guide on request and goes straight back to the episode', async () => {
     const { audio, voice, listen } = setup([spotlight])
     await listen.start(track)

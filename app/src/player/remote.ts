@@ -21,4 +21,9 @@ export async function playbackService(): Promise<void> {
   TrackPlayer.addEventListener(Event.RemoteJumpForward, () => handler?.('next'))
   TrackPlayer.addEventListener(Event.RemoteJumpBackward, () => handler?.('previous'))
   TrackPlayer.addEventListener(Event.RemoteSeek, (e) => handler?.({ seek: e.position }))
+  // A phone call or another app taking the audio: pause, so the guide isn't left talking over it
+  // (the episode may already be paused for the guide, so iOS alone wouldn't stop the lesson).
+  TrackPlayer.addEventListener(Event.RemoteDuck, (e) => {
+    if (e.paused || e.permanent) handler?.('pause')
+  })
 }
