@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignWordMomentLevels, includes, selectMoments, validateMoments, type GuideMoment } from '../src'
+import { assignWordMomentLevels, includes, selectMoments, validateMoments, voiceSegments, type GuideMoment } from '../src'
 
 const moment = (over: Partial<GuideMoment> & Pick<GuideMoment, 'id' | 'kind' | 'at' | 'minLevel'>): GuideMoment => ({
   script: 'Test',
@@ -117,5 +117,32 @@ describe('target-language runs in guide scripts', () => {
     expect(languageRuns('[[Hej]]')).toEqual([{ text: 'Hej', target: true }])
     expect(languageRuns('No marks [here]')).toEqual([{ text: 'No marks [here]', target: false }])
     expect(withoutLanguageMarks('Say [[tack]] and [[hej då]].')).toBe('Say tack and hej då.')
+  })
+})
+
+describe('voice segments', () => {
+  it('splits every [[ ]] run out for a voice that reads one language at a time', () => {
+    expect(voiceSegments('You might say: [[Jag är lite försenad]], I’m running a bit late.', { mixed: false })).toEqual([
+      { text: 'You might say:', target: false },
+      { text: 'Jag är lite försenad', target: true },
+      { text: ', I’m running a bit late.', target: false },
+    ])
+  })
+
+  it('sends a mixed line as one call to Eleven v4, keeping the slow repeat of a term on its own', () => {
+    expect(voiceSegments('You might say: [[Jag är lite försenad]], I’m running a bit late.', { mixed: true })).toEqual([
+      { text: 'You might say: Jag är lite försenad, I’m running a bit late.', target: false },
+    ])
+    // After the host's clip: the repeat stands alone, then the meaning carries on in one call.
+    expect(voiceSegments('. [[försenad]]. It means delayed. Listen out for it.', { mixed: true })).toEqual([
+      { text: 'försenad', target: true },
+      { text: 'It means delayed. Listen out for it.', target: false },
+    ])
+    expect(voiceSegments('[[Tåget var försenat]]: the train was late. You might say: [[Jag är lite försenad]], I’m running a bit late.', { mixed: true })).toEqual([
+      { text: 'Tåget var försenat', target: true },
+      { text: 'the train was late. You might say: Jag är lite försenad, I’m running a bit late.', target: false },
+    ])
+    expect(voiceSegments('That word again. [[Feierabend]]. The end of the working day.', { mixed: true }).map((s) => s.target)).toEqual([false, true, false])
+    expect(voiceSegments('A coffee break Swedes call [[fika]].', { mixed: true })).toEqual([{ text: 'A coffee break Swedes call fika.', target: false }])
   })
 })

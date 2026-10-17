@@ -1,4 +1,4 @@
-import { languageRuns, type AudioPart, type GuideMoment, type LessonPlan } from '@polycast/core'
+import { voiceSegments, type AudioPart, type GuideMoment, type LessonPlan } from '@polycast/core'
 import { mapLimit, withRetry } from '../retry'
 import type { SpeechSynth, Storage } from '../providers/types'
 import type { UsageMeter } from '../budget'
@@ -44,11 +44,12 @@ export async function voicePlan(
         continue
       }
       // Target-language words ([[…]]) are read by the same guide in that language, so a Swedish
-      // word sounds Swedish rather than English-accented. A run of only punctuation isn't voiced.
-      for (const run of languageRuns(piece.text)) {
-        if (!/\p{L}|\p{N}/u.test(run.text)) continue
+      // word sounds Swedish rather than English-accented. A voice that handles mixed lines (Eleven
+      // v4) gets each line in one call, with only a term repeated on its own sent separately, slowly.
+      const mixed = Boolean(deps.speech.mixedLanguage)
+      for (const run of voiceSegments(piece.text, { mixed })) {
         const say = (language: string, rate?: number) =>
-          withRetry(() => deps.speech.synthesize({ text: run.text.trim(), voice: guide.voice, style: guide.style, language, rate }))
+          withRetry(() => deps.speech.synthesize({ text: run.text, voice: guide.voice, style: guide.style, language, rate, mixed: mixed && !run.target }))
         const spoken = run.target ? await say(plan.targetLanguage, TARGET_SPEAKING_RATE).catch(() => say(plan.nativeLanguage, TARGET_SPEAKING_RATE)) : await say(plan.nativeLanguage)
         const { audio, mimeType, durationSec: d, usage } = spoken
         deps.meter.add(usage)

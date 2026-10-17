@@ -1,4 +1,4 @@
-import { costUSD, LAUNCH_LANGUAGES, languageRuns, type Usage } from '@polycast/core'
+import { costUSD, LAUNCH_LANGUAGES, voiceSegments, type Usage } from '@polycast/core'
 import type { SpendGuard } from './budget'
 import { UsageMeter } from './budget'
 import { TARGET_SPEAKING_RATE } from './providers/googleTts'
@@ -15,7 +15,8 @@ import { DEFAULT_GUIDE, type Guide } from './voices'
  * Bump WELCOME_VERSION when a script changes: the new version is voiced once on the next start-up.
  * Target-language words sit in [[ ]] and are read by the same voice in that language.
  */
-export const WELCOME_VERSION = 1
+/** 2 (17 Oct 2026): voiced again by Eleven v4 Turbo. */
+export const WELCOME_VERSION = 2
 
 /** Learners' own language. Polycast speaks English for now (spec: Languages). */
 export const WELCOME_NATIVE = 'en'
@@ -56,7 +57,7 @@ export function welcomeManifestPath(target: string, guide: Pick<Guide, 'id'> = D
 
 /** Spending cap estimate for one welcome: every character, as if voiced by a per-character voice, doubled for safety. */
 function estimateUSD(script: string): number {
-  return Math.max(0.01, costUSD({ transcriptionSec: 0, textInTokens: 0, textOutTokens: 0, ttsAudioSec: script.length / 15, ttsChars: script.length } as Usage) * 2)
+  return Math.max(0.01, costUSD({ transcriptionSec: 0, textInTokens: 0, textOutTokens: 0, ttsAudioSec: script.length / 15, ttsChars: script.length, elevenTtsChars: script.length } as Usage) * 2)
 }
 
 /** Voices one language's welcome and stores it. Returns the manifest. */
@@ -71,10 +72,10 @@ export async function voiceWelcome(
   const meter = new UsageMeter()
   try {
     const parts: WelcomeManifest['parts'] = []
-    for (const run of languageRuns(text)) {
-      if (!/\p{L}|\p{N}/u.test(run.text)) continue
+    const mixed = Boolean(deps.speech.mixedLanguage)
+    for (const run of voiceSegments(text, { mixed })) {
       const say = (language: string, rate?: number) =>
-        withRetry(() => deps.speech.synthesize({ text: run.text.trim(), voice: guide.voice, style: guide.style, language, rate }))
+        withRetry(() => deps.speech.synthesize({ text: run.text, voice: guide.voice, style: guide.style, language, rate, mixed: mixed && !run.target }))
       const spoken = run.target ? await say(target, TARGET_SPEAKING_RATE).catch(() => say(WELCOME_NATIVE, TARGET_SPEAKING_RATE)) : await say(WELCOME_NATIVE)
       meter.add(spoken.usage)
       const ext = spoken.mimeType === 'audio/mp4' ? 'm4a' : spoken.mimeType === 'audio/mpeg' ? 'mp3' : 'wav'

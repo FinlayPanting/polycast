@@ -12,7 +12,7 @@ const reply = (status: number, body: unknown) => (async () => new Response(JSON.
 
 describe('welcome', () => {
   it('points at the same path the server stores it under', () => {
-    expect(welcomeUrl('https://x.supabase.co', 'sv')).toBe('https://x.supabase.co/storage/v1/object/public/guide-audio/welcome/v1/en-sv/mia.json')
+    expect(welcomeUrl('https://x.supabase.co', 'sv')).toBe('https://x.supabase.co/storage/v1/object/public/guide-audio/welcome/v2/en-sv/mia.json')
   })
 
   it('loads a voiced welcome and quietly gives nothing when it is missing or broken', async () => {

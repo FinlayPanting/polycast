@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ZERO_USAGE,
   cohortAlert,
   costUSD,
   pricesOn,
@@ -79,16 +80,25 @@ describe('cohort alerts', () => {
 const AUTUMN_2026 = new Date('2026-10-15T12:00:00Z')
 
 describe('costs', () => {
-  // Chirp 3 HD voices since 13 Oct 2026 (was Gemini TTS at about $0.20 an hour less), plus Scribe's
-  // name-spelling edit (30% on transcription, about $0.07 an hour); docs/DECISIONS.md.
-  it('estimates under $0.85 for an hour of new audio, including the glossary', () => {
+  // Eleven v4 Turbo voices since 17 Oct 2026 ($40 per million characters; Chirp 3 HD was $30), plus
+  // Scribe's name-spelling edit (30% on transcription, about $0.07 an hour); docs/DECISIONS.md.
+  it('estimates under $1 for an hour of new audio, including the glossary', () => {
     const c = estimatePrepCostUSD(3600, { at: AUTUMN_2026 })
-    expect(c).toBeGreaterThan(0.75)
-    expect(c).toBeLessThan(0.85)
+    expect(c).toBeGreaterThan(0.9)
+    expect(c).toBeLessThan(1)
   })
 
-  it('keeps the worst-case 2-hour free episode under $1.70', () => {
-    expect(estimatePrepCostUSD(7200, { at: AUTUMN_2026 })).toBeLessThan(1.7)
+  it('keeps the worst-case 2-hour free episode under $2', () => {
+    expect(estimatePrepCostUSD(7200, { at: AUTUMN_2026 })).toBeLessThan(2)
+  })
+
+  it('costs about 13 cents an hour more with Eleven v4 Turbo than with the Chirp fallback', () => {
+    const eleven = estimatePrepCostUSD(3600, { at: AUTUMN_2026 })
+    const chirp = estimatePrepCostUSD(3600, { at: AUTUMN_2026, voice: 'chirp' })
+    // 13,500 characters of guide speech an hour, at $40 against $30 a million.
+    expect(eleven - chirp).toBeCloseTo(13_500 * 10e-6, 6)
+    expect(chirp).toBeLessThan(0.85)
+    expect(costUSD({ ...ZERO_USAGE, elevenTtsChars: 1e6 })).toBeCloseTo(40, 6)
   })
 
   it('skips transcription cost when the feed supplies a transcript', () => {
@@ -118,6 +128,6 @@ describe('costs', () => {
     const before = estimatePrepCostUSD(3600, { at: AUTUMN_2026 })
     const after = estimatePrepCostUSD(3600, { at: new Date('2027-01-01T00:00:00Z') })
     expect(after - before).toBeCloseTo(45_000 * 0.75e-6 + 30_000 * 3.75e-6, 6)
-    expect(after).toBeLessThan(1)
+    expect(after).toBeLessThan(1.15)
   })
 })

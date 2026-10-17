@@ -6,7 +6,9 @@ import { serve } from '@hono/node-server'
 import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
 import { createApi, supabaseVerifier } from './api'
 import { connect, releaseJob } from './db'
-import { scribeTranscriber } from './providers/elevenlabs'
+import { elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
+import { chooseTtsProvider, withFallbackSpeech } from './providers/speechChoice'
+import { elevenVoiceFor } from './voices'
 import { geminiSpeech, geminiText } from './providers/gemini'
 import { geminiBatchText } from './providers/geminiBatch'
 import { googleChirpSpeech } from './providers/googleTts'
@@ -93,7 +95,26 @@ async function main() {
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
-  console.log(`Guide voice: ${process.env.GOOGLE_TTS_API_KEY ? 'Google Cloud TTS (Chirp 3 HD)' : 'Gemini TTS'}`)
+  // The guide's voice (PC-1017-09): ElevenLabs Eleven v4 Turbo unless TTS_PROVIDER says otherwise,
+  // with Chirp 3 HD (when its key is set) reading any line ElevenLabs refuses outright.
+  const ttsProvider = chooseTtsProvider(process.env)
+  const chirp = process.env.GOOGLE_TTS_API_KEY
+    ? pacedSpeech(googleChirpSpeech(process.env.GOOGLE_TTS_API_KEY, ffmpegAacEncoder()), Number(process.env.GOOGLE_TTS_RPM ?? 150))
+    : undefined
+  let speech
+  if (ttsProvider === 'elevenlabs') {
+    const elevenKey = need('ELEVENLABS_API_KEY')
+    const model = await resolveElevenModel(elevenKey, process.env.ELEVENLABS_TTS_MODEL || undefined)
+    const eleven = pacedSpeech(elevenLabsSpeech(elevenKey, ffmpegAacEncoder(), { model, voiceId: elevenVoiceFor }), Number(process.env.ELEVENLABS_TTS_RPM ?? 120))
+    speech = withFallbackSpeech(eleven, chirp, (m) => void alert?.('voice', `ElevenLabs refused a guide line, Chirp read it instead: ${m.slice(0, 200)}`).catch(() => {}))
+    console.log(`Guide voice: ElevenLabs (${model})${chirp ? ', Chirp 3 HD as fallback' : ''}`)
+  } else if (ttsProvider === 'chirp') {
+    speech = chirp!
+    console.log('Guide voice: Google Cloud TTS (Chirp 3 HD)')
+  } else {
+    speech = pacedSpeech(geminiSpeech(gemini, ffmpegAacEncoder()), Number(process.env.GEMINI_TTS_RPM ?? 9))
+    console.log('Guide voice: Gemini TTS')
+  }
 
   const stopping = new AbortController()
   if (process.env.RUN_WORKER !== 'false') {
@@ -104,11 +125,7 @@ async function main() {
       text: geminiText(gemini),
       // Re-plans after a guide update go through Gemini's batch service at half price (PC-1015-07).
       batchText: process.env.GEMINI_BATCH === 'false' ? undefined : (maxWaitMs) => geminiBatchText(gemini, undefined, fetch, { maxWaitMs }),
-      // Chirp 3 HD voices (Google Cloud TTS, 200 requests a minute) when its key is set; otherwise
-      // Gemini's voices, which AI Studio caps at 10 a minute and 100 a day on Tier 1.
-      speech: process.env.GOOGLE_TTS_API_KEY
-        ? pacedSpeech(googleChirpSpeech(process.env.GOOGLE_TTS_API_KEY, ffmpegAacEncoder()), Number(process.env.GOOGLE_TTS_RPM ?? 150))
-        : pacedSpeech(geminiSpeech(gemini, ffmpegAacEncoder()), Number(process.env.GEMINI_TTS_RPM ?? 9)),
+      speech,
       storage: supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY')),
       downloadAudio: downloadEpisode(),
       fingerprint: ffmpegFingerprint(),

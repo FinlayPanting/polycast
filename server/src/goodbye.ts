@@ -13,7 +13,8 @@ import { GUIDES, type Guide } from './voices'
  * welcome), so nothing is generated while anyone listens. Bump GOODBYE_VERSION when a line or the
  * guides' voices change; the app reads the same version (app/src/lib/goodbye.ts).
  */
-export const GOODBYE_VERSION = 1
+/** 2 (17 Oct 2026): voiced again by Eleven v4 Turbo. */
+export const GOODBYE_VERSION = 2
 
 export const GOODBYE_LINES: Record<(typeof LAUNCH_LANGUAGES)[number], { text: string; meaning: string }> = {
   es: { text: '¡Hasta luego!', meaning: 'See you later!' },
@@ -43,7 +44,7 @@ export async function voiceGoodbye(target: (typeof LAUNCH_LANGUAGES)[number], gu
   const line = GOODBYE_LINES[target]
   const ledgerId = `goodbye-v${GOODBYE_VERSION}-${target}-${guide.id}`
   // Every character as if voiced by a per-character voice, doubled for safety; at least a cent.
-  await deps.guard.reserve(ledgerId, Math.max(0.01, costUSD({ ...ZERO_USAGE, ttsAudioSec: line.text.length / 15, ttsChars: line.text.length }) * 2))
+  await deps.guard.reserve(ledgerId, Math.max(0.01, costUSD({ ...ZERO_USAGE, ttsAudioSec: line.text.length / 15, ttsChars: line.text.length, elevenTtsChars: line.text.length }) * 2))
   const meter = new UsageMeter()
   try {
     const spoken = await withRetry(() => deps.speech.synthesize({ text: line.text, voice: guide.voice, style: guide.style, language: target, rate: TARGET_SPEAKING_RATE }))

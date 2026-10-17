@@ -40,7 +40,7 @@ describe('guide welcome', () => {
     expect(m.parts).toHaveLength(3)
     const stored = JSON.parse(new TextDecoder().decode(storage.files.get(welcomeManifestPath('sv'))!)) as WelcomeManifest
     expect(stored).toEqual(m)
-    expect(stored.parts[0]!.url).toContain('welcome/v1/en-sv/mia-0.m4a')
+    expect(stored.parts[0]!.url).toContain('welcome/v2/en-sv/mia-0.m4a')
     // Counted against the spending cap at its real cost.
     expect([...ledger.entries.values()][0]).toBeGreaterThan(0)
   })

@@ -6,7 +6,7 @@ const manifest = { version: 1, text: 'Ha det gott!', meaning: 'Take care!', url:
 
 describe('goodbye', () => {
   it('points at the same path the server stores it under', () => {
-    expect(goodbyeUrl('https://x.supabase.co', 'sv', 'leo')).toBe('https://x.supabase.co/storage/v1/object/public/guide-audio/goodbye/v1/sv/leo.json')
+    expect(goodbyeUrl('https://x.supabase.co', 'sv', 'leo')).toBe('https://x.supabase.co/storage/v1/object/public/guide-audio/goodbye/v2/sv/leo.json')
   })
 
   it('loads a voiced goodbye and quietly gives nothing when it is missing or broken', async () => {

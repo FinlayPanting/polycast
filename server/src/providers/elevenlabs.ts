@@ -1,5 +1,6 @@
 import { applyEditedSpellings, scribeNameInstruction, type Word } from '@polycast/core'
-import { errorFromResponse, type Transcriber } from './types'
+import { errorFromResponse, ProviderError, type SpeechSynth, type Transcriber } from './types'
+import { pcmToWav, wavDurationSec } from '../audio'
 
 interface ScribeWord {
   text: string
@@ -59,5 +60,70 @@ export function scribeTranscriber(apiKey: string, fetchImpl: typeof fetch = fetc
         usage: { transcriptionSec: heardSec, ...(instruction ? { transcriptEditSec: Math.max(10, heardSec) } : {}) },
       }
     },
+  }
+}
+
+/** Eleven v4 Turbo: Finlay's pick after the 17 Oct audition (v4 won more lines, Turbo is half the price). */
+export const ELEVEN_TTS_MODEL = 'eleven_v4_turbo'
+/** The guide's own pace and the slower one for a term said on its own (as with Chirp). */
+export const ELEVEN_GUIDE_SPEED = 0.9
+export const ELEVEN_TARGET_SPEED = 0.8
+/** ElevenLabs accepts speeds from 0.7 to 1.2. */
+const clampSpeed = (s: number) => Math.min(1.2, Math.max(0.7, s))
+
+/**
+ * ElevenLabs text to speech for the guide (board item PC-1017-09). One voice per guide reads every
+ * language, and a mixed line ("Swedes call it [[fika]]") goes as one call with the target words
+ * said natively. Raw 24 kHz PCM comes back and is encoded to AAC like the other voices.
+ * `voiceId` turns the guide's voice setting into an ElevenLabs voice id.
+ */
+export function elevenLabsSpeech(
+  apiKey: string,
+  encode: (wav: Uint8Array) => Promise<{ audio: Uint8Array; mimeType: string }>,
+  opts: { model?: string; voiceId?: (voice: string) => string; fetchImpl?: typeof fetch } = {},
+): SpeechSynth {
+  const fetchImpl = opts.fetchImpl ?? fetch
+  const model = opts.model ?? ELEVEN_TTS_MODEL
+  return {
+    mixedLanguage: true,
+    async synthesize({ text, voice, language, rate, mixed }) {
+      const id = opts.voiceId ? opts.voiceId(voice) : voice
+      const res = await fetchImpl(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(id)}?output_format=pcm_24000`, {
+        method: 'POST',
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/pcm' },
+        body: JSON.stringify({
+          text,
+          model_id: model,
+          // A line mixing two languages isn't pinned to one, so the target words keep their own sounds.
+          ...(mixed ? {} : { language_code: language.slice(0, 2).toLowerCase() }),
+          voice_settings: { speed: clampSpeed(rate ?? ELEVEN_GUIDE_SPEED) },
+        }),
+      })
+      if (!res.ok) throw errorFromResponse('ElevenLabs TTS', res.status, await res.text())
+      const pcm = new Uint8Array(await res.arrayBuffer())
+      if (pcm.byteLength < 2) throw new ProviderError('ElevenLabs TTS reply had no audio', true)
+      const wav = pcmToWav(pcm, 24000)
+      const durationSec = wavDurationSec(wav)
+      const { audio, mimeType } = await encode(wav)
+      return { audio, mimeType, durationSec, usage: { elevenTtsChars: text.length } }
+    },
+  }
+}
+
+/**
+ * Checks the configured model against the account's /v1/models (the key has Models access), and
+ * picks the v4 Turbo id listed there if the configured one isn't. Falls back to the configured id
+ * if the list can't be read.
+ */
+export async function resolveElevenModel(apiKey: string, wanted = ELEVEN_TTS_MODEL, fetchImpl: typeof fetch = fetch): Promise<string> {
+  try {
+    const res = await fetchImpl('https://api.elevenlabs.io/v1/models', { headers: { 'xi-api-key': apiKey }, signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) return wanted
+    const models = (await res.json()) as { model_id?: string; can_do_text_to_speech?: boolean }[]
+    const ids = models.filter((m) => m.can_do_text_to_speech !== false).map((m) => m.model_id ?? '')
+    if (ids.includes(wanted)) return wanted
+    return ids.find((i) => /v4/.test(i) && /turbo/.test(i)) ?? wanted
+  } catch {
+    return wanted
   }
 }

@@ -154,6 +154,41 @@ export function languageRuns(text: string): { text: string; target: boolean }[] 
   return runs.filter((r) => r.text.trim().length > 0)
 }
 
+/**
+ * How a guide line is sent to the voice. `mixed: false` (Chirp, Gemini): each [[ ]] run on its own in
+ * the target language, the rest in the learner's language. `mixed: true` (Eleven v4, which says
+ * embedded target words natively): the line goes as one call, except a term the guide repeats on
+ * its own ("Here's Anna: {term}. [[försenad]]. It means delayed.") which stays a separate, slower
+ * segment in the target language. A run counts as on its own when nothing but punctuation sits
+ * between it and the start of the line or the end of the previous sentence.
+ */
+export function voiceSegments(text: string, opts: { mixed: boolean }): { text: string; target: boolean }[] {
+  const runs = languageRuns(text)
+  if (!opts.mixed) return runs.filter((r) => /\p{L}|\p{N}/u.test(r.text)).map((r) => ({ text: r.text.trim(), target: r.target }))
+  const out: { text: string; target: boolean }[] = []
+  let line = ''
+  const flush = () => {
+    // Punctuation left over from a repeat ("…]]. It means") isn't spoken at the start of a line.
+    const t = line.replace(/^[\s.,;:!?…–—-]+/u, '').trim()
+    if (/\p{L}|\p{N}/u.test(t)) out.push({ text: t, target: false })
+    line = ''
+  }
+  runs.forEach((r) => {
+    if (!r.target) {
+      line += r.text
+      return
+    }
+    const before = line.replace(/^[\s.,;:!?…–—-]+/u, '').trimEnd()
+    const alone = before === '' || /[.!?…]["”»)]?$/u.test(before)
+    if (alone) {
+      flush()
+      out.push({ text: r.text.trim(), target: true })
+    } else line += r.text
+  })
+  flush()
+  return out
+}
+
 /** Guide text without the [[ ]] marks, for anywhere it's shown or read as plain text. */
 export function withoutLanguageMarks(text: string): string {
   return text.replace(/\[\[([^\[\]]+)\]\]/g, '$1')

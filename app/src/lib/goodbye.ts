@@ -3,7 +3,7 @@
  * once per language and guide ahead of time (server/src/goodbye.ts) and stores it publicly; the app
  * only plays it, after the wrap-up. Keep the version and path in step with the server.
  */
-export const GOODBYE_VERSION = 1
+export const GOODBYE_VERSION = 2
 
 export interface Goodbye {
   text: string

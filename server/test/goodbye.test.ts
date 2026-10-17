@@ -36,7 +36,7 @@ describe('guide goodbye', () => {
     const stored = JSON.parse(new TextDecoder().decode(storage.files.get(goodbyeManifestPath('sv', { id: 'leo' }))!)) as GoodbyeManifest
     expect(stored).toEqual(m)
     expect(stored).toMatchObject({ text: 'Ha det gott!', meaning: 'Take care!', guideId: 'leo' })
-    expect(stored.url).toContain('goodbye/v1/sv/leo.m4a')
+    expect(stored.url).toContain('goodbye/v2/sv/leo.m4a')
     expect([...ledger.entries.values()][0]).toBeGreaterThan(0)
   })
 

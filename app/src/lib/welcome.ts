@@ -5,7 +5,7 @@ import type { GuideVoice } from '../player/types'
  * once per language ahead of time (server/src/welcome.ts) and stores it publicly; the app only plays
  * it. Keep the version and path in step with the server.
  */
-export const WELCOME_VERSION = 1
+export const WELCOME_VERSION = 2
 
 export interface Welcome {
   text: string

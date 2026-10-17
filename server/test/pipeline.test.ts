@@ -252,4 +252,16 @@ describe('voicing target-language words', () => {
     await voicePlan(plan, DEFAULT_GUIDE, { speech, storage: memoryStorage(), meter: new UsageMeter() })
     expect(said).toContain('en:jag är sen')
   })
+
+  it('sends each mixed line as one call to a voice that handles both languages, keeping a lone repeat slow', async () => {
+    const said: string[] = []
+    const speech = {
+      mixedLanguage: true,
+      synthesize: (r: { text: string; voice: string; style: string; language: string; rate?: number; mixed?: boolean }) => (said.push(`${r.mixed ? 'mixed' : r.language}@${r.rate ?? 'default'}:${r.text}`), mockSpeech().synthesize(r)),
+    }
+    const withRepeat = { ...plan, moments: [{ ...plan.moments[0]!, script: 'Here’s Anna: {clip:0}. [[försenad]]. It means delayed. Or: [[jag är sen]], I am late.' }] } as unknown as LessonPlan
+    const out = await voicePlan(withRepeat, DEFAULT_GUIDE, { speech, storage: memoryStorage(), meter: new UsageMeter() })
+    expect(said).toEqual(['mixed@default:Here’s Anna:', `sv@${TARGET_SPEAKING_RATE}:försenad`, 'mixed@default:It means delayed. Or: jag är sen, I am late.'])
+    expect(out.moments[0]!.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip', 'speech', 'speech'])
+  })
 })

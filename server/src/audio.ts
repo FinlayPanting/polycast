@@ -23,6 +23,19 @@ export function wavDurationSec(wav: Uint8Array): number {
   throw new Error('WAV has no data chunk')
 }
 
+/** Wraps raw 16-bit mono PCM (as ElevenLabs' pcm_24000 returns it) in a WAV header. */
+export function pcmToWav(pcm: Uint8Array, sampleRate = 24000): Uint8Array {
+  const out = new Uint8Array(44 + pcm.byteLength)
+  const v = new DataView(out.buffer)
+  const w = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)))
+  w(0, 'RIFF'); v.setUint32(4, 36 + pcm.byteLength, true); w(8, 'WAVE')
+  w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true)
+  w(36, 'data'); v.setUint32(40, pcm.byteLength, true)
+  out.set(pcm, 44)
+  return out
+}
+
 /** A silent PCM WAV, used by tests and mocks. */
 export function silentWav(seconds: number, sampleRate = 24000): Uint8Array {
   const dataSize = Math.round(seconds * sampleRate) * 2

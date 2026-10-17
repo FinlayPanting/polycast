@@ -30,8 +30,16 @@ export interface TextModel {
 
 /** The guide's voice. Returns encoded audio ready to store. */
 export interface SpeechSynth {
-  /** `rate` is the speaking rate (1 = normal); providers that can't change it ignore it. */
-  synthesize(input: { text: string; voice: string; style: string; language: string; rate?: number }): Promise<{
+  /**
+   * True for a voice that reads target-language words inside a learner's-language sentence natively
+   * (Eleven v4), so a mixed line goes as one call; see voiceSegments in @polycast/core.
+   */
+  mixedLanguage?: boolean
+  /**
+   * `rate` is the speaking rate (1 = normal); providers that can't change it ignore it. `mixed`: the
+   * text mixes the learner's language with the target language, so don't pin it to `language`.
+   */
+  synthesize(input: { text: string; voice: string; style: string; language: string; rate?: number; mixed?: boolean }): Promise<{
     audio: Uint8Array
     mimeType: string
     durationSec: number

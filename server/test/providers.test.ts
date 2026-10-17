@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { fingerprintFromPcm } from '@polycast/core'
 import { ffmpegAacEncoder, ffmpegFingerprint, silentWav, wavDurationSec } from '../src/audio'
+import { elevenLabsSpeech, resolveElevenModel } from '../src/providers/elevenlabs'
+import { chooseTtsProvider, withFallbackSpeech } from '../src/providers/speechChoice'
+import { elevenVoiceFor, guideById } from '../src/voices'
 import { wordsFromScribe, scribeTranscriber } from '../src/providers/elevenlabs'
 import { geminiSpeech, geminiText, readInteraction, readTokenUsage } from '../src/providers/gemini'
 import { chirpVoiceName, googleChirpSpeech } from '../src/providers/googleTts'
@@ -254,5 +257,85 @@ describe('retries', () => {
     })
     expect(out).toEqual([10, 20, 30, 40, 50])
     expect(peak).toBe(2)
+  })
+})
+
+describe('ElevenLabs guide voice (Eleven v4 Turbo)', () => {
+  const pcm = (sec: number) => new Uint8Array(Math.round(sec * 24000) * 2)
+  const encode = async (wav: Uint8Array) => ({ audio: wav, mimeType: 'audio/wav' })
+
+  it("reads a mixed line in the guide's own voice, unpinned, at the guide's pace", async () => {
+    let url = ''
+    let body: any
+    let headers: Record<string, string> = {}
+    const s = elevenLabsSpeech('k3y', encode, {
+      voiceId: elevenVoiceFor,
+      fetchImpl: (async (u: string, init?: RequestInit) => {
+        url = String(u)
+        headers = init!.headers as Record<string, string>
+        body = JSON.parse(String(init!.body))
+        return new Response(pcm(1.5))
+      }) as typeof fetch,
+    })
+    expect(s.mixedLanguage).toBe(true)
+    const r = await s.synthesize({ text: 'Swedes call it fika.', voice: 'Sulafat', style: 'warm', language: 'en', mixed: true })
+    expect(url).toBe('https://api.elevenlabs.io/v1/text-to-speech/hpp4J3VqNfWAUOO0d1Us?output_format=pcm_24000')
+    expect(headers['xi-api-key']).toBe('k3y')
+    expect(body).toEqual({ text: 'Swedes call it fika.', model_id: 'eleven_v4_turbo', voice_settings: { speed: 0.9 } })
+    expect(r.durationSec).toBeCloseTo(1.5, 3)
+    expect(r.usage).toEqual({ elevenTtsChars: 20 })
+  })
+
+  it('pins a lone target word to its language and reads it slowly; Leo is Charlie', async () => {
+    let body: any
+    let url = ''
+    const s = elevenLabsSpeech('k', encode, { voiceId: elevenVoiceFor, fetchImpl: (async (u: string, init?: RequestInit) => ((url = String(u)), (body = JSON.parse(String(init!.body))), new Response(pcm(0.5)))) as typeof fetch })
+    await s.synthesize({ text: 'försenad', voice: guideById('leo').voice, style: 'warm', language: 'sv', rate: 0.8 })
+    expect(url).toContain('/IKne3meq5aSn9XLyUdCD?')
+    expect(body).toMatchObject({ language_code: 'sv', voice_settings: { speed: 0.8 } })
+  })
+
+  it('reports refusals the same way as the other providers', async () => {
+    const s = elevenLabsSpeech('k', encode, { fetchImpl: (async () => new Response('voice_not_found', { status: 404 })) as typeof fetch })
+    await expect(s.synthesize({ text: 'x', voice: 'v', style: '', language: 'en' })).rejects.toMatchObject({ retryable: false })
+    const busy = elevenLabsSpeech('k', encode, { fetchImpl: (async () => new Response('too_many_concurrent_requests', { status: 429 })) as typeof fetch })
+    await expect(busy.synthesize({ text: 'x', voice: 'v', style: '', language: 'en' })).rejects.toMatchObject({ retryable: true })
+  })
+
+  it("checks the model against the account's list, finding v4 Turbo there if the name differs", async () => {
+    const list = (ids: string[]) => (async () => Response.json(ids.map((model_id) => ({ model_id, can_do_text_to_speech: true })))) as unknown as typeof fetch
+    expect(await resolveElevenModel('k', undefined, list(['eleven_v4', 'eleven_v4_turbo']))).toBe('eleven_v4_turbo')
+    expect(await resolveElevenModel('k', undefined, list(['eleven_v4', 'eleven_v4_turbo_v2']))).toBe('eleven_v4_turbo_v2')
+    expect(await resolveElevenModel('k', undefined, (async () => new Response('', { status: 401 })) as unknown as typeof fetch)).toBe('eleven_v4_turbo')
+  })
+
+  it('maps each guide to its ElevenLabs voice', () => {
+    expect(elevenVoiceFor(guideById('mia').voice)).toBe('hpp4J3VqNfWAUOO0d1Us')
+    expect(elevenVoiceFor(guideById('leo').voice)).toBe('IKne3meq5aSn9XLyUdCD')
+    expect(elevenVoiceFor('someOtherId')).toBe('someOtherId')
+  })
+})
+
+describe('choosing the guide voice', () => {
+  it('defaults to ElevenLabs with no Railway change, and switches back to Chirp on request', () => {
+    expect(chooseTtsProvider({ ELEVENLABS_API_KEY: 'e', GOOGLE_TTS_API_KEY: 'g' })).toBe('elevenlabs')
+    expect(chooseTtsProvider({ TTS_PROVIDER: 'chirp', ELEVENLABS_API_KEY: 'e', GOOGLE_TTS_API_KEY: 'g' })).toBe('chirp')
+    expect(chooseTtsProvider({ TTS_PROVIDER: 'CHIRP', ELEVENLABS_API_KEY: 'e' })).toBe('elevenlabs')
+    expect(chooseTtsProvider({ GOOGLE_TTS_API_KEY: 'g' })).toBe('chirp')
+    expect(chooseTtsProvider({ TTS_PROVIDER: 'gemini', ELEVENLABS_API_KEY: 'e' })).toBe('gemini')
+    expect(chooseTtsProvider({})).toBe('gemini')
+  })
+
+  it('has Chirp read a line ElevenLabs refuses outright, telling Finlay once; busy errors are retried instead', async () => {
+    const told: string[] = []
+    const ok = { synthesize: async () => ({ audio: new Uint8Array(1), mimeType: 'audio/wav', durationSec: 1, usage: { ttsChars: 1 } }) }
+    const refusing = { mixedLanguage: true, synthesize: async () => { throw new ProviderError('ElevenLabs TTS returned 404: voice_not_found', false, 404) } }
+    const s = withFallbackSpeech(refusing, ok, (m) => told.push(m))
+    expect(s.mixedLanguage).toBe(true)
+    expect((await s.synthesize({ text: 'a', voice: 'v', style: '', language: 'en' })).usage).toEqual({ ttsChars: 1 })
+    await s.synthesize({ text: 'b', voice: 'v', style: '', language: 'en' })
+    expect(told).toHaveLength(1)
+    const busy = withFallbackSpeech({ synthesize: async () => { throw new ProviderError('429', true, 429) } }, ok)
+    await expect(busy.synthesize({ text: 'a', voice: 'v', style: '', language: 'en' })).rejects.toMatchObject({ retryable: true })
   })
 })
