@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { FINGERPRINT_SAMPLE_RATE, FingerprintBuilder } from '@polycast/core'
+import { POLYCAST_UA, safeFetch, TooLarge, UnsafeUrl, type LookupHost } from './safeFetch'
 
 /** Duration of a PCM WAV file from its header. */
 export function wavDurationSec(wav: Uint8Array): number {
@@ -84,15 +85,26 @@ export function ffmpegFingerprint(ffmpegPath = 'ffmpeg') {
     })
 }
 
-/** Downloads an episode's audio once, into memory only (it is never written to disk or storage). */
-export function downloadEpisode(fetchImpl: typeof fetch = fetch, maxBytes = 400 * 1024 * 1024) {
+/** The longest an episode download may take; a two-hour episode is about 120 MB. */
+export const EPISODE_TIMEOUT_MS = 10 * 60 * 1000
+export const EPISODE_MAX_BYTES = 400 * 1024 * 1024
+
+/**
+ * Downloads an episode's audio once, into memory only (it is never written to disk or storage).
+ * Same safety as feeds: public addresses only, every redirect checked, a time limit, and the size
+ * cap enforced while reading, so an undeclared or lying length can't fill the server's memory.
+ */
+export function downloadEpisode(fetchImpl: typeof fetch = fetch, maxBytes = EPISODE_MAX_BYTES, opts: { lookupHost?: LookupHost; timeoutMs?: number } = {}) {
   return async (url: string): Promise<Uint8Array> => {
-    const res = await fetchImpl(url, { redirect: 'follow', headers: { 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' } })
-    if (!res.ok) throw new Error(`Couldn't download the episode: ${res.status}`)
-    const length = Number(res.headers.get('content-length') ?? 0)
-    if (length > maxBytes) throw new Error(`Episode file too large (${Math.round(length / 1e6)} MB)`)
-    const bytes = new Uint8Array(await res.arrayBuffer())
-    if (bytes.byteLength > maxBytes) throw new Error(`Episode file too large (${Math.round(bytes.byteLength / 1e6)} MB)`)
-    return bytes
+    try {
+      // Podcast links often hop through a few measurement redirects before the file.
+      const res = await safeFetch(url, { fetch: fetchImpl, maxBytes, maxRedirects: 10, timeoutMs: opts.timeoutMs ?? EPISODE_TIMEOUT_MS, lookupHost: opts.lookupHost, headers: POLYCAST_UA })
+      if (!res.ok) throw new Error(`Couldn't download the episode: ${res.status}`)
+      return res.body
+    } catch (e) {
+      if (e instanceof TooLarge) throw new Error(`Episode file too large (over ${Math.round(maxBytes / 1e6)} MB)`)
+      if (e instanceof UnsafeUrl) throw new Error(`Couldn't download the episode: ${e.message}`)
+      throw e
+    }
   }
 }
