@@ -13,6 +13,8 @@ export interface ListenState {
   answer?: { index: number; correct: boolean }
   next?: GuideMoment
   rate: number
+  /** The guide's goodbye in the target language, on screen while it's said at the very end. */
+  goodbye?: { text: string; meaning: string }
 }
 
 export interface ListenOptions {
@@ -26,6 +28,8 @@ export interface ListenOptions {
   onSavePosition?: (seconds: number) => void
   /** Whether the app is on screen. A question can't be answered on a locked phone, so it doesn't wait. */
   inForeground?: () => boolean
+  /** Said after the wrap-up on a guided listen (voiced ahead of time). Missing or unplayable: skipped. */
+  goodbye?: () => { url: string; text: string; meaning: string } | undefined
 }
 
 /** Trace of what the player does: Terminal in development, and the shareable playback log on a test phone. */
@@ -323,14 +327,21 @@ export class GuidedListen {
   private async onEnded() {
     const position = await this.o.audio.position()
     const due = this.timeline.tick(Number.POSITIVE_INFINITY).filter((m) => m.kind === 'wrapUp')
+    // A skip of an earlier moment is over by now; it mustn't silence the wrap-up or the goodbye.
+    if (this.state.phase === 'playing') this.skipRequested = false
     if (due.length > 0 && this.state.phase === 'playing') {
-      // A skip of an earlier moment is over by now; it mustn't silence the wrap-up.
-      this.skipRequested = false
       this.set({ phase: 'guide', moment: due[0], position })
       this.timeline.markPlayed(due[0]!.id)
       for (const step of playSteps(due[0]!)) if (step.kind === 'speech' && !this.skipRequested) await this.o.voice.play(step.url)
     }
-    this.set({ phase: 'finished', moment: undefined, position })
+    // The guide signs off in the language being learnt, once the episode (and any wrap-up) is over.
+    const bye = this.o.moments.length > 0 ? this.o.goodbye?.() : undefined
+    if (bye && !this.skipRequested && (this.state.phase === 'playing' || this.state.phase === 'guide')) {
+      trace(`goodbye: ${bye.text}`)
+      this.set({ phase: 'guide', moment: undefined, goodbye: { text: bye.text, meaning: bye.meaning }, position })
+      await this.o.voice.play(bye.url).catch(() => trace('goodbye could not play'))
+    }
+    this.set({ phase: 'finished', moment: undefined, goodbye: undefined, position })
     this.o.onSavePosition?.(position)
   }
 

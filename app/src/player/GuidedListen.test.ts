@@ -366,3 +366,38 @@ describe('saving progress and the wrap-up', () => {
     expect(listen.current.phase).toBe('finished')
   })
 })
+
+describe('the goodbye', () => {
+  const bye = { url: 'bye.m4a', text: 'Ha det gott!', meaning: 'Take care!' }
+
+  it('signs off in the target language after the episode, with the words on screen', async () => {
+    const audio = fakeAudio()
+    const voice = fakeVoice()
+    const states: ListenState[] = []
+    const listen = new GuidedListen({ audio, voice, moments: [spotlight], segments, sleep: async () => {}, onChange: (s) => states.push(s), goodbye: () => bye })
+    await listen.start(track, 12)
+    await audio.end()
+    expect(voice.played).toEqual(['bye.m4a'])
+    expect(listen.current.goodbye).toEqual({ text: 'Ha det gott!', meaning: 'Take care!' })
+    await voice.finishCurrent()
+    expect(listen.current.phase).toBe('finished')
+    expect(listen.current.goodbye).toBeUndefined()
+  })
+
+  it('stays quiet without the guide, and when the goodbye is missing or won’t play', async () => {
+    const quiet = setup([])
+    const audio = fakeAudio()
+    const unguided = new GuidedListen({ audio, voice: quiet.voice, moments: [], segments, sleep: async () => {}, goodbye: () => bye })
+    await unguided.start(track)
+    await audio.end()
+    expect(quiet.voice.played).toEqual([])
+    expect(unguided.current.phase).toBe('finished')
+
+    const a2 = fakeAudio()
+    const broken: typeof quiet.voice = { ...fakeVoice(), play: async () => { throw new Error('offline') } }
+    const l2 = new GuidedListen({ audio: a2, voice: broken, moments: [spotlight], segments, sleep: async () => {}, goodbye: () => bye })
+    await l2.start(track, 12)
+    await a2.end()
+    expect(l2.current.phase).toBe('finished')
+  })
+})

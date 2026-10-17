@@ -17,6 +17,7 @@ import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shar
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName } from '../../lib/languages'
+import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
 import { useSession } from '../../lib/session'
 import { resumePosition, savePosition } from '../../lib/data'
 import { listWords, saveWord } from '../../lib/words'
@@ -161,6 +162,7 @@ export default function Listen() {
   const [caughtAt, setCaughtAt] = useState<number[]>([])
   const [getReady, setGetReady] = useState<GetReadyStep>()
   const listen = useRef<GuidedListen | undefined>(undefined)
+  const goodbye = useRef<Goodbye | undefined>(undefined)
 
   const clipText = useCallback(
     (c: Clip) =>
@@ -216,6 +218,11 @@ export default function Listen() {
         const level = d.guidanceLevel ?? 'standard'
         const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
         const startAt = await resumePosition(id)
+        // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
+        goodbye.current = undefined
+        if (!config.demo && moments.length > 0) {
+          void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, profile?.guide_id ?? 'mia')).then((g) => (goodbye.current = g))
+        }
 
         const l = new GuidedListen({
           audio: config.demo ? demoAudio(d.episode.durationSec) : trackPlayerAudio(),
@@ -227,6 +234,7 @@ export default function Listen() {
             if (session) void savePosition(session.user.id, id, sec)
           },
           inForeground: () => AppState.currentState === 'active',
+          goodbye: () => goodbye.current,
         })
         listen.current = l
         setRemoteHandler((cmd) => void l.remote(cmd))
@@ -373,6 +381,17 @@ export default function Listen() {
       </View>
 
       <View style={{ paddingHorizontal: space.lg, gap: space.md }}>
+        {guideOn && state.goodbye ? (
+          <View accessible accessibilityLabel={`${guideName(profile?.guide_id)} says ${state.goodbye.text}, meaning ${state.goodbye.meaning}`} style={{ alignItems: 'center', gap: space.xs, paddingVertical: space.md }}>
+            <Mark height={28} flagId={profile?.flag_id} speaking accessibilityLabel="" />
+            <Txt variant="heading" style={{ textAlign: 'center' }}>
+              {state.goodbye.text}
+            </Txt>
+            <Txt tone="quiet" style={{ textAlign: 'center' }}>
+              {state.goodbye.meaning}
+            </Txt>
+          </View>
+        ) : null}
         {guideOn && state.moment ? (
           <GuideCard
             moment={state.moment}

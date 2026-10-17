@@ -6,6 +6,7 @@ import { ProviderError, type TextModel } from './providers/types'
 import { batchFirst } from './providers/geminiBatch'
 import { guideById } from './voices'
 import { ensureWelcomeAudio } from './welcome'
+import { ensureGoodbyeAudio } from './goodbye'
 import { POLYCAST_UA, safeFetch, type LookupHost } from './safeFetch'
 
 export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
@@ -162,6 +163,11 @@ export async function workLoop(deps: WorkerDeps, opts: { pollMs?: number; signal
     .then((g) => ensureWelcomeAudio({ speech: deps.speech, storage: deps.storage, guard: g, log: console.log }))
     .then((v) => v.length && console.log(`worker: voiced the welcome for ${v.join(', ')}`))
     .catch((e) => console.error('worker: welcome voicing failed', e instanceof Error ? e.message : e))
+  // And the goodbye in each language, for each guide (PC-1015-09).
+  await guard(deps)
+    .then((g) => ensureGoodbyeAudio({ speech: deps.speech, storage: deps.storage, guard: g, log: console.log }))
+    .then((v) => v.length && console.log(`worker: voiced the goodbye for ${v.join(', ')}`))
+    .catch((e) => console.error('worker: goodbye voicing failed', e instanceof Error ? e.message : e))
   const reclaim = async () => {
     if (Date.now() - lastReclaim <= 60_000) return
     lastReclaim = Date.now()
