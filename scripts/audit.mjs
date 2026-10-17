@@ -12,13 +12,33 @@ import { pathToFileURL } from 'node:url'
 export const SERVER_SIDE = ['server', 'packages/core']
 const BLOCKING = new Set(['high', 'critical'])
 
-/** Splits a `pnpm audit --json` report into what blocks the check and what is only reported. */
-export function triage(report) {
+/** Every `name@version` in a `pnpm list --json` tree. */
+export function packagesInTree(list) {
+  const out = new Set()
+  const walk = (deps) => {
+    for (const [name, d] of Object.entries(deps ?? {})) {
+      if (d?.version) out.add(`${name}@${d.version}`)
+      walk(d?.dependencies)
+    }
+  }
+  for (const project of Array.isArray(list) ? list : [list]) walk(project?.dependencies)
+  return out
+}
+
+/**
+ * Splits a `pnpm audit --json` report into what blocks the check and what is only reported.
+ * `serverPackages` (from `pnpm list` on the server's own workspaces) decides what the server runs;
+ * pnpm's audit doesn't always fill in `paths`, so they're only a fallback.
+ */
+export function triage(report, serverPackages) {
   const blocking = []
   const reported = []
   for (const a of Object.values(report?.advisories ?? {})) {
     const roots = new Set((a.findings ?? []).flatMap((f) => f.paths ?? []).map((p) => p.split(' > ')[0]))
-    const serverSide = SERVER_SIDE.some((w) => roots.has(w))
+    const versions = (a.findings ?? []).map((f) => f.version).filter(Boolean)
+    const inServerTree = serverPackages ? versions.some((v) => serverPackages.has(`${a.module_name}@${v}`)) : false
+    const serverSide = inServerTree || SERVER_SIDE.some((w) => roots.has(w))
+    if (!roots.size) roots.add(inServerTree ? 'server' : 'no paths')
     const line = `${a.severity} ${a.module_name} ${a.vulnerable_versions} (${[...roots].join(', ')}): ${a.title ?? ''} ${a.url ?? ''}`.trim()
     if (serverSide && BLOCKING.has(a.severity)) blocking.push(line)
     else reported.push(line)
@@ -45,7 +65,19 @@ function main() {
     console.log(`audit: skipped (${report.error.code ?? 'registry error'})`)
     return
   }
-  const { blocking, reported } = triage(report)
+  // What the server and @polycast/core actually run, asked of pnpm directly.
+  let serverPackages
+  try {
+    const list = execFileSync('pnpm', ['--filter', '@polycast/server', '--filter', '@polycast/core', 'list', '--prod', '--depth', 'Infinity', '--json'], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    serverPackages = packagesInTree(JSON.parse(list))
+  } catch {
+    console.log("audit: couldn't list the server's dependencies; going by the report's paths")
+  }
+  const { blocking, reported } = triage(report, serverPackages)
   for (const l of reported) console.log(`audit (not blocking): ${l}`)
   for (const l of blocking) console.error(`audit BLOCKING: ${l}`)
   if (blocking.length) process.exit(1)
