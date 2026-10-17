@@ -39,9 +39,13 @@ export async function buy(pkg: PurchasesPackage): Promise<boolean> {
   }
 }
 
-/** App Review requires a way to restore purchases on a new phone. */
-export async function restore(): Promise<boolean> {
-  if (!configured) return false
+/**
+ * App Review requires a way to restore purchases on a new phone. 'none' means the App Store answered
+ * and there's no Plus on this Apple account; anything that stopped it answering (a dropped signal)
+ * throws, so it's never mistaken for "nothing found".
+ */
+export async function restore(): Promise<'plus' | 'none'> {
+  if (!configured) return 'none'
   const info = await Purchases.restorePurchases()
-  return Boolean(info.entitlements.active[PLUS_ENTITLEMENT])
+  return info.entitlements.active[PLUS_ENTITLEMENT] ? 'plus' : 'none'
 }

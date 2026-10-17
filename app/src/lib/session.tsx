@@ -3,6 +3,7 @@ import * as AppleAuthentication from 'expo-apple-authentication'
 import * as Crypto from 'expo-crypto'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { config } from './config'
+import { PENDING_PLUS_MS, waitForServerPlus, withPendingPlus } from './plusPending'
 import { supabase } from './supabase'
 import { DEMO_PROFILE, DEMO_SESSION } from '../demo/session'
 
@@ -29,6 +30,8 @@ interface SessionValue {
   session: Session | null
   profile: Profile | null
   refreshProfile: () => Promise<void>
+  /** The App Store has just confirmed Plus: show it now and keep checking until the server agrees. */
+  confirmPlus: () => void
   updatePrefs: (prefs: ProfilePrefs) => Promise<void>
   signInWithApple: () => Promise<void>
   sendEmailCode: (email: string) => Promise<void>
@@ -42,11 +45,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [pendingPlusUntil, setPendingPlusUntil] = useState<number>()
 
-  const loadProfile = useCallback(async (s: Session | null) => {
-    if (!s) return setProfile(null)
+  const loadProfile = useCallback(async (s: Session | null): Promise<Profile | null> => {
+    if (!s) {
+      setProfile(null)
+      return null
+    }
     const { data } = await supabase.from('profiles').select('*').eq('id', s.user.id).maybeSingle()
     setProfile((data as Profile | null) ?? null)
+    return (data as Profile | null) ?? null
   }, [])
 
   useEffect(() => {
@@ -74,8 +82,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       session,
-      profile,
-      refreshProfile: () => loadProfile(session),
+      profile: withPendingPlus(profile, pendingPlusUntil),
+      refreshProfile: async () => void (await loadProfile(session)),
+      confirmPlus() {
+        setPendingPlusUntil(Date.now() + PENDING_PLUS_MS)
+        if (!session) return
+        void waitForServerPlus(async () => (await loadProfile(session))?.plan).then((agreed) => agreed && setPendingPlusUntil(undefined))
+      },
       async updatePrefs(prefs) {
         if (config.demo) return setProfile((p) => (p ? { ...p, ...prefs } : p))
         if (!session) return
@@ -110,7 +123,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut()
       },
     }),
-    [ready, session, profile, loadProfile],
+    [ready, session, profile, pendingPlusUntil, loadProfile],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

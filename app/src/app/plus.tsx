@@ -4,6 +4,7 @@ import { Linking, ScrollView, View } from 'react-native'
 import { Mark } from '../components/Mark'
 import { Button, Screen, Txt } from '../components/ui'
 import { buy, plusOffer, restore } from '../lib/purchases'
+import { RESTORE_MESSAGES, restoreErrorMessage } from '../lib/plusPending'
 import { useSession } from '../lib/session'
 import { useAsync } from '../lib/useAsync'
 import { space, usePalette } from '../theme'
@@ -17,7 +18,7 @@ const WHAT_YOU_GET = [
 /** Plus: €4.99 a month or €39 a year (spec: Plans), sold through the App Store. */
 export default function Plus() {
   const p = usePalette()
-  const { refreshProfile } = useSession()
+  const { confirmPlus } = useSession()
   const { data: offer, error } = useAsync(plusOffer, [])
   const [busy, setBusy] = useState<string>()
   const [message, setMessage] = useState<string>()
@@ -29,7 +30,8 @@ export default function Plus() {
     setMessage(undefined)
     try {
       if (await buy(pkg)) {
-        await refreshProfile()
+        // The App Store said yes: Plus shows now, and the app keeps checking until the server agrees.
+        confirmPlus()
         router.back()
       }
     } catch (e) {
@@ -79,12 +81,19 @@ export default function Plus() {
           <Button
             kind="quiet"
             label="Restore purchases"
+            busy={busy === 'restore'}
             onPress={async () => {
-              const ok = await restore().catch(() => false)
-              setMessage(ok ? undefined : 'No Plus subscription found for this Apple account.')
-              if (ok) {
-                await refreshProfile()
-                router.back()
+              setBusy('restore')
+              setMessage(undefined)
+              try {
+                if ((await restore()) === 'plus') {
+                  confirmPlus()
+                  router.back()
+                } else setMessage(RESTORE_MESSAGES.none)
+              } catch (e) {
+                setMessage(restoreErrorMessage(e))
+              } finally {
+                setBusy(undefined)
               }
             }}
             style={{ paddingHorizontal: 0 }}
