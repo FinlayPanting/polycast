@@ -129,3 +129,7 @@ Board item PC-1014-06. The wrap-up now offers "Share a line you caught": up to t
 ## 'Good first listen' on a show page (17 Oct 2026)
 
 Board item PC-1014-10. On a show's page, one of the latest five episodes gets a "Good first listen" tag (`goodFirstListen` in `@polycast/core`): first preference is one that fits in a sitting (30 minutes or less), then the easiest by its difficulty estimate (an episode not prepared yet, so with no estimate, counts between moderate and challenging), then the shorter, then the newer. Simplest options picked: it's shown to everyone, not only learners who haven't listened yet, and nothing is tagged when a show lists fewer than two episodes. Computed on the phone from the listing the server already sends; no AI cost.
+
+## Stems slide out of the pole (17 Oct 2026)
+
+Board item PC-1014-F1, Finlay's idea from his scrapped stem logo (Group 2). The mark can now "arrive": the coral, magenta and violet stems start tucked behind the orange pole, each peeking a little further out below it, then slide out one after another into the full mark (`arrive` on `Mark`; geometry in `app/src/lib/markGeometry.ts`). Simplest placement picked: the welcome screen only, the first thing a new learner sees; it plays once and is skipped when iOS's Reduce Motion is on. The exact stem offsets are drawn from the live mark's geometry, not traced from Group 2.svg (not in the repo), so Finlay may want to tune `PEEK`.

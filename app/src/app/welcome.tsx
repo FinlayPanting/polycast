@@ -16,7 +16,7 @@ export default function Welcome() {
   return (
     <Screen edges={['top', 'bottom']} style={{ paddingHorizontal: space.lg }}>
       <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
-        <Mark height={96} speaking />
+        <Mark height={96} speaking arrive />
         <Txt variant="title" style={{ fontSize: 40, lineHeight: 44 }}>
           Polycast
         </Txt>
