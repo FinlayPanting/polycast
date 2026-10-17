@@ -2,7 +2,7 @@ import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wor
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Modal, Pressable, ScrollView, View } from 'react-native'
+import { AppState, Modal, Pressable, ScrollView, Share, View } from 'react-native'
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
@@ -12,6 +12,7 @@ import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { plusInvite } from '../../lib/plusInvite'
+import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName } from '../../lib/languages'
@@ -72,14 +73,39 @@ function WordSheet({ word, onSave, onClose, saved }: { word?: { form: string; le
   )
 }
 
+/** A line the learner caught, as a card they can share: it credits the show and points to Polycast. */
+function ShareLines({ lines, data }: { lines: ShareableLine[]; data: ListenPayload }) {
+  const p = usePalette()
+  const [i, setI] = useState(0)
+  const line = lines[Math.min(i, lines.length - 1)]!
+  return (
+    <View style={{ gap: space.sm }}>
+      <Txt variant="heading">Share a line you caught</Txt>
+      <View style={{ backgroundColor: p.raised, borderRadius: 18, padding: space.md, gap: space.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Artwork uri={data.episode.image} size={44} radius={10} />
+          <Txt variant="small" tone="quiet" numberOfLines={2} style={{ flex: 1 }}>
+            Caught on Polycast, from {data.episode.podcastTitle}
+          </Txt>
+        </View>
+        <Txt variant="bodyStrong">“{line.text}”</Txt>
+        <Txt tone="quiet">{line.translation}</Txt>
+      </View>
+      {lines.length > 1 ? <Button kind="quiet" label="Another line" onPress={() => setI((n) => (n + 1) % lines.length)} /> : null}
+      <Button kind="secondary" label="Share this line" onPress={() => void Share.share({ message: shareMessage(line, data.episode.podcastTitle) }).catch(() => {})} />
+    </View>
+  )
+}
+
 /** After the episode: the wrap-up questions and the words gathered on the way. */
-function WrapUp({ data, savedThisListen, listenedSec, onDone }: { data: ListenPayload; savedThisListen: string[]; listenedSec: number; onDone: () => void }) {
+function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data: ListenPayload; savedThisListen: string[]; caughtAt: number[]; listenedSec: number; onDone: () => void }) {
   const p = usePalette()
   const questions = data.plan?.wrapUpQuestions ?? []
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const right = Object.entries(answers).filter(([i, a]) => questions[Number(i)]?.answerIndex === a).length
   const all = questions.length > 0 && Object.keys(answers).length === questions.length
   const invite = plusInvite(data.freeEpisode, listenedSec, savedThisListen.length)
+  const lines = useMemo(() => shareableLines(data.transcript.segments, caughtAt), [data, caughtAt])
   return (
     <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
       <Mark height={44} />
@@ -107,6 +133,7 @@ function WrapUp({ data, savedThisListen, listenedSec, onDone }: { data: ListenPa
           </Txt>
         </View>
       ) : null}
+      {lines.length ? <ShareLines lines={lines} data={data} /> : null}
       {invite ? (
         <View style={{ backgroundColor: p.raised, borderRadius: 18, padding: space.md, gap: space.sm }}>
           <Txt>{invite.summary}</Txt>
@@ -129,6 +156,8 @@ export default function Listen() {
   const [oldFriends, setOldFriends] = useState<Set<number>>(new Set())
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
   const [saved, setSaved] = useState<string[]>([])
+  // When in the episode the learner caught a word (saved it, or the guide taught it): lines to share.
+  const [caughtAt, setCaughtAt] = useState<number[]>([])
   const [getReady, setGetReady] = useState<GetReadyStep>()
   const listen = useRef<GuidedListen | undefined>(undefined)
 
@@ -146,6 +175,7 @@ export default function Listen() {
       if (!session || !data) return
       await saveWord(session.user.id, { lemma, form, meaning, language: data.transcript.language, episodeId: data.episode.id, clip, sentence }).catch(() => {})
       setSaved((s) => (s.includes(lemma) ? s : [...s, lemma]))
+      setCaughtAt((c) => (c.includes(clip.start) ? c : [...c, clip.start]))
     },
     [session, data],
   )
@@ -266,7 +296,7 @@ export default function Listen() {
       </Screen>
     )
   }
-  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={close} /></Screen>
+  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={close} /></Screen>
 
   const l = listen.current
   const guideOn = state.phase === 'guide' || state.phase === 'question'
