@@ -204,6 +204,24 @@ run('API and worker', () => {
     expect(await sql`select 1 from episodes where id = ${ep!.id}`).toHaveLength(1)
   })
 
+  it('serves prepared lessons as readable pages, only with the admin token', async () => {
+    const admin = createApi({ sql, verify: async () => undefined, fetch: fakeFetch, funnelToken: 't0ken' })
+    expect((await admin.request('/admin/lessons')).status).toBe(401)
+    expect((await admin.request('/admin/lessons?token=wrong')).status).toBe(401)
+    const { lessons } = await (await admin.request('/admin/lessons?token=t0ken')).json()
+    const tåget = lessons.find((l: any) => l.title === 'Tåget')
+    expect(tåget).toMatchObject({ podcast_title: 'Svenska Samtal', plans: 1 })
+    const page = await admin.request(`/admin/lessons/${tåget.id}`, { headers: { Authorization: 'Bearer t0ken' } })
+    expect(page.status).toBe(200)
+    expect(page.headers.get('Content-Type')).toContain('text/markdown')
+    const text = await page.text()
+    expect(text).toContain('# Svenska Samtal: Tåget')
+    expect(text).toContain('## Moments')
+    expect(text).toContain('**Guide:**')
+    expect((await admin.request(`/admin/lessons/${randomUUID()}?token=t0ken`)).status).toBe(404)
+    expect((await admin.request('/admin/lessons/not-an-id?token=t0ken')).status).toBe(404)
+  })
+
   it('accepts a creator’s removal request without an account, and alerts Finlay', async () => {
     const res = await api().request('/removal-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastTitle: 'Svenska Samtal', contact: 'anna@example.com' }) })
     expect(res.status).toBe(200)

@@ -7,6 +7,7 @@ import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, type Sql } from './db'
 import { discoverShelves } from './discover'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
+import { lessonPage, recentLessons } from './lessons'
 import { guideById } from './voices'
 import { clientAddress, rateLimiter } from './rateLimit'
 
@@ -94,13 +95,31 @@ export function createApi(deps: ApiDeps) {
   /** The weekly drop-off funnel, as counts. `week` is a Monday (YYYY-MM-DD); defaults to last week. */
   // The token can also come as ?token=, because the morning email's fetch tool can't send headers.
   // It only unlocks these counts (no personal data, read-only), so a token in a URL is acceptable here.
-  app.get('/admin/funnel', async (c) => {
+  const adminAllowed = (c: Context) => {
     const given = c.req.header('Authorization')?.replace(/^Bearer /, '') ?? c.req.query('token')
-    if (!deps.funnelToken || !given || !safeEqual(given, deps.funnelToken)) return c.json({ error: 'unauthorised' }, 401)
+    return Boolean(deps.funnelToken && given && safeEqual(given, deps.funnelToken))
+  }
+  app.get('/admin/funnel', async (c) => {
+    if (!adminAllowed(c)) return c.json({ error: 'unauthorised' }, 401)
     const week = c.req.query('week') ?? lastMonday(new Date())
     if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return c.json({ error: 'week must be YYYY-MM-DD' }, 400)
     const funnel = await weeklyFunnel(sql, week)
     return c.json({ funnel, text: funnelText(funnel) })
+  })
+
+  // Lessons as readable pages, so Claude and Finlay can review what the guide actually says.
+  // Same token as the funnel: lesson plans are shared catalogue content, with no learner data.
+  app.get('/admin/lessons', async (c) => {
+    if (!adminAllowed(c)) return c.json({ error: 'unauthorised' }, 401)
+    return c.json({ lessons: await recentLessons(sql) })
+  })
+  app.get('/admin/lessons/:episodeId', async (c) => {
+    if (!adminAllowed(c)) return c.json({ error: 'unauthorised' }, 401)
+    const id = c.req.param('episodeId')
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return c.json({ error: 'Not found' }, 404)
+    const page = await lessonPage(sql, id, c.req.query('guide'))
+    if (!page) return c.json({ error: 'Not found' }, 404)
+    return c.body(page, 200, { 'Content-Type': 'text/markdown; charset=utf-8' })
   })
 
   /** SQL condition: does a purchase at `at` start a new Plus period for this profile? */
