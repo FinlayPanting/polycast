@@ -72,6 +72,10 @@ export class GuidedListen {
   private skipRequested = false
   private answerWaiter: ((index: number) => void) | undefined
   private lastSaved = 0
+  /** Paused while the guide had the floor: the guide waits here until play. */
+  private hold: { promise: Promise<void>; release: () => void; phase: 'guide' | 'question' } | undefined
+  /** The guide's line (or host clip) in progress was cut short by a pause, so it plays again. */
+  private interrupted = false
 
   constructor(private readonly o: ListenOptions) {
     this.timeline = new GuideTimeline(o.moments)
@@ -128,21 +132,28 @@ export class GuidedListen {
     await this.sleep(BREATH_BEFORE_GUIDE_MS)
 
     for (const m of due) {
+      await this.waitIfHeld()
       this.timeline.markPlayed(m.id)
       this.skipRequested = false
       this.set({ phase: 'guide', moment: m, answer: undefined })
       const steps = playSteps(m)
-      for (const [i, step] of steps.entries()) {
+      for (let i = 0; i < steps.length; ) {
+        const step = steps[i]!
         if (this.skipRequested) break
         const prev = steps[i - 1]
         if (prev) await this.sleep(step.kind === 'clip' ? GAP_BEFORE_CLIP_MS : prev.kind === 'clip' ? GAP_AFTER_CLIP_MS : GAP_BETWEEN_LINES_MS)
+        await this.waitIfHeld()
         if (this.skipRequested) break
+        this.interrupted = false
         if (step.kind === 'speech') {
           trace(`  guide speaks (${step.durationSec ? fmt(step.durationSec) + 's' : 'length unknown'})`)
           const said = Date.now()
           await this.o.voice.play(step.url)
           trace(`  guide finished after ${fmt((Date.now() - said) / 1000)}s`)
         } else await this.playClip(step.start, step.end)
+        // Paused part-way: once the learner presses play, this line starts again from its beginning.
+        if (this.interrupted) continue
+        i++
       }
       if (m.waits && m.question && !this.skipRequested && this.o.inForeground && !this.o.inForeground()) {
         trace('  question asked with the phone locked: not waiting for an answer')
@@ -152,13 +163,16 @@ export class GuidedListen {
         const index = await new Promise<number>((resolve) => (this.answerWaiter = resolve))
         this.answerWaiter = undefined
         if (index >= 0) {
-          this.set({ phase: 'question', moment: m, answer: { index, correct: index === m.question.answerIndex } })
+          // Answered while paused: show it, but stay paused so play still means play.
+          this.set({ phase: this.hold ? 'paused' : 'question', moment: m, answer: { index, correct: index === m.question.answerIndex } })
           await this.sleep(1600) // long enough to see whether it was right
         }
       }
     }
 
     if (this.state.phase === 'finished') return
+    // Paused during the guide (an answer can still arrive while paused): the episode waits for play.
+    await this.waitIfHeld()
     // Where the learner moved the playhead wins; otherwise pick up a little before where we stopped
     // (not for the warm-up at the very start).
     const back = this.resumeOverride ?? (resumeAt > PICK_UP_BEFORE_SEC + 1 ? resumeAt - PICK_UP_BEFORE_SEC : resumeAt)
@@ -210,9 +224,13 @@ export class GuidedListen {
 
   // ---------------------------------------------------------------- learner actions
 
-  /** Skip whatever the guide is saying and go back to the episode. */
+  private async waitIfHeld(): Promise<void> {
+    while (this.hold) await this.hold.promise
+  }
+
+  /** Skip whatever the guide is saying and go back to the episode (after play, if paused). */
   skipGuide(): void {
-    if (this.state.phase !== 'guide' && this.state.phase !== 'question') return
+    if (this.state.phase !== 'guide' && this.state.phase !== 'question' && !this.hold) return
     this.skipRequested = true
     this.o.voice.stop()
     this.endClip()
@@ -224,6 +242,20 @@ export class GuidedListen {
   }
 
   async pause(): Promise<void> {
+    if ((this.state.phase === 'guide' || this.state.phase === 'question') && !this.hold) {
+      // The guide stops mid-sentence and the episode holds; play picks up with the same moment.
+      let release = () => {}
+      const promise = new Promise<void>((r) => (release = r))
+      this.hold = { promise, release, phase: this.state.phase }
+      this.interrupted = true
+      trace(`paused during the guide (${this.state.moment?.id ?? '?'})`)
+      this.o.voice.stop()
+      if (this.clipEnd) this.endClip('paused')
+      await this.o.audio.pause()
+      this.set({ phase: 'paused' })
+      this.o.onSavePosition?.(this.state.position)
+      return
+    }
     if (this.state.phase !== 'playing') return
     await this.o.audio.pause()
     this.set({ phase: 'paused' })
@@ -231,13 +263,20 @@ export class GuidedListen {
   }
 
   async resume(): Promise<void> {
+    const held = this.hold
+    if (held) {
+      this.hold = undefined
+      this.set({ phase: held.phase })
+      held.release()
+      return
+    }
     if (this.state.phase !== 'paused') return
     this.set({ phase: 'playing' })
     await this.o.audio.play()
   }
 
   async seek(to: number): Promise<void> {
-    if (this.state.phase === 'guide' || this.state.phase === 'question') {
+    if (this.state.phase === 'guide' || this.state.phase === 'question' || this.hold) {
       // The guide stops and the episode picks up where the learner moved it, not where it paused.
       this.resumeOverride = to
       this.skipGuide()
@@ -258,7 +297,7 @@ export class GuidedListen {
    * place in the episode. Does nothing while the guide is already speaking.
    */
   async replayMoment(m: GuideMoment): Promise<void> {
-    if (this.state.phase !== 'playing' && this.state.phase !== 'paused') return
+    if ((this.state.phase !== 'playing' && this.state.phase !== 'paused') || this.hold) return
     await this.runMoments([m])
   }
 
@@ -273,7 +312,7 @@ export class GuidedListen {
     if (cmd === 'pause') return this.pause()
     if (cmd === 'previous') return this.replayLine()
     if (cmd === 'next') {
-      if (this.state.phase === 'guide' || this.state.phase === 'question') return this.skipGuide()
+      if (this.state.phase === 'guide' || this.state.phase === 'question' || this.hold) return this.skipGuide()
       return this.seek((await this.o.audio.position()) + 30)
     }
     return this.seek(cmd.seek)
