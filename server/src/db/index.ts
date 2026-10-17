@@ -316,7 +316,7 @@ export async function guideAllowed(sql: Sql, userId: string, episodeId: string, 
   const [profile] = await sql`select plan from profiles where id = ${userId}`
   if (!profile) return false
   const [existing] = await sql`select guided from listens where user_id = ${userId} and episode_id = ${episodeId}`
-  const [count] = await sql`select count(*)::int as n from listens where user_id = ${userId} and guided and started_at >= ${weekStartUTC(new Date())}`
+  const [count] = await sql`select count(*)::int as n from listens where user_id = ${userId} and guided and guided_at >= ${weekStartUTC(new Date())}`
   return mayUseGuide(profile.plan, count!.n, Boolean(existing?.guided))
 }
 
@@ -326,12 +326,14 @@ export async function startListen(sql: Sql, userId: string, episodeId: string, g
     if (!profile) throw new Error('No such learner')
     const [existing] = await tx`select guided from listens where user_id = ${userId} and episode_id = ${episodeId}`
     const week = weekStartUTC(new Date())
-    const [count] = await tx`select count(*)::int as n from listens where user_id = ${userId} and guided and started_at >= ${week}`
+    // Counted by the week the guide was first switched on for each episode, not when it was first opened.
+    const [count] = await tx`select count(*)::int as n from listens where user_id = ${userId} and guided and guided_at >= ${week}`
     const wantsGuide = guidanceLevel !== null
     const guided = wantsGuide && mayUseGuide(profile.plan, count!.n, Boolean(existing?.guided))
     await tx`
-      insert into listens (user_id, episode_id, guided, guidance_level) values (${userId}, ${episodeId}, ${guided}, ${guided ? guidanceLevel : null})
+      insert into listens (user_id, episode_id, guided, guidance_level, guided_at) values (${userId}, ${episodeId}, ${guided}, ${guided ? guidanceLevel : null}, ${guided ? tx`now()` : null})
       on conflict (user_id, episode_id) do update set guided = listens.guided or excluded.guided, updated_at = now(),
+        guided_at = case when listens.guided then listens.guided_at else excluded.guided_at end,
         guidance_level = coalesce(excluded.guidance_level, listens.guidance_level)`
     return { guided }
   })

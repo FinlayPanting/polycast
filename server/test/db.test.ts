@@ -350,6 +350,29 @@ run('database', () => {
       expect(await startListen(sql, a, e1, 'standard')).toEqual({ guided: true })
       expect(await startListen(sql, a, e2, null)).toEqual({ guided: false })
     })
+
+    it("can't be slipped across weeks: episodes opened without the guide earlier still count when it's switched on", async () => {
+      const a = await learner()
+      const eps = [await episode(), await episode(), await episode()]
+      for (const e of eps) expect(await startListen(sql, a, e, null)).toEqual({ guided: false })
+      await sql`update listens set started_at = now() - interval '8 days' where user_id = ${a}`
+      const guided = []
+      for (const e of eps) guided.push((await startListen(sql, a, e, 'standard')).guided)
+      expect(guided).toEqual([true, false, false])
+      const [row] = await sql`select guided_at from listens where user_id = ${a} and episode_id = ${eps[0]!}`
+      expect(row!.guided_at).not.toBeNull()
+    })
+
+    it("keeps the week the guide was first switched on, and last week's guided episode doesn't use up this week's", async () => {
+      const a = await learner()
+      const [old, fresh] = [await episode(), await episode()]
+      expect(await startListen(sql, a, old, 'standard')).toEqual({ guided: true })
+      await sql`update listens set started_at = now() - interval '8 days', guided_at = now() - interval '8 days' where user_id = ${a}`
+      expect(await startListen(sql, a, old, 'standard')).toEqual({ guided: true }) // still guided on replay
+      const [row] = await sql`select guided_at < now() - interval '7 days' as kept from listens where user_id = ${a} and episode_id = ${old}`
+      expect(row!.kept).toBe(true)
+      expect(await startListen(sql, a, fresh, 'standard')).toEqual({ guided: true })
+    })
   })
 
   describe('spending ledger', () => {

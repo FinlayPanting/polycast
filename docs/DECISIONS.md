@@ -161,3 +161,7 @@ Board item PC-1015-09. After the wrap-up of a guided episode, Mia or Leo says on
 ## Crash reports from the first TestFlight (17 Oct 2026)
 
 Board item PC-1015-10. The app uses EAS Observe (`expo-observe` 57.0.25, Expo's own service, free plan up to 100,000 events a month): the root layout is wrapped in `ObserveRoot` and configured in `app/src/lib/observe.ts` with expo-router timings, nothing about the learner attached, and nothing sent from debug builds; Finlay's personal-team test builds report under the `test` environment. Reports go to the app's EAS project, which exists once `eas init` has linked the app (needed for the first TestFlight build anyway); until then the native module finds no project id and sends nothing. App Store privacy answers gain Crash Data and Performance Data, not linked to the user (docs/APP_STORE.md). Simplest option picked: no in-app setting to turn it off, as no personal data is sent.
+
+## The free guide is counted by the week it was switched on (17 Oct 2026)
+
+Board item PC-1016-01. A free learner's one guided episode a week is now counted by `listens.guided_at`, the moment the guide was first switched on for that episode (migration 0008), not by when the episode was first opened. Before, an episode opened without the guide in an earlier week could get it later without counting, so a learner could have several guided episodes a week. Replaying a guided episode keeps its original week. Existing guided listens are backfilled with their start time. No change to the allowance itself.
