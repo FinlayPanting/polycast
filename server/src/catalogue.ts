@@ -1,5 +1,7 @@
 import {
   appleChartUrl,
+  cleanDescription,
+  feedDescriptionFromHead,
   CHART_COUNTRY,
   feedLanguageFromHead,
   interestQueries,
@@ -42,19 +44,19 @@ export async function syncFeed(
   const feed = parseFeed(new TextDecoder().decode(res.body))
   const language = feed.language ?? null
   const [p] = await sql`
-    insert into podcasts (apple_id, feed_url, title, author, artwork, language)
-    values (${apple?.appleId ?? null}, ${feedUrl}, ${feed.title}, ${feed.author ?? apple?.author ?? null}, ${apple?.artwork || feed.image || null}, ${language})
+    insert into podcasts (apple_id, feed_url, title, author, artwork, language, description)
+    values (${apple?.appleId ?? null}, ${feedUrl}, ${feed.title}, ${feed.author ?? apple?.author ?? null}, ${apple?.artwork || feed.image || null}, ${language}, ${cleanDescription(feed.description) ?? null})
     on conflict (feed_url) do update set
-      title = excluded.title, author = excluded.author, artwork = coalesce(excluded.artwork, podcasts.artwork),
+      title = excluded.title, description = coalesce(excluded.description, podcasts.description), author = excluded.author, artwork = coalesce(excluded.artwork, podcasts.artwork),
       language = coalesce(excluded.language, podcasts.language), apple_id = coalesce(excluded.apple_id, podcasts.apple_id), updated_at = now()
     returning id, language`
   const podcastId = p!.id as string
   const recent = feed.episodes.filter((e) => e.durationSec && e.durationSec > 0).slice(0, EPISODES_KEPT)
   for (const e of recent) {
     await sql`
-      insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, image, language)
-      values (${podcastId}, ${e.guid}, ${e.title}, ${e.published ?? null}, ${e.durationSec!}, ${e.audioUrl}, ${e.image ?? null}, ${p!.language ?? 'und'})
-      on conflict (podcast_id, guid) do update set title = excluded.title, audio_url = excluded.audio_url, image = excluded.image,
+      insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, image, language, description)
+      values (${podcastId}, ${e.guid}, ${e.title}, ${e.published ?? null}, ${e.durationSec!}, ${e.audioUrl}, ${e.image ?? null}, ${p!.language ?? 'und'}, ${cleanDescription(e.description) ?? null})
+      on conflict (podcast_id, guid) do update set title = excluded.title, audio_url = excluded.audio_url, image = excluded.image, description = excluded.description,
         duration_sec = case when episodes.status = 'none' then excluded.duration_sec else episodes.duration_sec end`
   }
   return { podcastId, feed }
@@ -105,8 +107,8 @@ const FEED_HEAD_BYTES = 64 * 1024
 const FEED_CHECK_CONCURRENCY = 8
 const FEED_CHECK_TIMEOUT_MS = 8000
 
-/** Reads just the start of a feed and returns the language its channel declares. */
-async function feedLanguage(f: Fetch, feedUrl: string): Promise<string | undefined> {
+/** Reads just the start of a feed and returns the language its channel declares, and its description. */
+async function feedHead(f: Fetch, feedUrl: string): Promise<{ language?: string; description?: string } | undefined> {
   const res = await f(feedUrl, { headers: { 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' }, signal: AbortSignal.timeout(FEED_CHECK_TIMEOUT_MS) })
   if (!res.ok || !res.body) return undefined
   const reader = res.body.getReader()
@@ -122,7 +124,7 @@ async function feedLanguage(f: Fetch, feedUrl: string): Promise<string | undefin
   } finally {
     reader.cancel().catch(() => {})
   }
-  return feedLanguageFromHead(head)
+  return { language: feedLanguageFromHead(head), description: feedDescriptionFromHead(head) }
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -152,26 +154,29 @@ export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSumm
     if (!res.ok) throw new Error(`Apple lookup returned ${res.status}`)
     for (const r of parseItunesResults(await res.json())) if (r.feedUrl) feeds.set(r.appleId, r.feedUrl)
   }
-  const known = new Map<string, string>()
+  const known = new Map<string, { language: string; description?: string }>()
   const feedUrls = [...feeds.values()]
   if (feedUrls.length) {
-    const rows = await sql`select feed_url, language from podcasts where feed_url in ${sql(feedUrls)} and language is not null`
-    for (const r of rows) known.set(r.feed_url, r.language)
+    const rows = await sql`select feed_url, language, description from podcasts where feed_url in ${sql(feedUrls)} and language is not null`
+    for (const r of rows) known.set(r.feed_url, { language: r.language, description: r.description ?? undefined })
   }
-  const languages = await mapLimit(shows, FEED_CHECK_CONCURRENCY, async (s) => {
+  const heads = await mapLimit(shows, FEED_CHECK_CONCURRENCY, async (s) => {
     const feedUrl = feeds.get(s.appleId)
     if (!feedUrl) return undefined
-    return known.get(feedUrl) ?? (await feedLanguage(f, feedUrl).catch(() => undefined))
+    return known.get(feedUrl) ?? (await feedHead(f, feedUrl).catch(() => undefined))
   })
-  return shows.filter((_, i) => languages[i] === language).map((s) => ({ ...s, feedUrl: feeds.get(s.appleId) }))
+  return shows
+    .map((s, i) => ({ s, head: heads[i] }))
+    .filter(({ head }) => head?.language === language)
+    .map(({ s, head }) => ({ ...s, feedUrl: feeds.get(s.appleId), ...(head?.description ? { description: head.description } : {}) }))
 }
 
 /** The Top charts shelf: Apple's charts for the language's countries, only shows in that language. */
 export function topChart(sql: Sql, f: Fetch, language: string): Promise<PodcastSummary[]> {
   const countries = TOP_CHART_COUNTRIES[language]
   if (!countries?.length) return Promise.resolve([])
-  // A new cache key, so charts cached before shows carried their chart place aren't served.
-  return cachedChart(sql, language, 'top:in-language:ranked', async () => {
+  // A new cache key (v2), so charts cached before shows carried their description aren't served.
+  return cachedChart(sql, language, 'top:in-language:v2', async () => {
     const charts = await Promise.all(
       countries.map(async (country) => {
         const res = await f(appleChartUrl(country, 50))

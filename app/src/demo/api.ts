@@ -3,6 +3,14 @@ import { LISTEN, SHELVES, art } from './fixtures'
 /** Answers the app's API calls with sample data in demo mode. */
 export async function demoCall<T>(method: string, path: string): Promise<T> {
   await new Promise((r) => setTimeout(r, 120))
+  if (path.startsWith('/v1/discover/') && path.endsWith('/mood'))
+    return {
+      mood: 'Something calm',
+      picks: [
+        { kind: 'episode', episodeId: 'ep1', podcastId: 'p1', title: 'Tåget till Göteborg', podcastTitle: 'Svenska Samtal', artwork: art.samtal, why: 'Two friends chatting on a slow train: easy to follow and very relaxed.' },
+        { kind: 'show', podcastId: 'p1', title: 'Svenska Samtal', author: 'Anna & Erik', artwork: art.samtal, why: 'Gentle everyday conversations, at a pace that leaves room to think.' },
+      ],
+    } as T
   if (path.startsWith('/v1/discover/')) return { shelves: SHELVES } as T
   if (path.startsWith('/v1/episodes/') && path.endsWith('/listen')) return LISTEN as T
   if (path === '/v1/podcasts/open')
