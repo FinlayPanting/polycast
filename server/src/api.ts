@@ -45,6 +45,14 @@ type Env = { Variables: { userId: string } }
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
 
+/**
+ * Fair-use limits per signed-in learner, per minute. Each of these calls reaches outside services
+ * (Apple, Podcast Index, the show's feed, the preparation queue), so one script or a broken build
+ * can't hammer them on Polycast's behalf. Generous enough that a person never notices.
+ */
+export const LEARNER_LIMITS = { searchPerMinute: 30, openPerMinute: 30, preparePerMinute: 10, searchMaxChars: 100 }
+export const SLOW_DOWN = 'Give it a moment, then try again.'
+
 export function createApi(deps: ApiDeps) {
   const { sql } = deps
   const app = new Hono<Env>()
@@ -126,6 +134,10 @@ export function createApi(deps: ApiDeps) {
     return c.json({ ok: true })
   })
 
+  const searchLimit = rateLimiter(LEARNER_LIMITS.searchPerMinute, 60_000)
+  const openLimit = rateLimiter(LEARNER_LIMITS.openPerMinute, 60_000)
+  const prepareLimit = rateLimiter(LEARNER_LIMITS.preparePerMinute, 60_000)
+
   // Everything below needs a signed-in learner.
   app.use('/v1/*', async (c, next) => {
     const auth = c.req.header('Authorization')
@@ -148,14 +160,16 @@ export function createApi(deps: ApiDeps) {
   })
 
   app.get('/v1/search', async (c) => {
-    const q = c.req.query('q')?.trim()
+    const q = c.req.query('q')?.trim().slice(0, LEARNER_LIMITS.searchMaxChars)
     const language = c.req.query('language') ?? 'sv'
     if (!q) return c.json({ results: [] })
+    if (!searchLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
     return c.json({ results: await searchPodcasts(deps.fetch, q, language) })
   })
 
   /** A show's page: syncs its feed and returns recent episodes with whether each is ready. */
   app.post('/v1/podcasts/open', async (c) => {
+    if (!openLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
     const body = await c.req.json()
     let feedUrl: string | undefined = body.feedUrl
     if (!feedUrl && body.podcastId) feedUrl = (await sql`select feed_url from podcasts where id = ${body.podcastId}`)[0]?.feed_url
@@ -180,6 +194,7 @@ export function createApi(deps: ApiDeps) {
 
   app.post('/v1/episodes/:id/prepare', async (c) => {
     const userId = c.get('userId')
+    if (!prepareLimit.hit(userId)) return c.json({ error: SLOW_DOWN }, 429)
     const [profile] = await sql`select guide_id from profiles where id = ${userId}`
     const guideId = guideById(profile?.guide_id).id
     const claimedBefore = await freeEpisodesClaimed(sql)

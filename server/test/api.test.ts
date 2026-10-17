@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi } from '../src/api'
+import { createApi, LEARNER_LIMITS, SLOW_DOWN } from '../src/api'
 import { runJob, showNamesFor } from '../src/worker'
 import { claimNextJob, type Sql } from '../src/db'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
@@ -225,6 +225,38 @@ run('API and worker', () => {
     // Someone else can still reach Finlay.
     expect((await send({ podcastTitle: 'Show', contact: 'c@d.e' }, '198.51.100.9')).status).toBe(200)
     expect(alerts.filter((a) => a.startsWith('removal:')).length - before).toBe(6)
+  })
+
+  it('keeps each learner to a fair pace on search, show pages and preparing', async () => {
+    const seen: string[] = []
+    const counting: typeof fetch = async (input, init) => {
+      seen.push(String(input))
+      if (String(input).includes('itunes.apple.com/search')) return Response.json({ results: [] })
+      return fakeFetch(input, init)
+    }
+    const limited = createApi({ sql, verify: async (t) => t, fetch: counting, lookupHost: publicHost })
+    const ask = (userId: string, path: string, method = 'GET', body?: unknown) =>
+      limited.request(path, { method, headers: { Authorization: `Bearer ${userId}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+    const ola = await learner()
+    const kim = await learner()
+    for (let i = 0; i < LEARNER_LIMITS.searchPerMinute; i++) expect((await ask(ola, '/v1/search?q=fika&language=sv')).status).toBe(200)
+    const slow = await ask(ola, '/v1/search?q=fika&language=sv')
+    expect(slow.status).toBe(429)
+    expect((await slow.json()).error).toBe(SLOW_DOWN)
+    // Another learner isn't held up.
+    expect((await ask(kim, '/v1/search?q=fika&language=sv')).status).toBe(200)
+    // A very long search is cut to a sensible length before it reaches anyone else.
+    seen.length = 0
+    await ask(kim, `/v1/search?q=${'a'.repeat(5000)}&language=sv`)
+    expect(seen.length).toBeGreaterThan(0)
+    for (const url of seen) expect(url).not.toContain('a'.repeat(LEARNER_LIMITS.searchMaxChars + 1))
+
+    for (let i = 0; i < LEARNER_LIMITS.openPerMinute; i++) expect((await ask(kim, '/v1/podcasts/open', 'POST', { feedUrl: FEED_URL })).status).not.toBe(429)
+    expect((await ask(kim, '/v1/podcasts/open', 'POST', { feedUrl: FEED_URL })).status).toBe(429)
+
+    const ep = (await sql`select e.id from episodes e join podcasts p on p.id = e.podcast_id where p.feed_url = ${FEED_URL} limit 1`)[0]!.id
+    for (let i = 0; i < LEARNER_LIMITS.preparePerMinute; i++) expect((await ask(ola, `/v1/episodes/${ep}/prepare`, 'POST')).status).not.toBe(429)
+    expect((await ask(ola, `/v1/episodes/${ep}/prepare`, 'POST')).status).toBe(429)
   })
 
   it('gives a fresh 5 Plus hours once per paid month, however often RevenueCat repeats an event', async () => {
