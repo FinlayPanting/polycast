@@ -132,6 +132,8 @@ export interface PodcastSummary {
   artwork: string
   feedUrl?: string
   genres: string[]
+  /** The show's own description from its feed, cleaned, when Polycast has read it. */
+  description?: string
   /** Its place in a country's Apple top chart, when it came from one. */
   chart?: { rank: number; country: string }
 }
@@ -263,6 +265,7 @@ export interface TrendingPodcast {
   feedUrl: string
   language?: string
   categories: string[]
+  description?: string
 }
 
 export function podcastIndexTrendingUrl(language: string, category?: string, max = 50): string {
@@ -278,6 +281,7 @@ export function parsePodcastIndexTrending(json: any): TrendingPodcast[] {
     feedUrl: f.url,
     language: f.language?.toLowerCase().split('-')[0],
     categories: Object.values(f.categories ?? {}) as string[],
+    ...(f.description ? { description: String(f.description).slice(0, 2000) } : {}),
   }))
 }
 

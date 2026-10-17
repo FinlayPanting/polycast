@@ -7,7 +7,7 @@ import { freshDatabase, PG_TEST_URL } from './pg'
 const run = PG_TEST_URL ? describe : describe.skip
 
 const feed = (lang: string | null) =>
-  `<?xml version="1.0"?><rss><channel><title>Show</title>${lang ? `<language>${lang}</language>` : ''}<item><title>Ep</title><language>sv</language></item></channel></rss>`
+  `<?xml version="1.0"?><rss><channel><title>Show</title>${lang ? `<language>${lang}</language>` : ''}<description>&lt;p&gt;A show in ${lang}.&lt;/p&gt;</description><item><title>Ep</title><language>sv</language></item></channel></rss>`
 
 /** Apple charts per country, lookups for any ids, and a feed per show whose language is in its id. */
 function fakeApple(charts: Record<string, string[]>, calls: string[] = []): typeof fetch {
@@ -52,6 +52,8 @@ run('Top charts only show the target language', () => {
     expect(top.map((s) => s.appleId)).toEqual(['sv-1', 'sv-3'])
     expect(top[0]!.feedUrl).toBe('https://feeds.example.com/sv-1.xml')
     expect(top[0]!.artwork).toBe('https://img/600x600bb.jpg')
+    // The channel's description comes along from the same read, for mood picks.
+    expect(top[0]!.description).toBe('A show in sv.')
   })
 
   it("merges Spain's and Mexico's charts for Spanish, keeping each show once", async () => {

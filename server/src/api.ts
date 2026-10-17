@@ -1,11 +1,14 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
-import { cohortAlert, REFUSAL_MESSAGES } from '@polycast/core'
+import { cohortAlert, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, type Sql } from './db'
 import { discoverShelves } from './discover'
+import { cachedMood, MoodUnavailable, recommendByMood } from './mood'
+import type { TextModel } from './providers/types'
+import { SpendCapReached, type SpendGuard } from './budget'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { lessonPage, recentLessons } from './lessons'
 import { guideById } from './voices'
@@ -39,6 +42,10 @@ export interface ApiDeps {
   funnelToken?: string
   /** Resolves host names before fetching a show's feed; tests pass a fake. Default: DNS. */
   lookupHost?: LookupHost
+  /** Gemini, for the one small call behind "Tell Mia what you're in the mood for". Unset: mood picks are off. */
+  text?: TextModel
+  /** Tests pass one; otherwise the daily spending cap from settings. */
+  guard?: SpendGuard
 }
 
 type Env = { Variables: { userId: string } }
@@ -53,6 +60,18 @@ export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddr
  */
 export const LEARNER_LIMITS = { searchPerMinute: 30, openPerMinute: 30, preparePerMinute: 10, searchMaxChars: 100 }
 export const SLOW_DOWN = 'Give it a moment, then try again.'
+
+/**
+ * Mood picks a learner can ask for each day (one small Gemini call each, about a tenth of a cent).
+ * A mood someone already asked today is answered from the cache and doesn't count.
+ */
+export const MOOD_LIMITS = { freePerDay: 3, plusPerDay: 30 }
+export const MOOD_MESSAGES = {
+  freeUsed: "That's today's three mood picks. Try again tomorrow, or have a look through the shelves below. Plus gives you more.",
+  plusUsed: "That's a lot of moods for one day. Have a look through the shelves below, and try again tomorrow.",
+  unavailable: "Mia couldn't find a match just now. Try putting it another way, or have a look through the shelves below.",
+  paused: 'Mood picks are resting for today. Have a look through the shelves below.',
+}
 
 export function createApi(deps: ApiDeps) {
   const { sql } = deps
@@ -176,6 +195,8 @@ export function createApi(deps: ApiDeps) {
   const searchLimit = rateLimiter(LEARNER_LIMITS.searchPerMinute, 60_000)
   const openLimit = rateLimiter(LEARNER_LIMITS.openPerMinute, 60_000)
   const prepareLimit = rateLimiter(LEARNER_LIMITS.preparePerMinute, 60_000)
+  const moodFree = rateLimiter(MOOD_LIMITS.freePerDay, 24 * 60 * 60_000)
+  const moodPlus = rateLimiter(MOOD_LIMITS.plusPerDay, 24 * 60 * 60_000)
 
   // Everything below needs a signed-in learner.
   app.use('/v1/*', async (c, next) => {
@@ -196,6 +217,30 @@ export function createApi(deps: ApiDeps) {
   app.get('/v1/discover/:language', async (c) => {
     const [profile] = await sql`select interests from profiles where id = ${c.get('userId')}`
     return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? []) })
+  })
+
+  /** "Tell Mia what you're in the mood for": three shows or prepared episodes with a line on why. */
+  app.post('/v1/discover/:language/mood', async (c) => {
+    const userId = c.get('userId')
+    const language = c.req.param('language')
+    const body = await c.req.json().catch(() => ({}))
+    const mood = normaliseMood(String(body?.mood ?? ''))
+    if (!mood) return c.json({ error: 'Tell Mia what you’re in the mood for first.' }, 400)
+    if (!deps.text) return c.json({ error: MOOD_MESSAGES.paused }, 503)
+    const [profile] = await sql`select plan, native_language from profiles where id = ${userId}`
+    const nativeLanguage = profile?.native_language ?? 'en'
+    const cached = await cachedMood(sql, language, mood, nativeLanguage)
+    if (cached) return c.json({ mood, picks: cached })
+    const plus = profile?.plan === 'plus'
+    if (!(plus ? moodPlus : moodFree).hit(userId)) return c.json({ error: plus ? MOOD_MESSAGES.plusUsed : MOOD_MESSAGES.freeUsed }, 429)
+    try {
+      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard }, language, mood, nativeLanguage)
+      return c.json({ mood, picks })
+    } catch (e) {
+      if (e instanceof SpendCapReached) return c.json({ error: MOOD_MESSAGES.paused }, 503)
+      if (e instanceof MoodUnavailable || (e instanceof Error && e.name === 'ProviderError')) return c.json({ error: MOOD_MESSAGES.unavailable }, 502)
+      throw e
+    }
   })
 
   app.get('/v1/search', async (c) => {

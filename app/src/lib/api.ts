@@ -80,7 +80,13 @@ export interface ListenPayload {
   syncUrl?: string | null
 }
 
+/** One of Mia's picks for a mood (server/src/mood.ts). */
+export type MoodPick =
+  | { kind: 'show'; title: string; author: string | null; artwork: string | null; podcastId?: string; appleId?: string; feedUrl?: string; why: string }
+  | { kind: 'episode'; episodeId: string; podcastId: string; title: string; podcastTitle: string; artwork: string | null; why: string }
+
 export const api = {
+  mood: (language: string, mood: string) => call<{ mood: string; picks: MoodPick[] }>('POST', `/v1/discover/${language}/mood`, { mood }, 20_000),
   discover: (language: string) => call<{ shelves: Shelf[] }>('GET', `/v1/discover/${language}`),
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
   // Opening a show re-reads its feed on the server, which may take up to 15 seconds itself.

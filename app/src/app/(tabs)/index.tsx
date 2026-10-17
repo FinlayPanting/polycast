@@ -7,7 +7,8 @@ import { Mark } from '../../components/Mark'
 import { ShelfRow } from '../../components/Shelves'
 import { Button, Screen, Txt } from '../../components/ui'
 import { api } from '../../lib/api'
-import { languageName } from '../../lib/languages'
+import { guideName, languageName } from '../../lib/languages'
+import { MoodPicks } from '../../components/MoodPicks'
 import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
 import { MIN_TAP, space, type, usePalette } from '../../theme'
@@ -47,6 +48,8 @@ export default function Discover() {
             <Txt style={[type.body, { color: p.faint }]}>Search any podcast</Txt>
           </Pressable>
         </View>
+
+        <MoodPicks key={language} language={language} guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} />
 
         {error && !data ? (
           <View style={{ paddingHorizontal: space.lg, gap: space.md }}>

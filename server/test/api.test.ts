@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi, LEARNER_LIMITS, SLOW_DOWN } from '../src/api'
+import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, SLOW_DOWN } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
 import type { TextModel } from '../src/providers/types'
 import { claimNextJob, queueSyncUpgrades, type Sql } from '../src/db'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
+import { memoryLedger, SpendGuard } from '../src/budget'
 import { draftFor, syntheticEpisode } from './fixtures'
 import { freshDatabase, PG_TEST_URL } from './pg'
 
@@ -12,7 +13,7 @@ const run = PG_TEST_URL ? describe : describe.skip
 
 const FEED_URL = 'https://feeds.example.com/svenska.xml'
 const RSS = `<?xml version="1.0"?><rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel>
-  <title>Svenska Samtal</title><language>sv</language><itunes:author>Anna</itunes:author>
+  <title>Svenska Samtal</title><language>sv</language><itunes:author>Anna</itunes:author><description><![CDATA[<p>Vardagssvenska, <b>lugnt</b> och roligt.</p>]]></description>
   <item><title>Tåget</title><guid>ep-1</guid><pubDate>Mon, 05 Oct 2026 06:00:00 GMT</pubDate><itunes:duration>590</itunes:duration><enclosure url="https://cdn.example.com/1.mp3" type="audio/mpeg"/></item>
   <item><title>Fikan</title><guid>ep-2</guid><pubDate>Mon, 28 Sep 2026 06:00:00 GMT</pubDate><itunes:duration>590</itunes:duration><enclosure url="https://cdn.example.com/2.mp3" type="audio/mpeg"/></item>
 </channel></rss>`
@@ -363,5 +364,49 @@ run('API and worker', () => {
     expect(alerts.filter((a) => a.startsWith('ready: Fikan'))).toHaveLength(1)
     const [after] = await sql`select ready_at from episodes where id = ${episodeId}`
     expect(after!.ready_at.getTime()).toBe(first!.ready_at.getTime())
+  })
+
+  it("answers 'what are you in the mood for' with three picks from the pool, cached and counted", async () => {
+    const someone = await learner()
+    const [show] = await sql`select id, description from podcasts where feed_url = ${FEED_URL}`
+    // The feed's own description is kept, cleaned of HTML.
+    expect(show!.description).toBe('Vardagssvenska, lugnt och roligt.')
+    let calls = 0
+    const prompts: string[] = []
+    const text: TextModel = {
+      async generateJson<T>(i: Parameters<TextModel['generateJson']>[0]) {
+        calls++
+        prompts.push(i.prompt)
+        const ids = [...i.prompt.matchAll(/^((?:show|episode):\S+) \|/gm)].map((m) => m[1]!)
+        return { data: { picks: [...ids.slice(0, 3).map((id) => ({ id, why: 'Easy, warm chat to start with!' })), { id: 'show:made-up', why: 'x' }] } as T, usage: { textInTokens: 2000, textOutTokens: 100 } }
+      },
+    }
+    const ledger = memoryLedger()
+    const app = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, lookupHost: publicHost, text, guard: new SpendGuard(ledger, 5) })
+    const ask = (mood: unknown, who = someone) =>
+      app.request('/v1/discover/sv/mood', { method: 'POST', headers: { Authorization: `Bearer ${who}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ mood }) })
+
+    const first = await ask('Something calm about everyday Swedish')
+    expect(first.status).toBe(200)
+    const { picks } = await first.json()
+    expect(picks.length).toBeGreaterThanOrEqual(1)
+    expect(picks.length).toBeLessThanOrEqual(3)
+    for (const p of picks) expect(p.why).toBe('Easy, warm chat to start with.')
+    expect(picks.some((p: any) => p.kind === 'episode' && p.episodeId)).toBe(true)
+    expect(picks.some((p: any) => p.kind === 'show' && (p.podcastId || p.appleId))).toBe(true)
+    expect(prompts[0]).toContain('Vardagssvenska')
+    // Counted against the daily spending cap at its real cost.
+    expect([...ledger.entries.entries()].some(([k, v]) => k.startsWith('mood-') && v > 0)).toBe(true)
+
+    // The same mood in other words order is answered from the cache, for free.
+    expect((await ask('everyday swedish, something CALM')).status).toBe(200)
+    expect(calls).toBe(1)
+
+    // A free learner gets a few new moods a day.
+    for (const m of ['football stories', 'gardening', 'science facts', 'history quiz'].slice(0, MOOD_LIMITS.freePerDay - 1)) expect((await ask(m)).status).toBe(200)
+    const over = await ask('cooking for friends')
+    expect(over.status).toBe(429)
+    expect((await over.json()).error).toBe(MOOD_MESSAGES.freeUsed)
+    expect((await ask('   ')).status).toBe(400)
   })
 })

@@ -89,7 +89,7 @@ async function main() {
   const alert = webhookAlert(process.env.ALERT_WEBHOOK_URL)
   const podcastIndex = process.env.PODCAST_INDEX_KEY ? { key: process.env.PODCAST_INDEX_KEY, secret: need('PODCAST_INDEX_SECRET') } : undefined
 
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
