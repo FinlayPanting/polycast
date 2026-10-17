@@ -1,4 +1,6 @@
+import { goodFirstListen } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
+import { useMemo } from 'react'
 import { FlatList, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/ui'
 import { api, type EpisodeListing } from '../lib/api'
@@ -10,10 +12,10 @@ function published(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
 
-export function EpisodeRow({ e }: { e: EpisodeListing }) {
+export function EpisodeRow({ e, firstListen = false }: { e: EpisodeListing; firstListen?: boolean }) {
   const date = published(e.published)
   return (
-    <Row accessibilityLabel={`${e.title}, ${minutes(e.duration_sec)}${e.status === 'ready' ? ', ready now' : ''}`} onPress={() => router.push(`/episode/${e.id}`)}>
+    <Row accessibilityLabel={`${e.title}, ${minutes(e.duration_sec)}${e.status === 'ready' ? ', ready now' : ''}${firstListen ? ', good first listen' : ''}`} onPress={() => router.push(`/episode/${e.id}`)}>
       <View style={{ flex: 1, gap: 4, paddingVertical: space.xs }}>
         <Txt variant="bodyStrong" numberOfLines={2}>
           {e.title}
@@ -22,6 +24,7 @@ export function EpisodeRow({ e }: { e: EpisodeListing }) {
           <Txt variant="small" tone="quiet">
             {[date, minutes(e.duration_sec)].filter(Boolean).join(', ')}
           </Txt>
+          {firstListen ? <Tag label="Good first listen" tone="saved" /> : null}
           {e.status === 'ready' ? <Tag label="Ready" tone="play" /> : null}
           {e.status === 'preparing' ? <Tag label="Preparing" tone="quiet" /> : null}
           {e.difficulty ? <Tag label={e.difficulty.label.split(',')[0]!} tone="level" /> : null}
@@ -35,6 +38,8 @@ export function EpisodeRow({ e }: { e: EpisodeListing }) {
 export default function Show() {
   const params = useLocalSearchParams<{ appleId?: string; feedUrl?: string; podcastId?: string }>()
   const { data, error, reload } = useAsync(() => api.openShow(params), [params.appleId, params.feedUrl, params.podcastId])
+  // One recent episode a new learner can finish in a sitting, so their first listen reaches the wrap-up.
+  const firstListen = useMemo(() => (data ? goodFirstListen(data.episodes) : undefined), [data])
 
   return (
     <Screen>
@@ -63,7 +68,7 @@ export default function Show() {
             )}
           </View>
         }
-        renderItem={({ item }) => <EpisodeRow e={item} />}
+        renderItem={({ item }) => <EpisodeRow e={item} firstListen={item.id === firstListen} />}
       />
     </Screen>
   )
