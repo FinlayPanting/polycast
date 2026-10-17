@@ -277,6 +277,36 @@ run('API and worker', () => {
     expect((await ask(ola, `/v1/episodes/${ep}/prepare`, 'POST')).status).toBe(429)
   })
 
+  it('moves Plus to the account signed in now when a learner restores purchases', async () => {
+    const oldAccount = await learner()
+    const newAccount = await learner()
+    const hook = (event: Record<string, unknown>) =>
+      createApi({ sql, verify: async () => undefined, fetch: fakeFetch, revenueCatSecret: 's3cret' }).request('/webhooks/revenuecat', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer s3cret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event }),
+      })
+    const profile = async (id: string) => (await sql`select plan, plus_used_sec, plus_period_start from profiles where id = ${id}`)[0]!
+    await hook({ type: 'INITIAL_PURCHASE', app_user_id: oldAccount, purchased_at_ms: Date.parse('2026-10-03T09:00:00Z') })
+    await sql`update profiles set plus_used_sec = 2400 where id = ${oldAccount}`
+
+    // RevenueCat's TRANSFER carries no app_user_id, only who it moved from and to.
+    const res = await hook({ type: 'TRANSFER', transferred_from: [oldAccount], transferred_to: [newAccount] })
+    expect(res.status).toBe(200)
+    expect(await profile(newAccount)).toMatchObject({ plan: 'plus', plus_used_sec: 2400 })
+    expect((await profile(newAccount)).plus_period_start.toISOString()).toBe('2026-10-03T09:00:00.000Z')
+    expect((await profile(oldAccount)).plan).toBe('free')
+
+    // From an anonymous RevenueCat id (not one of our accounts): Plus still arrives.
+    const third = await learner()
+    await hook({ type: 'TRANSFER', transferred_from: ['$RCAnonymousID:abc123'], transferred_to: [third] })
+    expect((await profile(third)).plan).toBe('plus')
+    expect((await profile(third)).plus_used_sec).toBe(0)
+    // Malformed transfers change nothing.
+    expect((await hook({ type: 'TRANSFER', transferred_from: [third] })).status).toBe(200)
+    expect((await profile(third)).plan).toBe('plus')
+  })
+
   it('gives a fresh 5 Plus hours once per paid month, however often RevenueCat repeats an event', async () => {
     const max = await learner()
     const hook = (event: Record<string, unknown>) =>

@@ -131,6 +131,26 @@ export function createApi(deps: ApiDeps) {
   app.post('/webhooks/revenuecat', async (c) => {
     if (!deps.revenueCatSecret || c.req.header('Authorization') !== `Bearer ${deps.revenueCatSecret}`) return c.json({ error: 'unauthorised' }, 401)
     const { event } = await c.req.json()
+    // Restore purchases on a new phone or a fresh account: RevenueCat moves the subscription from
+    // the old account to the one signed in now. Plus moves with it, along with the month's hours
+    // already used (so a transfer can't be used to reset them); the old account goes back to free.
+    if (event?.type === 'TRANSFER') {
+      const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+      const from = ids(event.transferred_from)
+      const to = ids(event.transferred_to)
+      if (!to.length) return c.json({ ok: true })
+      const [old] = from.length
+        ? await sql`select plus_used_sec, plus_period_start from profiles where id::text = any(${from}) and plan = 'plus'
+            order by plus_period_start desc nulls last limit 1`
+        : []
+      await sql`update profiles set plan = 'plus',
+        plus_used_sec = ${old ? sql`greatest(plus_used_sec, ${old.plus_used_sec})` : sql`plus_used_sec`},
+        plus_period_start = coalesce(${old?.plus_period_start ?? null}::timestamptz, plus_period_start, now())
+        where id::text = any(${to})`
+      const leaving = from.filter((id) => !to.includes(id))
+      if (leaving.length) await sql`update profiles set plan = 'free' where id::text = any(${leaving})`
+      return c.json({ ok: true })
+    }
     const userId = event?.app_user_id
     if (!userId) return c.json({ ok: true })
     const active = ['INITIAL_PURCHASE', 'RENEWAL', 'UNCANCELLATION', 'PRODUCT_CHANGE'].includes(event.type)
