@@ -65,7 +65,7 @@ export type Shelf =
 
 export type PrepareResult =
   | { status: 'ready' }
-  | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' }
+  | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' | 'ownKeys' }
 
 export interface ListenPayload {
   episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number }
@@ -95,8 +95,12 @@ export const api = {
   /** Shared translations (PC-1017-T1): a list's titles, and a show's or episode's description by id. */
   translate: (req: { titles?: string[]; podcastId?: string; episodeId?: string }) =>
     call<{ to: string; titles: (string | null)[]; podcastDescription: string | null; episodeDescription: string | null }>('POST', '/v1/translate', req, 20_000),
-  prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
-  job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
+  /** With `ownKeys`, the episode is prepared on the learner's own API keys (PC-1017-K1). */
+  prepare: (episodeId: string, ownKeys?: { elevenlabs: string; gemini: string }) =>
+    call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, ownKeys ? { ownKeys } : undefined),
+  job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null; message?: string }>('GET', `/v1/jobs/${jobId}`),
+  testKey: (provider: 'elevenlabs' | 'gemini', key: string) => call<{ ok: true } | { ok: false; message: string }>('POST', '/v1/keys/test', { provider, key }),
+  forgetKeys: () => call<{ ok: true }>('DELETE', '/v1/keys'),
   /** `level` is the guide intensity chosen for this episode; left out, the server uses the learner's default. */
   listen: (episodeId: string, guide: boolean, level?: 'light' | 'standard' | 'handsOn') =>
     call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, level ? { guide, level } : { guide }),
