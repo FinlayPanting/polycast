@@ -6,7 +6,7 @@ import { serve } from '@hono/node-server'
 import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
 import { createApi, supabaseVerifier } from './api'
 import { connect, releaseJob } from './db'
-import { elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
+import { ELEVEN_TTS_MODEL, elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
 import { chooseTtsProvider, withFallbackSpeech } from './providers/speechChoice'
 import { elevenVoiceFor } from './voices'
 import { geminiSpeech, geminiText } from './providers/gemini'
@@ -91,7 +91,9 @@ async function main() {
   const alert = webhookAlert(process.env.ALERT_WEBHOOK_URL)
   const podcastIndex = process.env.PODCAST_INDEX_KEY ? { key: process.env.PODCAST_INDEX_KEY, secret: need('PODCAST_INDEX_SECRET') } : undefined
 
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
+  // "Use your own API keys" (PC-1017-K1) is on once OWN_KEYS_SECRET (32 random bytes, base64) is set.
+  const ownKeysSecret = process.env.OWN_KEYS_SECRET || undefined
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), ownKeysSecret, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
@@ -131,6 +133,18 @@ async function main() {
       fingerprint: ffmpegFingerprint(),
       alert,
       notifyReady: expoPush(async (id) => (await sql`select push_token from profiles where id = ${id}`)[0]?.push_token ?? undefined),
+      // Learners' own keys (PC-1017-K1): their ElevenLabs key for Scribe and the guide's voice, their
+      // Google key for the writing. Never Polycast's keys, and no Chirp fallback.
+      ownKeys: ownKeysSecret
+        ? {
+            secret: ownKeysSecret,
+            providers: (k) => ({
+              transcriber: scribeTranscriber(k.elevenlabs),
+              speech: pacedSpeech(elevenLabsSpeech(k.elevenlabs, ffmpegAacEncoder(), { model: ELEVEN_TTS_MODEL, voiceId: elevenVoiceFor }), Number(process.env.ELEVENLABS_TTS_RPM ?? 120)),
+              text: geminiText(k.gemini),
+            }),
+          }
+        : undefined,
     }, { signal: stopping.signal })
     console.log('Worker running')
 

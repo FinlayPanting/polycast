@@ -1,5 +1,6 @@
 import { costUSD, recurringNames, wordsFromPodcastJson, type ShowNames, pickTimedTranscript, parseFeed, type LessonPlan } from '@polycast/core'
-import { SpendCapReached, SpendGuard } from './budget'
+import { memoryLedger, SpendCapReached, SpendGuard } from './budget'
+import { deleteJobKeys, loadJobKeys, onOwnKey, type OwnKeys } from './ownKeys'
 import { claimNextJob, completePreparation, type JobLane, failJob, queueSyncUpgrades, reclaimStaleJobs, saveTranscript, savedTranscript, pgSpendLedger, getSetting, setJobStage, type ClaimedJob, type Sql } from './db'
 import { EmptyTranscript, prepareEpisode, syncPath, voiceForGuide, type PrepareDeps } from './pipeline/prepare'
 import { ProviderError, type TextModel } from './providers/types'
@@ -23,7 +24,15 @@ export interface WorkerDeps extends Omit<PrepareDeps, 'guard' | 'onStage'> {
    * behind a batch.
    */
   batchText?: (maxWaitMs: number) => TextModel
+  /**
+   * Learners' own API keys (PC-1017-K1): the secret their keys are sealed with, and the providers
+   * built on them. Unset: jobs on own keys fail with a plain message.
+   */
+  ownKeys?: { secret: string; providers: (keys: OwnKeys) => Pick<PrepareDeps, 'transcriber' | 'speech' | 'text'> }
 }
+
+/** Shown on the prepare screen while a free Google key's rate limit slows a job down. */
+export const SLOW_KEY_STAGE = 'slow-key'
 
 /** The most a background job waits on batches in total, well inside the one-hour stale-job limit. */
 export const BATCH_JOB_BUDGET_MS = 20 * 60_000
@@ -65,11 +74,35 @@ export async function showNamesFor(sql: Sql, podcastId: string): Promise<ShowNam
 }
 
 export async function runJob(deps: WorkerDeps, job: ClaimedJob): Promise<'done' | 'retrying' | 'failed'> {
+  if (!job.ownKeys) return runJobWith(deps, job)
+  // On the learner's own keys: their providers, nothing reserved against Polycast's cap, and their
+  // keys deleted as soon as the job is over (kept only while it may still be retried).
+  const keys = deps.ownKeys ? await loadJobKeys(deps.sql, job.id, deps.ownKeys.secret).catch(() => undefined) : undefined
+  if (!deps.ownKeys || !keys) {
+    const outcome = await failJob(deps.sql, job.id, 'Your own API keys weren’t there when this episode’s turn came. Add them again and try once more.', false)
+    await deleteJobKeys(deps.sql, job.id)
+    return outcome
+  }
+  const slow = () => void setJobStage(deps.sql, job.id, SLOW_KEY_STAGE).catch(() => {})
+  const p = deps.ownKeys.providers(keys)
+  const own: WorkerDeps = {
+    ...deps,
+    transcriber: onOwnKey('elevenlabs', p.transcriber),
+    speech: onOwnKey('elevenlabs', p.speech),
+    text: onOwnKey('gemini', p.text, slow),
+    batchText: undefined,
+  }
+  const outcome = await runJobWith(own, job, new SpendGuard(memoryLedger(), Number.POSITIVE_INFINITY))
+  if (outcome !== 'retrying') await deleteJobKeys(deps.sql, job.id)
+  return outcome
+}
+
+async function runJobWith(deps: WorkerDeps, job: ClaimedJob, ownGuard?: SpendGuard): Promise<'done' | 'retrying' | 'failed'> {
   const { sql } = deps
   const [ep] = await sql`select e.*, p.feed_url from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${job.episodeId}`
   const guide = guideById(job.guideId)
   try {
-    const g = await guard(deps)
+    const g = ownGuard ?? (await guard(deps))
     if (job.kind === 'voice') {
       const [row] = await sql`select plan from lesson_plans where episode_id = ${job.episodeId} limit 1`
       const { plan, usage } = await voiceForGuide(job.id, row!.plan as LessonPlan, guide, ep!.duration_sec, { ...deps, guard: g })

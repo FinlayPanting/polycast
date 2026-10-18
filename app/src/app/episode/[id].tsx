@@ -17,12 +17,15 @@ import { getEpisode } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
+import { loadOwnKeys, type OwnKeys } from '../../lib/ownKeys'
+import { OWN_KEYS_COST_LINE, SLOW_KEY_LINE } from '../../lib/ownKeysCore'
 
 const STAGES: Record<string, string> = {
   transcribing: 'Listening to the episode',
   translating: 'Writing the subtitles',
   writing: 'Planning what your guide will say',
   voicing: 'Recording your guide',
+  'slow-key': SLOW_KEY_LINE,
   done: 'Ready',
 }
 
@@ -40,6 +43,11 @@ export default function Episode() {
   const [saveError, setSaveError] = useState<string>()
   const [preparedByMe, setPreparedByMe] = useState(false)
   const [offline, setOffline] = useState(false)
+  // The learner's own API keys, when they've added both (PC-1017-K1): preparation then runs on them.
+  const [ownKeys, setOwnKeys] = useState<OwnKeys>()
+  useEffect(() => {
+    void loadOwnKeys().then(setOwnKeys)
+  }, [])
   const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
   const [earlyPrimer, setEarlyPrimer] = useState<PrimerData>()
 
@@ -87,7 +95,7 @@ export default function Episode() {
           clearInterval(t)
           setJobId(undefined)
           if (job.status === 'done') setPreparedByMe(true)
-          if (job.status === 'failed') setMessage({ text: 'We couldn’t prepare this episode. Nothing was taken from your allowance. Please try again later.' })
+          if (job.status === 'failed') setMessage({ text: job.message ?? 'We couldn’t prepare this episode. Nothing was taken from your allowance. Please try again later.' })
           await Promise.all([reload(), refreshProfile()])
         }
       } catch {
@@ -154,7 +162,9 @@ export default function Episode() {
 
   const preparing = Boolean(jobId) || ep.status === 'preparing'
   const plus = profile?.plan === 'plus'
-  const cost = plus
+  const cost = ownKeys
+    ? OWN_KEYS_COST_LINE
+    : plus
     ? `Uses ${minutes(ep.duration_sec)} of your 5 hours of new episodes this month (${minutes(Math.max(0, PLUS_MONTHLY_SEC - (profile?.plus_used_sec ?? 0)))} left).`
     : profile?.free_episode_used
       ? 'Preparing new episodes is part of Plus. Episodes marked Ready are free to everyone.'
@@ -167,7 +177,7 @@ export default function Episode() {
     setBusy(true)
     setMessage(undefined)
     try {
-      const r = await api.prepare(ep!.id)
+      const r = await api.prepare(ep!.id, ownKeys)
       if (r.status === 'ready') return reload()
       setJobId(r.jobId)
       setStage(undefined)
@@ -250,7 +260,7 @@ export default function Episode() {
         ) : (
           <View style={{ gap: space.md }}>
             <Txt tone="quiet">{cost}</Txt>
-            {plus || (!profile?.free_episode_used && ep.duration_sec <= FREE_EPISODE_MAX_SEC) ? (
+            {ownKeys || plus || (!profile?.free_episode_used && ep.duration_sec <= FREE_EPISODE_MAX_SEC) ? (
               <Button label="Prepare this episode" busy={busy} onPress={prepare} />
             ) : (
               <Button label="See Plus" onPress={() => router.push('/plus')} />

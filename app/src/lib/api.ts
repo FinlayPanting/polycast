@@ -64,7 +64,7 @@ export type Shelf =
 
 export type PrepareResult =
   | { status: 'ready' }
-  | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' }
+  | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' | 'ownKeys' }
 
 export interface ListenPayload {
   episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number }
@@ -91,8 +91,12 @@ export const api = {
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
   // Opening a show re-reads its feed on the server, which may take up to 15 seconds itself.
   openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show, 25_000),
-  prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
-  job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
+  /** With `ownKeys`, the episode is prepared on the learner's own API keys (PC-1017-K1). */
+  prepare: (episodeId: string, ownKeys?: { elevenlabs: string; gemini: string }) =>
+    call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, ownKeys ? { ownKeys } : undefined),
+  job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null; message?: string }>('GET', `/v1/jobs/${jobId}`),
+  testKey: (provider: 'elevenlabs' | 'gemini', key: string) => call<{ ok: true } | { ok: false; message: string }>('POST', '/v1/keys/test', { provider, key }),
+  forgetKeys: () => call<{ ok: true }>('DELETE', '/v1/keys'),
   /** `level` is the guide intensity chosen for this episode; left out, the server uses the learner's default. */
   listen: (episodeId: string, guide: boolean, level?: 'light' | 'standard' | 'handsOn') =>
     call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, level ? { guide, level } : { guide }),

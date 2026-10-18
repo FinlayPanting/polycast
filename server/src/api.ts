@@ -4,7 +4,8 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { cohortAlert, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import type { LookupHost } from './safeFetch'
-import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, type Sql } from './db'
+import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
+import { forgetUserKeys, OWN_KEYS_LIMITS, OWN_KEYS_MESSAGES, plausibleKey, storeJobKeys, testElevenLabsKey, testGeminiKey } from './ownKeys'
 import { discoverShelves } from './discover'
 import { cachedMood, MoodUnavailable, recommendByMood } from './mood'
 import type { TextModel } from './providers/types'
@@ -46,6 +47,8 @@ export interface ApiDeps {
   text?: TextModel
   /** Tests pass one; otherwise the daily spending cap from settings. */
   guard?: SpendGuard
+  /** Encrypts learners' own API keys while their job runs (PC-1017-K1). Unset: own keys are off. */
+  ownKeysSecret?: string
 }
 
 type Env = { Variables: { userId: string } }
@@ -276,11 +279,32 @@ export function createApi(deps: ApiDeps) {
     return c.json({ podcast, episodes })
   })
 
+  // "Use your own API keys" (PC-1017-K1): check a key with a tiny call, and forget every copy.
+  const keyTestLimit = rateLimiter(20, 60_000)
+  app.post('/v1/keys/test', async (c) => {
+    if (!keyTestLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
+    const body = await c.req.json().catch(() => ({}))
+    if (!plausibleKey(body?.key)) return c.json({ ok: false, message: 'That doesn’t look like a whole key. Paste it again, all of it.' })
+    const check = body.provider === 'elevenlabs' ? await testElevenLabsKey(body.key, deps.fetch) : body.provider === 'gemini' ? await testGeminiKey(body.key, deps.fetch) : undefined
+    return check ? c.json(check) : c.json({ error: 'Unknown provider' }, 400)
+  })
+  app.delete('/v1/keys', async (c) => c.json({ ok: true, forgotten: await forgetUserKeys(sql, c.get('userId')) }))
+
   app.post('/v1/episodes/:id/prepare', async (c) => {
     const userId = c.get('userId')
     if (!prepareLimit.hit(userId)) return c.json({ error: SLOW_DOWN }, 429)
     const [profile] = await sql`select guide_id from profiles where id = ${userId}`
     const guideId = guideById(profile?.guide_id).id
+    const body = await c.req.json().catch(() => ({}))
+    if (body?.ownKeys) {
+      if (!deps.ownKeysSecret) return c.json({ error: OWN_KEYS_MESSAGES.off }, 503)
+      const keys = { elevenlabs: body.ownKeys.elevenlabs, gemini: body.ownKeys.gemini }
+      if (!plausibleKey(keys.elevenlabs) || !plausibleKey(keys.gemini)) return c.json({ error: OWN_KEYS_MESSAGES.missing }, 400)
+      const r = await requestOwnKeysPreparation(sql, userId, c.req.param('id'), guideId, OWN_KEYS_LIMITS.preparationsPerDay)
+      if (r.status === 'fairUse') return c.json({ error: OWN_KEYS_MESSAGES.fairUse }, 429)
+      if (r.status === 'queued' && r.charge === 'ownKeys') await storeJobKeys(sql, r.jobId, userId, keys, deps.ownKeysSecret)
+      return c.json(r)
+    }
     const claimedBefore = await freeEpisodesClaimed(sql)
     const result = await requestPreparation(sql, userId, c.req.param('id'), guideId)
     if (result.status === 'refused') return c.json({ ...result, message: REFUSAL_MESSAGES[result.reason] }, 402)
@@ -292,8 +316,11 @@ export function createApi(deps: ApiDeps) {
   })
 
   app.get('/v1/jobs/:id', async (c) => {
-    const [job] = await sql`select id, status, stage, episode_id from prep_jobs where id = ${c.req.param('id')} and requested_by = ${c.get('userId')}`
-    return job ? c.json(job) : c.json({ error: 'Not found' }, 404)
+    const [job] = await sql`select id, status, stage, episode_id, charge, error from prep_jobs where id = ${c.req.param('id')} and requested_by = ${c.get('userId')}`
+    if (!job) return c.json({ error: 'Not found' }, 404)
+    const { charge, error, ...rest } = job
+    // On their own keys, a failure is their provider's, already in plain words (PC-1017-K1).
+    return c.json({ ...rest, ...(charge === 'ownKeys' && job.status === 'failed' && error ? { message: error } : {}) })
   })
 
   /**

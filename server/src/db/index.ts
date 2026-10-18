@@ -55,7 +55,7 @@ async function spendCapReached(tx: postgres.TransactionSql): Promise<boolean> {
 
 export type PrepRequestResult =
   | { status: 'ready' }
-  | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' }
+  | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' | 'ownKeys' }
   | { status: 'refused'; reason: Extract<PrepDecision, { allowed: false }>['reason'] }
 
 const PLUS_PERIOD = "interval '1 month'"
@@ -108,13 +108,38 @@ export async function requestPreparation(sql: Sql, userId: string, episodeId: st
   })
 }
 
+/**
+ * A preparation on the learner's own keys (PC-1017-K1): no allowance and no free episode used, and
+ * not stopped by Polycast's spending cap, as it's their money. Within the daily fair-use limit only.
+ * An episode already preparing just waits for that job; a ready one is ready.
+ */
+export async function requestOwnKeysPreparation(
+  sql: Sql,
+  userId: string,
+  episodeId: string,
+  guideId: string,
+  perDay: number,
+): Promise<PrepRequestResult | { status: 'fairUse' }> {
+  return sql.begin(async (tx) => {
+    const [episode] = await tx`select id, status from episodes where id = ${episodeId} for update`
+    if (!episode) throw new Error('No such episode')
+    if (episode.status === 'ready') return { status: 'ready' } as const
+    const [active] = await tx`select id from prep_jobs where episode_id = ${episodeId} and kind = 'prepare' and status in ('queued', 'running')`
+    if (active) return { status: 'queued', jobId: active.id as string, charge: 'none' } as const
+    const [{ n }] = await tx`select count(*)::int as n from prep_jobs where requested_by = ${userId} and charge = 'ownKeys' and created_at > now() - interval '1 day'` as any
+    if (n >= perDay) return { status: 'fairUse' } as const
+    await tx`update episodes set status = 'preparing' where id = ${episodeId}`
+    return queueJob(tx, episodeId, userId, 'prepare', guideId, 'ownKeys', 0)
+  })
+}
+
 async function queueJob(
   tx: postgres.TransactionSql,
   episodeId: string,
   userId: string,
   kind: 'prepare' | 'voice',
   guideId: string,
-  charge: 'none' | 'freeEpisode' | 'plus',
+  charge: 'none' | 'freeEpisode' | 'plus' | 'ownKeys',
   chargedSec: number,
 ): Promise<PrepRequestResult> {
   const [existing] = await tx`select id from prep_jobs where episode_id = ${episodeId} and guide_id = ${guideId} and kind = ${kind} and status in ('queued', 'running')`
@@ -136,6 +161,8 @@ export interface ClaimedJob {
   attempts: number
   /** One of Polycast's own re-preparations, which can use the slower, cheaper batch service. */
   background?: boolean
+  /** Runs on the learner's own API keys (PC-1017-K1). */
+  ownKeys?: boolean
 }
 
 /** Takes the oldest queued job. SKIP LOCKED lets several workers run without picking the same job. */
@@ -154,7 +181,7 @@ export async function claimNextJob(sql: Sql, lane: JobLane = 'all'): Promise<Cla
     where id = (select id from prep_jobs where status = 'queued' ${filter} order by created_at for update skip locked limit 1)
     returning id, kind, episode_id, guide_id, attempts, charge`
   return job
-    ? { id: job.id, kind: job.kind, episodeId: job.episode_id, guideId: job.guide_id, attempts: job.attempts, background: job.kind === 'prepare' && job.charge === 'none' }
+    ? { id: job.id, kind: job.kind, episodeId: job.episode_id, guideId: job.guide_id, attempts: job.attempts, background: job.kind === 'prepare' && job.charge === 'none', ownKeys: job.charge === 'ownKeys' }
     : undefined
 }
 

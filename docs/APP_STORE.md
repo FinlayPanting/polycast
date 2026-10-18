@@ -25,3 +25,9 @@ Free: every ready episode with subtitles and the guide on one episode a week. Pl
 ## Privacy label: crash data (17 Oct 2026)
 
 The app sends crash reports and start-up timings through EAS Observe (PC-1015-10). In App Store Connect's App Privacy answers, declare **Diagnostics → Crash Data** and **Performance Data**: used for App Functionality, **not linked** to the user, **not used for tracking**. No account id, email or listening data is attached.
+
+## Notes for App Review: your own API keys (PC-1017-K1)
+
+Paste into App Review Information → Notes when "Use your own API keys" ships:
+
+"Polycast Plus is sold only through in-app purchase. Separately, and entirely optional, a learner who already has their own ElevenLabs and Google Gemini API keys can enter them in Settings so that episodes they prepare run on their own accounts with those providers. No purchase is made or unlocked this way, no digital content is sold outside the App Store, and the app works fully without keys. Keys are stored in the iOS Keychain and sent only to our server over HTTPS while that episode is prepared."

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, SLOW_DOWN } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
-import type { TextModel } from '../src/providers/types'
+import { ProviderError, type TextModel } from '../src/providers/types'
+import { OWN_KEYS_LIMITS } from '../src/ownKeys'
 import { claimNextJob, queueSyncUpgrades, type Sql } from '../src/db'
 import { memoryStorage, mockSpeech, mockText, mockTranscriber } from '../src/providers/mock'
 import { memoryLedger, SpendGuard } from '../src/budget'
@@ -417,5 +418,66 @@ run('API and worker', () => {
     expect(over.status).toBe(429)
     expect((await over.json()).error).toBe(MOOD_MESSAGES.freeUsed)
     expect((await ask('   ')).status).toBe(400)
+  })
+
+  it('prepares an episode on a learner’s own keys: no allowance, their providers, keys gone afterwards (PC-1017-K1)', async () => {
+    const SECRET = Buffer.alloc(32, 3).toString('base64')
+    const keys = { elevenlabs: 'sk_eleven_abcdefghijklmnopqrstuvwx', gemini: 'AIzaSy-abcdefghijklmnopqrstuvwxyz0123' }
+    const anna = await learner()
+    const [show] = await sql`select id from podcasts where feed_url = ${FEED_URL}`
+    const newEpisode = async (guid: string) =>
+      (await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language) values (${show!.id}, ${guid}, ${guid}, 600, ${'https://cdn.example.com/' + guid + '.mp3'}, 'sv') returning id`)[0]!.id as string
+    const app = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, lookupHost: publicHost, ownKeysSecret: SECRET })
+    const prepare = (episodeId: string, body: unknown) =>
+      app.request(`/v1/episodes/${episodeId}/prepare`, { method: 'POST', headers: { Authorization: `Bearer ${anna}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+    // Both keys are needed; then it queues on her keys without touching her free episode.
+    const ep1 = await newEpisode('own-1')
+    expect((await prepare(ep1, { ownKeys: { elevenlabs: keys.elevenlabs } })).status).toBe(400)
+    const queued = await (await prepare(ep1, { ownKeys: keys })).json()
+    expect(queued).toMatchObject({ status: 'queued', charge: 'ownKeys' })
+    expect((await sql`select free_episode_used from profiles where id = ${anna}`)[0]!.free_episode_used).toBe(false)
+    const [held] = await sql`select elevenlabs, gemini from job_keys where job_id = ${queued.jobId}`
+    expect(held!.elevenlabs).not.toContain(keys.elevenlabs) // sealed
+
+    // The worker uses providers built on her keys, and nothing goes against Polycast's cap.
+    const usedKeys: string[] = []
+    const w = worker()
+    const own = { ...w, ownKeys: { secret: SECRET, providers: (k: { elevenlabs: string; gemini: string }) => (usedKeys.push(k.elevenlabs, k.gemini), { transcriber: w.transcriber, speech: w.speech, text: w.text }) } }
+    const failing = { ...w, text: mockText(() => { throw new Error('Polycast’s own key must not be used') }) }
+    const job = (await claimNextJob(sql, 'learners'))!
+    expect(job.ownKeys).toBe(true)
+    expect(await runJob({ ...own, text: failing.text }, job)).toBe('done')
+    expect(usedKeys).toEqual([keys.elevenlabs, keys.gemini])
+    expect((await sql`select count(*)::int as n from spend_ledger where job_id = ${job.id}`)[0]!.n).toBe(0)
+    expect((await sql`select count(*)::int as n from job_keys where job_id = ${job.id}`)[0]!.n).toBe(0)
+    expect((await sql`select status from episodes where id = ${ep1}`)[0]!.status).toBe('ready') // in the shared pool
+
+    // A key their provider turns down fails the job in plain words, with no fallback to Polycast's.
+    const ep2 = await newEpisode('own-2')
+    await prepare(ep2, { ownKeys: keys })
+    const job2 = (await claimNextJob(sql, 'learners'))!
+    const refused = { ...own, ownKeys: { secret: SECRET, providers: () => ({ transcriber: { transcribe: async () => { throw new ProviderError('unauthorised', false, 401) } } as any, speech: w.speech, text: w.text }) } }
+    expect(await runJob(refused, job2)).toBe('failed')
+    expect((await sql`select error from prep_jobs where id = ${job2.id}`)[0]!.error).toMatch(/ElevenLabs key was turned down/)
+    expect((await sql`select count(*)::int as n from job_keys where job_id = ${job2.id}`)[0]!.n).toBe(0)
+
+    // Removing her keys forgets every copy, even for a job still waiting.
+    const ep3 = await newEpisode('own-3')
+    await prepare(ep3, { ownKeys: keys })
+    const del = await (await app.request('/v1/keys', { method: 'DELETE', headers: { Authorization: `Bearer ${anna}` } })).json()
+    expect(del.forgotten).toBe(1)
+    const job3 = (await claimNextJob(sql, 'learners'))!
+    expect(await runJob(own, job3)).toBe('failed')
+
+    // Fair use: a generous number a day.
+    await sql`update prep_jobs set created_at = now() where requested_by = ${anna}`
+    for (let i = 0; i < OWN_KEYS_LIMITS.preparationsPerDay - 3; i++) await prepare(await newEpisode(`own-fill-${i}`), { ownKeys: keys })
+    expect((await prepare(await newEpisode('own-over'), { ownKeys: keys })).status).toBe(429)
+    await sql`delete from prep_jobs where requested_by = ${anna} and status = 'queued'`
+
+    // Off without the server's secret.
+    const off = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, lookupHost: publicHost })
+    expect((await off.request(`/v1/episodes/${ep3}/prepare`, { method: 'POST', headers: { Authorization: `Bearer ${anna}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ownKeys: keys }) })).status).toBe(503)
   })
 })
