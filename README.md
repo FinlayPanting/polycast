@@ -20,6 +20,16 @@ It's built for learning for fun, not homework: put your headphones in, pick a sh
 
 ---
 
+## Screenshots
+
+| Discover | Before you press play | Words and episode map |
+|:---:|:---:|:---:|
+| <img src="screenshots/discover.png" alt="Discover: Tell Mia what you're in the mood for, For you and Top charts shelves" width="240" /> | <img src="screenshots/primer.png" alt="Episode primer: the gist in simple Swedish" width="240" /> | <img src="screenshots/words-map.png" alt="Words to listen for and what comes up, and when" width="240" /> |
+| **How often Mia steps in** | **Listening** | **Library** |
+| <img src="screenshots/guidance.png" alt="Choosing Hands-on, Standard or Light guidance" width="240" /> | <img src="screenshots/player.png" alt="Player with Swedish subtitles, English underneath and Mia's next moment on the scrubber" width="240" /> | <img src="screenshots/library.png" alt="Library of episodes in progress" width="240" /> |
+
+---
+
 ## What a listen feels like
 
 1. **Pick a show.** Discover has hand-picked starter shows, each country's top charts, shelves built from your interests, and a box where you can just tell Mia what you're in the mood for ("a calm story for the train"). Any show with a public feed works too.
