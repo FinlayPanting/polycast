@@ -22,6 +22,14 @@ It's built for learning for fun, not homework: put your headphones in, pick a sh
 
 ## Screenshots
 
+**Mia and Leo step in at natural pauses:** a word in the host's own sentence, a culture note, a quick question.
+
+| Word spotlight | Culture note | Quick question |
+|:---:|:---:|:---:|
+| <img src="screenshots/guide-word.png" alt="Mia's word spotlight on 'verktyg' (tools), quoting the host's sentence" width="240" /> | <img src="screenshots/guide-culture.png" alt="Leo's culture note explaining the German 'Ampel' coalition" width="240" /> | <img src="screenshots/guide-question.png" alt="Leo asks a quick multiple-choice question about the episode" width="240" /> |
+
+**Around the listen**
+
 | Discover | Before you press play | Words and episode map |
 |:---:|:---:|:---:|
 | <img src="screenshots/discover.png" alt="Discover: Tell Mia what you're in the mood for, For you and Top charts shelves" width="240" /> | <img src="screenshots/primer.png" alt="Episode primer: the gist in simple Swedish" width="240" /> | <img src="screenshots/words-map.png" alt="Words to listen for and what comes up, and when" width="240" /> |
