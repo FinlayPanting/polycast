@@ -6,6 +6,8 @@ import { Artwork, Button, Row, Screen, Txt } from '../components/ui'
 import { api } from '../lib/api'
 import { languageName } from '../lib/languages'
 import { useSession } from '../lib/session'
+import { useTranslations } from '../lib/translate'
+import { TranslatedLine } from '../components/Translated'
 import { space, type, usePalette } from '../theme'
 
 export default function Search() {
@@ -15,6 +17,8 @@ export default function Search() {
   const [q, setQ] = useState('')
   const [results, setResults] = useState<PodcastSummary[]>([])
   const [error, setError] = useState<string>()
+  // Result titles in the learner's language, in one request per result list (PC-1017-T1).
+  const tr = useTranslations({ titles: results.map((r) => r.title) }, results.length > 0)
 
   useEffect(() => {
     const query = q.trim()
@@ -64,6 +68,7 @@ export default function Search() {
               <Txt variant="bodyStrong" numberOfLines={2}>
                 {item.title}
               </Txt>
+              <TranslatedLine text={tr.titles.get(item.title)} pending={tr.pending} />
               <Txt variant="small" tone="quiet" numberOfLines={1}>
                 {item.author}
               </Txt>

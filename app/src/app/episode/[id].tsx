@@ -10,6 +10,8 @@ import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '
 import { earlyPrimerUrl, jumpStart, loadEarlyPrimer, primerSource } from '../../lib/primer'
 import { config } from '../../lib/config'
 import { Primer, PrimerBuilding } from '../../components/Primer'
+import { TranslatedDescription, TranslatedLine } from '../../components/Translated'
+import { useTranslations } from '../../lib/translate'
 import type { Primer as PrimerData } from '@polycast/core'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
@@ -54,6 +56,8 @@ export default function Episode() {
     }
     return episode
   }, [id])
+  // The title and description in the learner's language, made once and shared (PC-1017-T1).
+  const tr = useTranslations({ titles: ep ? [ep.title] : [], episodeId: ep?.description ? ep.id : undefined }, Boolean(ep) && !offline)
 
   // The primer, once the episode is ready (PC-1017-P4). Offline, the saved lesson's copy is used.
   useEffect(() => {
@@ -187,12 +191,16 @@ export default function Episode() {
         <Button kind="quiet" label="Back" onPress={() => router.back()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
         <Artwork uri={ep.image ?? ep.podcasts.artwork} size={primer ? 120 : 240} radius={primer ? 14 : 20} />
         <View style={{ gap: space.sm }}>
-          <Txt variant="title" accessibilityRole="header">
-            {ep.title}
-          </Txt>
+          <View>
+            <Txt variant="title" accessibilityRole="header">
+              {ep.title}
+            </Txt>
+            <TranslatedLine text={tr.titles.get(ep.title)} pending={tr.pending} variant="body" />
+          </View>
           <Txt tone="quiet">
             {ep.podcasts.title}, {minutes(ep.duration_sec)}
           </Txt>
+          {ep.description && !primer ? <TranslatedDescription original={ep.description} translation={tr.episodeDescription} pending={tr.pending} /> : null}
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             {ep.status === 'ready' ? <Tag label="Ready" tone="play" /> : null}
             {ep.difficulty ? <Tag label={ep.difficulty.label} tone="level" /> : null}

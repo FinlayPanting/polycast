@@ -14,6 +14,8 @@ export interface EpisodeDetail {
   status: 'none' | 'preparing' | 'ready' | 'failed'
   difficulty: { label: string } | null
   podcasts: { title: string; artwork: string | null }
+  /** From the feed, cleaned (PC-1017-T1); missing offline. */
+  description?: string | null
 }
 
 export interface ListenRow {
@@ -26,7 +28,7 @@ export interface ListenRow {
 
 export async function getEpisode(id: string): Promise<{ episode: EpisodeDetail; activeJob?: { id: string; stage: string | null }; offline?: boolean; preparedByMe?: boolean }> {
   if (config.demo) return demo.getEpisode(id)
-  const { data, error } = await supabase.from('episodes').select('id, title, duration_sec, image, audio_url, status, difficulty, podcasts(title, artwork)').eq('id', id).single()
+  const { data, error } = await supabase.from('episodes').select('id, title, duration_sec, image, audio_url, status, difficulty, description, podcasts(title, artwork)').eq('id', id).single()
   if (error) {
     // Offline: an episode saved on the phone still opens and plays.
     const saved = loadLesson(id)?.payload.episode

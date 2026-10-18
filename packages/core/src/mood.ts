@@ -1,3 +1,4 @@
+import { stripSponsorReads } from './showText'
 /**
  * "Tell Mia what you're in the mood for" (board item PC-1016-07): a learner types a mood, or taps a
  * chip, and gets three shows or prepared episodes in their language with a line on why each fits.
@@ -74,7 +75,7 @@ export function prefilterCandidates(mood: string, pool: MoodCandidate[], max = M
   return scored.slice(0, max).map((s) => s.c)
 }
 
-/** Strips HTML, links' markup and extra spaces from a feed description and caps its length. */
+/** Strips HTML, links, sponsor reads and extra spaces from a feed description and caps its length. */
 export function cleanDescription(html: string | undefined | null, max = 1000): string | undefined {
   if (!html) return undefined
   // Feeds often escape their HTML (&lt;p&gt;), so unescape the brackets before removing tags.
@@ -90,8 +91,10 @@ export function cleanDescription(html: string | undefined | null, max = 1000): s
     .replace(/https?:\/\/\S+/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  if (!text) return undefined
-  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text
+  // Sponsor reads and hosting notices aren't what the show is about (PC-1017-T1).
+  const clean = stripSponsorReads(text)
+  if (!clean) return undefined
+  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean
 }
 
 const LANGUAGE_NAMES: Record<string, string> = { es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese', sv: 'Swedish', en: 'English' }

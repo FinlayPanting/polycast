@@ -5,6 +5,8 @@ import { FlatList, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/ui'
 import { api, type EpisodeListing } from '../lib/api'
 import { useAsync } from '../lib/useAsync'
+import { useTranslations } from '../lib/translate'
+import { TranslatedDescription, TranslatedLine } from '../components/Translated'
 import { space } from '../theme'
 import { Loading } from '../components/Loading'
 
@@ -12,7 +14,7 @@ function published(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
 
-export function EpisodeRow({ e, firstListen = false }: { e: EpisodeListing; firstListen?: boolean }) {
+export function EpisodeRow({ e, firstListen = false, translation, translating }: { e: EpisodeListing; firstListen?: boolean; translation?: string; translating?: boolean }) {
   const date = published(e.published)
   return (
     <Row accessibilityLabel={`${e.title}, ${minutes(e.duration_sec)}${e.status === 'ready' ? ', ready now' : ''}${firstListen ? ', good first listen' : ''}`} onPress={() => router.push(`/episode/${e.id}`)}>
@@ -20,6 +22,7 @@ export function EpisodeRow({ e, firstListen = false }: { e: EpisodeListing; firs
         <Txt variant="bodyStrong" numberOfLines={2}>
           {e.title}
         </Txt>
+        <TranslatedLine text={translation} pending={translating} />
         <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center', flexWrap: 'wrap' }}>
           <Txt variant="small" tone="quiet">
             {[date, minutes(e.duration_sec)].filter(Boolean).join(', ')}
@@ -40,6 +43,8 @@ export default function Show() {
   const { data, error, reload } = useAsync(() => api.openShow(params), [params.appleId, params.feedUrl, params.podcastId])
   // One recent episode a new learner can finish in a sitting, so their first listen reaches the wrap-up.
   const firstListen = useMemo(() => (data ? goodFirstListen(data.episodes) : undefined), [data])
+  // Titles and the description in the learner's language, shared and cached on the server (PC-1017-T1).
+  const tr = useTranslations({ titles: data ? [data.podcast.title, ...data.episodes.map((e) => e.title)] : [], podcastId: data?.podcast.description ? data.podcast.id : undefined }, Boolean(data))
 
   return (
     <Screen>
@@ -53,10 +58,14 @@ export default function Show() {
             {data ? (
               <>
                 <Artwork uri={data.podcast.artwork} size={180} radius={20} />
-                <Txt variant="title" accessibilityRole="header">
-                  {data.podcast.title}
-                </Txt>
+                <View>
+                  <Txt variant="title" accessibilityRole="header">
+                    {data.podcast.title}
+                  </Txt>
+                  <TranslatedLine text={tr.titles.get(data.podcast.title)} pending={tr.pending} variant="body" />
+                </View>
                 {data.podcast.author ? <Txt tone="quiet">{data.podcast.author}</Txt> : null}
+                {data.podcast.description ? <TranslatedDescription original={data.podcast.description} translation={tr.podcastDescription} pending={tr.pending} /> : null}
               </>
             ) : error ? (
               <View style={{ gap: space.md }}>
@@ -68,7 +77,9 @@ export default function Show() {
             )}
           </View>
         }
-        renderItem={({ item }) => <EpisodeRow e={item} firstListen={item.id === firstListen} />}
+        renderItem={({ item, index }) => (
+          <EpisodeRow e={item} firstListen={item.id === firstListen} translation={tr.titles.get(item.title)} translating={tr.pending && index < 39} />
+        )}
       />
     </Screen>
   )

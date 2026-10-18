@@ -83,6 +83,7 @@ run('API and worker', () => {
 
     const opened = await (await call(anna, 'POST', '/v1/podcasts/open', { appleId: '555' })).json()
     expect(opened.podcast.title).toBe('Svenska Samtal')
+    expect(opened.podcast.description).toBe('Vardagssvenska, lugnt och roligt.') // for the show page (PC-1017-T1)
     expect(opened.episodes.map((e: any) => e.title)).toEqual(['Tåget', 'Fikan'])
     const episodeId = opened.episodes[0].id
 
@@ -417,5 +418,40 @@ run('API and worker', () => {
     expect(over.status).toBe(429)
     expect((await over.json()).error).toBe(MOOD_MESSAGES.freeUsed)
     expect((await ask('   ')).status).toBe(400)
+  })
+
+  it('translates titles and a show’s description once, for everyone, against the cap (PC-1017-T1)', async () => {
+    const someone = await learner()
+    const other = await learner()
+    const [show] = await sql`select id, description from podcasts where feed_url = ${FEED_URL}`
+    const sent: string[][] = []
+    const translateText: TextModel = {
+      async generateJson<T>(i: Parameters<TextModel['generateJson']>[0]) {
+        const texts = [...i.prompt.matchAll(/^(\d+): (.*)$/gm)].map((m) => m[2]!)
+        sent.push(texts)
+        return { data: { translations: texts.map((t, id) => ({ id, text: `EN ${t}` })) } as T, usage: { textInTokens: 200, textOutTokens: 100 } }
+      },
+    }
+    const ledger = memoryLedger()
+    const app = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, lookupHost: publicHost, translateText, guard: new SpendGuard(ledger, 5) })
+    const ask = (body: unknown, who = someone) =>
+      app.request('/v1/translate', { method: 'POST', headers: { Authorization: `Bearer ${who}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+    const first = await (await ask({ titles: ['Tåget', 'Fikan'], podcastId: show!.id })).json()
+    expect(first).toMatchObject({ to: 'en', titles: ['EN Tåget', 'EN Fikan'], podcastDescription: `EN ${show!.description}`, episodeDescription: null })
+    expect([...ledger.entries.keys()].some((k) => k.startsWith('translate-'))).toBe(true)
+
+    // Another learner gets the same translations from the shared table, with no new call.
+    const again = await (await ask({ titles: ['Fikan', 'Tåget'], podcastId: show!.id }, other)).json()
+    expect(again.titles).toEqual(['EN Fikan', 'EN Tåget'])
+    expect(sent).toHaveLength(1)
+
+    // Only catalogue descriptions, by id; arbitrary long text isn't translated as a "title".
+    await ask({ titles: ['x'.repeat(5000)] })
+    expect(sent.at(-1)![0]!.length).toBeLessThanOrEqual(200)
+
+    // Off without a model.
+    const off = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, lookupHost: publicHost })
+    expect((await off.request('/v1/translate', { method: 'POST', headers: { Authorization: `Bearer ${someone}`, 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(503)
   })
 })

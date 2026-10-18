@@ -32,6 +32,7 @@ async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: u
 export interface EpisodeListing {
   id: string
   title: string
+  description?: string | null
   published: string | null
   duration_sec: number
   image: string | null
@@ -40,7 +41,7 @@ export interface EpisodeListing {
 }
 
 export interface ShowPage {
-  podcast: { id: string; title: string; author: string | null; artwork: string | null; language: string | null }
+  podcast: { id: string; title: string; author: string | null; artwork: string | null; language: string | null; description?: string | null }
   episodes: EpisodeListing[]
 }
 
@@ -91,6 +92,9 @@ export const api = {
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
   // Opening a show re-reads its feed on the server, which may take up to 15 seconds itself.
   openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show, 25_000),
+  /** Shared translations (PC-1017-T1): a list's titles, and a show's or episode's description by id. */
+  translate: (req: { titles?: string[]; podcastId?: string; episodeId?: string }) =>
+    call<{ to: string; titles: (string | null)[]; podcastDescription: string | null; episodeDescription: string | null }>('POST', '/v1/translate', req, 20_000),
   prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
   /** `level` is the guide intensity chosen for this episode; left out, the server uses the learner's default. */

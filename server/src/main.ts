@@ -9,7 +9,9 @@ import { connect, releaseJob } from './db'
 import { elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
 import { chooseTtsProvider, withFallbackSpeech } from './providers/speechChoice'
 import { elevenVoiceFor } from './voices'
-import { geminiSpeech, geminiText } from './providers/gemini'
+import { GEMINI_MODELS, geminiSpeech, geminiText } from './providers/gemini'
+import { pretranslateDiscover } from './translations'
+import { LAUNCH_LANGUAGES } from '@polycast/core'
 import { geminiBatchText } from './providers/geminiBatch'
 import { googleChirpSpeech } from './providers/googleTts'
 import type { Storage } from './providers/types'
@@ -91,7 +93,8 @@ async function main() {
   const alert = webhookAlert(process.env.ALERT_WEBHOOK_URL)
   const podcastIndex = process.env.PODCAST_INDEX_KEY ? { key: process.env.PODCAST_INDEX_KEY, secret: need('PODCAST_INDEX_SECRET') } : undefined
 
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
+  const translateText = geminiText(gemini, GEMINI_MODELS.textLite)
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), translateText, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
@@ -146,6 +149,19 @@ async function main() {
     }
     const nudgeTimer = setInterval(() => void nudgeRound(), 3 * 60 * 60_000)
     stopping.signal.addEventListener('abort', () => clearInterval(nudgeTimer))
+
+    // Shared translations of the day's Discover pool (PC-1017-T1): 15 minutes after start, then daily.
+    const translateRound = async () => {
+      try {
+        const n = await pretranslateDiscover({ sql, text: translateText, fetch, podcastIndex }, LAUNCH_LANGUAGES)
+        console.log(`Discover pool translated (${n} titles and descriptions checked)`)
+      } catch (e) {
+        console.error('translation round failed', e)
+      }
+    }
+    const firstTranslate = setTimeout(() => void translateRound(), 15 * 60_000)
+    const translateTimer = setInterval(() => void translateRound(), 24 * 60 * 60_000)
+    stopping.signal.addEventListener('abort', () => (clearTimeout(firstTranslate), clearInterval(translateTimer)))
   }
 
   // Railway stops the old server on every deploy. Hand an unfinished job back to the queue so

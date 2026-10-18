@@ -7,6 +7,7 @@ import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestPreparation, startListen, type Sql } from './db'
 import { discoverShelves } from './discover'
 import { cachedMood, MoodUnavailable, recommendByMood } from './mood'
+import { translateTexts } from './translations'
 import type { TextModel } from './providers/types'
 import { SpendCapReached, type SpendGuard } from './budget'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
@@ -44,6 +45,8 @@ export interface ApiDeps {
   lookupHost?: LookupHost
   /** Gemini, for the one small call behind "Tell Mia what you're in the mood for". Unset: mood picks are off. */
   text?: TextModel
+  /** Gemini Flash-Lite, for shared translations of show titles and descriptions (PC-1017-T1). Unset: off. */
+  translateText?: TextModel
   /** Tests pass one; otherwise the daily spending cap from settings. */
   guard?: SpendGuard
 }
@@ -65,6 +68,9 @@ export const SLOW_DOWN = 'Give it a moment, then try again.'
  * Mood picks a learner can ask for each day (one small Gemini call each, about a tenth of a cent).
  * A mood someone already asked today is answered from the cache and doesn't count.
  */
+/** Translating titles and descriptions (PC-1017-T1): per learner, so nobody can run up the shared cap. */
+export const TRANSLATE_LIMITS = { perMinute: 30, perDay: 300, titles: 40, titleChars: 200 }
+
 export const MOOD_LIMITS = { freePerDay: 3, plusPerDay: 30 }
 export const MOOD_MESSAGES = {
   freeUsed: "That's today's three mood picks. Try again tomorrow, or have a look through the shelves below. Plus gives you more.",
@@ -243,6 +249,38 @@ export function createApi(deps: ApiDeps) {
     }
   })
 
+  /**
+   * Shared translations for the show pages (PC-1017-T1): a list's titles in one go, and a show's or
+   * episode's description by id (only catalogue text is translated). Made once, kept for everyone,
+   * reserved against the daily cap and free to learners. Answers in the learner's own language.
+   */
+  const translateMinute = rateLimiter(TRANSLATE_LIMITS.perMinute, 60_000)
+  const translateDay = rateLimiter(TRANSLATE_LIMITS.perDay, 24 * 60 * 60_000)
+  app.post('/v1/translate', async (c) => {
+    const userId = c.get('userId')
+    if (!deps.translateText) return c.json({ error: 'Translations are off just now.' }, 503)
+    if (!translateMinute.hit(userId) || !translateDay.hit(userId)) return c.json({ error: SLOW_DOWN }, 429)
+    const body = await c.req.json().catch(() => ({}))
+    const titles: string[] = (Array.isArray(body?.titles) ? body.titles : []).slice(0, TRANSLATE_LIMITS.titles).map((t: unknown) => String(t ?? '').slice(0, TRANSLATE_LIMITS.titleChars))
+    const [profile] = await sql`select native_language from profiles where id = ${userId}`
+    const to = profile?.native_language ?? 'en'
+    const [podcast] = body?.podcastId ? await sql`select description from podcasts where id = ${String(body.podcastId)} and not removed` : []
+    const [episode] = body?.episodeId ? await sql`select e.description from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${String(body.episodeId)} and not p.removed` : []
+    const texts = [...titles, podcast?.description ?? '', episode?.description ?? '']
+    try {
+      const out = await translateTexts({ sql, text: deps.translateText, guard: deps.guard }, texts, to)
+      return c.json({
+        to,
+        titles: out.slice(0, titles.length),
+        podcastDescription: podcast?.description ? out[titles.length] : null,
+        episodeDescription: episode?.description ? out[titles.length + 1] : null,
+      })
+    } catch (e) {
+      if (e instanceof SpendCapReached || (e instanceof Error && e.name === 'ProviderError')) return c.json({ error: 'Translations are off just now.' }, 503)
+      throw e
+    }
+  })
+
   app.get('/v1/search', async (c) => {
     const q = c.req.query('q')?.trim().slice(0, LEARNER_LIMITS.searchMaxChars)
     const language = c.req.query('language') ?? 'sv'
@@ -269,9 +307,9 @@ export function createApi(deps: ApiDeps) {
       if (!known) return c.json({ error: 'We couldn’t load this show right now.' }, 502)
       podcastId = known.id // serve what we have
     }
-    const [podcast] = await sql`select id, title, author, artwork, language from podcasts where id = ${podcastId}`
+    const [podcast] = await sql`select id, title, author, artwork, language, description from podcasts where id = ${podcastId}`
     const episodes = await sql`
-      select id, title, published, duration_sec, image, status, difficulty from episodes
+      select id, title, published, duration_sec, image, status, difficulty, description from episodes
       where podcast_id = ${podcastId} order by published desc nulls last limit 50`
     return c.json({ podcast, episodes })
   })

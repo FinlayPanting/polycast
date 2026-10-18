@@ -5,6 +5,8 @@ const BASE = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 
 export const GEMINI_MODELS = {
   text: 'gemini-3.8-flash',
+  /** Show titles and descriptions (PC-1017-T1): short, simple translations. */
+  textLite: 'gemini-3.8-flash-lite',
   tts: 'gemini-3.8-flash-tts',
   /** A third cheaper; only the voice audition uses it so far (server/src/audition.ts). */
   ttsLite: 'gemini-3.8-flash-lite-tts',
