@@ -155,6 +155,15 @@ describe('moving a lesson onto the listener\'s copy', () => {
       },
       { id: 'z', kind: 'wrapUp', at: 420, minLevel: 'light', script: '', clips: [] },
     ],
+    primer: {
+      gist: '',
+      gistNative: '',
+      words: [
+        { text: 'alltså', lemma: 'alltså', meaning: 'so', at: 200, clip: { start: 200, end: 200.6 } },
+        { text: 'köp', lemma: 'köpa', meaning: 'buy', at: 120, clip: { start: 120, end: 120.4 } },
+      ],
+      themes: [{ title: 'Greetings', at: 10 }],
+    },
   } as LessonPlan
 
   const out = retimeLesson(transcript, plan, map)
@@ -176,6 +185,15 @@ describe('moving a lesson onto the listener\'s copy', () => {
     expect(m!.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip'])
     expect(m!.audio!.durationSec).toBeCloseTo(2.6, 5)
     expect(z!.at).toBe(400)
+  })
+
+  it('moves the primer’s words and themes too, dropping a clip only in our copy (PC-1017-P1)', () => {
+    const [a, b] = out.plan!.primer!.words
+    expect(a!.at).toBe(170)
+    expect(a!.clip).toEqual({ start: 170, end: expect.closeTo(170.6, 5) })
+    expect(b!.at).toBe(130)
+    expect(b!.clip).toEqual({ start: -1, end: -1 })
+    expect(out.plan!.primer!.themes[0]!.at).toBe(40)
   })
 
   it('leaves the lesson alone when the match is not trustworthy', () => {

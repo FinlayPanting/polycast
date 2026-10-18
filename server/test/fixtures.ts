@@ -68,6 +68,23 @@ export function draftFor(): PlanDraft {
     ],
     cultureNotes: [{ segmentId: 's19', script: 'Fika is a Swedish coffee break, almost a ritual.' }],
     quickQuestions: [{ segmentId: 's50', prompt: 'Was the train on time?', options: ['Yes', 'No', 'They walked'], answerIndex: 1 }],
+    primer: {
+      gist: 'Anna och Erik pratar om ett [[försenat]] tåg. Sen tar de en fika.',
+      gistNative: 'Anna and Erik talk about a late train. Then they have a fika.',
+      words: [
+        { text: 'fika', lemma: 'fika', meaning: 'coffee break', segmentId: 's33' },
+        { text: 'försenad', lemma: 'försenad', meaning: 'delayed', segmentId: 's7' },
+        { text: 'hittepå', lemma: 'hittepå', meaning: 'made up', segmentId: 's2' }, // not in the episode
+        { text: 'Fika', lemma: 'fika', meaning: 'coffee break', segmentId: 's33' }, // a repeat
+        { text: 'sambo', lemma: 'sambo', meaning: 'live-in partner', segmentId: 's59' },
+        { text: 'ändå', lemma: 'ändå', meaning: 'anyway', segmentId: 's14' },
+      ],
+      themes: [
+        { title: 'Getting home', segmentId: 's45' },
+        { title: 'A late train', segmentId: 's1' },
+        { title: 'Nowhere', segmentId: 's999' },
+      ],
+    },
     wrapUp: {
       script: 'Nicely done. Anna and Erik covered a late train, a fika and getting home.',
       questions: [

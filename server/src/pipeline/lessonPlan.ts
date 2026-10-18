@@ -13,6 +13,9 @@ import {
   type GuideMoment,
   type Host,
   type LessonPlan,
+  type Primer,
+  type PrimerTheme,
+  type PrimerWord,
   type Question,
   type RankedUnit,
   type Segment,
@@ -33,6 +36,8 @@ export interface PlanDraft {
   cultureNotes: { segmentId: string; script: string }[]
   quickQuestions: { segmentId: string; prompt: string; options: string[]; answerIndex: number }[]
   wrapUp: { script: string; questions: Question[] }
+  /** Optional so drafts from older prompts (and test fixtures) still assemble. */
+  primer?: { gist: string; gistNative: string; words: DraftTerm[]; themes: { title: string; segmentId: string }[] }
 }
 
 interface DraftTerm {
@@ -85,8 +90,18 @@ export const PLAN_SCHEMA = {
     cultureNotes: { type: 'array', items: { type: 'object', properties: { segmentId: { type: 'string' }, script: { type: 'string' } }, required: ['segmentId', 'script'] } },
     quickQuestions: { type: 'array', items: { type: 'object', properties: { segmentId: { type: 'string' }, ...question.properties }, required: ['segmentId', ...question.required] } },
     wrapUp: { type: 'object', properties: { script: { type: 'string' }, questions: { type: 'array', items: question } }, required: ['script', 'questions'] },
+    primer: {
+      type: 'object',
+      properties: {
+        gist: { type: 'string' },
+        gistNative: { type: 'string' },
+        words: { type: 'array', items: term },
+        themes: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, segmentId: { type: 'string' } }, required: ['title', 'segmentId'] } },
+      },
+      required: ['gist', 'gistNative', 'words', 'themes'],
+    },
   },
-  required: ['hosts', 'summary', 'warmup', 'chapters', 'wordMoments', 'cultureNotes', 'quickQuestions', 'wrapUp'],
+  required: ['hosts', 'summary', 'warmup', 'chapters', 'wordMoments', 'cultureNotes', 'quickQuestions', 'wrapUp', 'primer'],
 }
 
 function clock(sec: number): string {
@@ -115,6 +130,7 @@ Write a lesson plan:
 - quickQuestions: about one every 3 minutes, checking the gist of what was just said, after the given line. The prompt starts with a few words of context (e.g. "Erik was just talking about his old camera."), then asks. Three short options, one correct.
 - Placing moments: the guide only ever steps in once a speaker has finished their answer or their bit, or straight after someone asks a question; never mid-sentence or mid-exchange. For culture notes and quick questions, give the id of the line where that happens. Spread everything out through the episode rather than bunching it.
 - wrapUp: script (under 70 words) recapping the episode warmly and honestly, and 3 questions on its content.
+- primer: a short warm-up the learner reads before pressing play. No [[ ]] marks anywhere in the primer. gist: two or three short sentences on what the episode is about, in simple ${target} a learner at A2 could follow. gistNative: the same in ${native}. words: the 5 to 8 most useful words or short phrases to listen for (they may repeat warm-up or word-moment terms), copied exactly as spoken in the line given by segmentId, with dictionary form and meaning in ${native}. themes: the 2 to 4 main themes, a few words each in ${native}, with the id of the line where each first comes up.
 
 Transcript:
 ${transcript.segments.map((s) => `${s.id} [${clock(s.start)}] ${s.speaker ?? '?'}: ${s.text}`).join('\n')}`
@@ -279,6 +295,8 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
     clips: [],
   })
 
+  const primer = draft.primer ? assemblePrimer(draft.primer, transcript, dropped) : undefined
+
   // Drop whatever still breaks the rules, and keep word-moment pairs together.
   const problems = validateMoments(moments, opts.durationSec)
   const badIds = new Set(problems.map((p) => p.momentId))
@@ -296,8 +314,51 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
       summary: draft.summary,
       moments: kept.sort((a, b) => a.at - b.at),
       wrapUpQuestions: wrapUpQuestions(draft),
+      ...(primer ? { primer } : {}),
     },
     dropped,
+  }
+}
+
+/** Most words a primer lists, and the fewest that make it worth showing (PC-1017-P1). */
+export const PRIMER_MAX_WORDS = 8
+export const PRIMER_MIN_WORDS = 3
+
+/**
+ * Places the primer on the timeline: each word at the first time the host says it (with the clip of
+ * them saying it), each theme where its line starts. Words the host never says are dropped, repeats
+ * kept once, and the list is ordered as they come up. With too few words left there's no primer.
+ */
+export function assemblePrimer(draft: NonNullable<PlanDraft['primer']>, transcript: Transcript, dropped: string[] = []): Primer | undefined {
+  const words: PrimerWord[] = []
+  const seen = new Set<string>()
+  for (const t of draft.words) {
+    const key = t.lemma.toLocaleLowerCase()
+    if (seen.has(key)) continue
+    const all = findOccurrences(transcript.words, t.text, transcript.language)
+    const occ = all[0]
+    if (!occ) {
+      dropped.push(`primer word "${t.text}": not found in transcript`)
+      continue
+    }
+    seen.add(key)
+    words.push({ text: t.text, lemma: t.lemma, meaning: withoutLanguageMarks(t.meaning), at: occ.start, clip: wordClip(transcript.words, occ) })
+    if (words.length === PRIMER_MAX_WORDS) break
+  }
+  words.sort((a, b) => a.at - b.at)
+  if (words.length < PRIMER_MIN_WORDS || !draft.gist.trim()) {
+    dropped.push('primer: too few words to listen for')
+    return undefined
+  }
+  const themes: PrimerTheme[] = draft.themes
+    .map((th) => ({ title: withoutLanguageMarks(th.title).trim(), at: transcript.segments.find((s) => s.id === th.segmentId)?.start ?? -1 }))
+    .filter((th) => th.title && th.at >= 0)
+    .sort((a, b) => a.at - b.at)
+  return {
+    gist: withoutLanguageMarks(draft.gist).trim(),
+    gistNative: withoutLanguageMarks(draft.gistNative).trim(),
+    words,
+    themes,
   }
 }
 

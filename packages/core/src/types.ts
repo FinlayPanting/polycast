@@ -127,4 +127,35 @@ export interface LessonPlan {
    * and for publisher transcripts.
    */
   syncUrl?: string
+  /** Written once while preparing (PC-1017-P1); missing on plans written before 18 Oct 2026. */
+  primer?: Primer
+}
+
+/**
+ * The Episode Primer: a short warm-up the learner reads before pressing play, so they go in
+ * oriented. Saved inside the lesson plan, so it works offline.
+ */
+export interface Primer {
+  /** Two or three short lines on what the episode is about, in simple target-language words. */
+  gist: string
+  /** The same in the learner's own language, for beginners. */
+  gistNative: string
+  /** 5 to 8 words to listen for, in the order they first come up. */
+  words: PrimerWord[]
+  /** The episode's main themes, in the order they come up. */
+  themes: PrimerTheme[]
+}
+
+export interface PrimerWord extends Term {
+  /** When the host first says it. */
+  at: number
+  /** The host saying it, cut from the episode audio. */
+  clip: Clip
+}
+
+export interface PrimerTheme {
+  /** A few words, in the learner's language. */
+  title: string
+  /** Roughly when it first comes up. */
+  at: number
 }

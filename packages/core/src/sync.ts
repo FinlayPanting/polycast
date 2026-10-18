@@ -8,7 +8,7 @@
  * is shifted, so every time in the lesson can be moved onto the learner's copy, and anything that
  * only exists in our copy (our adverts) can be left out.
  */
-import type { Clip, GuideMoment, LessonPlan, Segment, Transcript, Word } from './types'
+import type { Clip, GuideMoment, LessonPlan, Primer, Segment, Transcript, Word } from './types'
 
 /** Fingerprints are made from mono 16-bit audio at this rate. */
 export const FINGERPRINT_SAMPLE_RATE = 8000
@@ -298,8 +298,22 @@ export function retimeLesson(transcript: Transcript, plan: LessonPlan | null, ma
     segments.push({ ...s, start, end, wordStart: first, wordEnd: last + 1 })
   }
 
-  const retimedPlan = plan && { ...plan, moments: plan.moments.map((m) => retimeMoment(m, map)) }
+  const retimedPlan = plan && { ...plan, moments: plan.moments.map((m) => retimeMoment(m, map)), ...(plan.primer ? { primer: retimePrimer(plan.primer, map) } : {}) }
   return { transcript: { ...transcript, words, segments }, plan: retimedPlan, synced: true }
+}
+
+/** Primer words and themes move with the episode; a word whose clip is only in our copy loses its clip. */
+function retimePrimer(primer: Primer, map: SyncMap): Primer {
+  return {
+    ...primer,
+    words: primer.words.map((w) => {
+      const start = toListenerTime(map, w.clip.start)
+      const end = toListenerTime(map, w.clip.end)
+      const clip = start !== null && end !== null && end > start ? { start, end } : { start: -1, end: -1 }
+      return { ...w, at: nextListenerTime(map, w.at), clip }
+    }),
+    themes: primer.themes.map((t) => ({ ...t, at: nextListenerTime(map, t.at) })),
+  }
 }
 
 function retimeMoment(m: GuideMoment, map: SyncMap): GuideMoment {

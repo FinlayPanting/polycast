@@ -1,7 +1,7 @@
 import { findBreaks, GUIDE_SPACING, pauseQuality, selectMoments, type LessonPlan } from '@polycast/core'
 import { describe, expect, it } from 'vitest'
 import { memoryLedger, SpendCapReached, SpendGuard, UsageMeter } from '../src/budget'
-import { assemblePlan } from '../src/pipeline/lessonPlan'
+import { assemblePlan, assemblePrimer } from '../src/pipeline/lessonPlan'
 import { prepareEpisode } from '../src/pipeline/prepare'
 import { splitScript, voicePlan } from '../src/pipeline/voice'
 import { TARGET_SPEAKING_RATE } from '../src/providers/googleTts'
@@ -101,6 +101,30 @@ describe('preparing an episode', () => {
       expect(listen.at).toBeLessThanOrEqual(d.ep.termAt[lemma]!)
       expect(spot.at).toBeGreaterThan(d.ep.termAt[lemma]!)
     }
+  })
+
+  it('writes a primer: gist, words to listen for with times and the host’s clip, and themes (PC-1017-P1)', async () => {
+    const d = deps()
+    const { plan, dropped } = await prepareEpisode(input(d.ep), d)
+    const primer = plan.primer!
+    expect(primer.gist).toBe('Anna och Erik pratar om ett försenat tåg. Sen tar de en fika.') // no [[ ]] marks
+    expect(primer.gistNative).toMatch(/late train/)
+    // In the order they come up; the made-up word and the repeat are gone.
+    expect(primer.words.map((w) => w.lemma)).toEqual(['försenad', 'ändå', 'fika', 'sambo'])
+    for (const w of primer.words) {
+      expect(w.at).toBeCloseTo(d.ep.termAt[w.lemma]!, 5)
+      expect(w.clip.start).toBeLessThanOrEqual(w.at)
+      expect(w.clip.end).toBeGreaterThan(w.at)
+    }
+    expect(primer.themes.map((t) => t.title)).toEqual(['A late train', 'Getting home'])
+    expect(primer.themes[0]!.at).toBe(0)
+    expect(dropped.join('\n')).toMatch(/primer word "hittepå"/)
+  })
+
+  it('leaves the primer out when too few of its words are in the episode', () => {
+    const ep = syntheticEpisode()
+    const primer = assemblePrimer({ gist: 'Hej.', gistNative: 'Hi.', words: [{ text: 'fika', lemma: 'fika', meaning: 'x', segmentId: 's33' }], themes: [] }, { language: 'sv', source: 'scribe', words: ep.words, segments: [] })
+    expect(primer).toBeUndefined()
   })
 
   it('gives each guidance level the right subset', async () => {
