@@ -131,3 +131,15 @@ export function estimatePrepUsage(durationSec: number, opts: { feedTranscript?: 
 export function estimatePrepCostUSD(durationSec: number, opts: { feedTranscript?: boolean; at?: Date; voice?: GuideVoiceProvider } = {}): number {
   return costUSD(estimatePrepUsage(durationSec, opts), opts.at)
 }
+
+/**
+ * Roughly what preparing an hour of episode costs on a learner's own keys (PC-1017-K2), split by
+ * whose account pays: ElevenLabs (Scribe, the name-spelling edit and the guide's voice) and Google
+ * (Gemini's writing). From the same estimate the spending cap uses, at list prices.
+ */
+export function ownKeysCostUSD(durationSec: number, at: Date = new Date()): { elevenlabs: number; google: number } {
+  const u = estimatePrepUsage(durationSec)
+  const elevenlabs = costUSD({ ...ZERO_USAGE, transcriptionSec: u.transcriptionSec, transcriptEditSec: u.transcriptEditSec, elevenTtsChars: u.elevenTtsChars }, at)
+  const google = costUSD({ ...ZERO_USAGE, textInTokens: u.textInTokens, textOutTokens: u.textOutTokens }, at)
+  return { elevenlabs, google }
+}
