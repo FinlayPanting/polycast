@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>For podcast creators · Polycast</title>
+<meta name="description" content="How Polycast treats your show, and how to ask for it to be removed.">
+<meta name="theme-color" content="#1a1a30">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/"><img src="/icon.png" alt="">Polycast</a>
+  <nav class="top"><a href="/creators" aria-current="page">Creators</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+</div></header>
+
+<main><div class="wrap">
+  <h1>For podcast creators</h1>
+  <p class="lede">Polycast helps people learn a language by listening to shows like yours. Here's how it treats your work.</p>
+
+  <h2>How your show appears</h2>
+  <ul>
+    <li><strong>Your audio comes from your feed.</strong> Every listen downloads the episode from your own feed, so it counts in your hosting stats, and your adverts stay in. Polycast never stores or re-hosts your audio.</li>
+    <li><strong>Your name and artwork stay on it.</strong> Episodes show your show's title, artwork and author, as they appear in your feed.</li>
+    <li><strong>Learners hear you, not a copy.</strong> Polycast adds subtitles and translations, and a guide who only speaks when you pause. Nothing in your episode is changed or cut.</li>
+    <li><strong>New listeners.</strong> People learning your language find shows they'd never have come across, and often keep listening once they can follow along.</li>
+  </ul>
+
+  <h2>Ask for your show to be removed</h2>
+  <p>If you'd rather your show wasn't on Polycast, tell us here. It'll be taken off within a few days, and you'll get a reply to confirm.</p>
+
+  <div class="card">
+    <form id="removal" novalidate>
+      <label for="podcastTitle">Your show's name</label>
+      <input id="podcastTitle" name="podcastTitle" maxlength="200" required autocomplete="off">
+
+      <label for="contact">How to reach you <span class="hint">(email, ideally from your show's domain)</span></label>
+      <input id="contact" name="contact" maxlength="200" required autocomplete="email">
+
+      <label for="message">Anything else <span class="hint">(optional)</span></label>
+      <textarea id="message" name="message" maxlength="2000"></textarea>
+
+      <button type="submit">Send removal request</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+  <p>Prefer email? Write to <a href="mailto:hello@polycast.app">hello@polycast.app</a>. The same address is there for anything else, from partnerships to featuring your show.</p>
+</div></main>
+
+<footer><div class="wrap">
+  <a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="mailto:hello@polycast.app">Contact</a>
+</div></footer>
+
+<script>
+  const form = document.getElementById('removal')
+  const status = document.getElementById('status')
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const data = Object.fromEntries(new FormData(form))
+    if (!data.podcastTitle.trim() || !data.contact.trim()) {
+      status.textContent = 'Please give the show’s name and a way to reach you.'
+      return
+    }
+    const button = form.querySelector('button')
+    button.disabled = true
+    status.textContent = 'Sending…'
+    try {
+      const res = await fetch('/api/removal-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      const body = await res.json().catch(() => ({}))
+      if (res.ok) {
+        form.reset()
+        status.textContent = 'Thanks, that’s with us. You’ll hear back within a few days.'
+      } else {
+        status.textContent = body.error || 'That didn’t go through. Please try again, or email hello@polycast.app.'
+      }
+    } catch {
+      status.textContent = 'That didn’t go through. Please try again, or email hello@polycast.app.'
+    } finally {
+      button.disabled = false
+    }
+  })
+</script>
+</body>
+</html>
