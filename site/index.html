@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Polycast: Learn with Podcasts</title>
-<meta name="description" content="Learn a language through the podcasts people there actually listen to. Subtitles on real podcasts, and a guide who steps in at natural pauses.">
-<meta property="og:title" content="Polycast: Learn with Podcasts">
-<meta property="og:description" content="Learn a language through the podcasts people there actually listen to.">
-<meta property="og:image" content="https://polycast.app/icon.png">
+<meta name="description" content="Learn a language through the podcasts people there actually listen to. Subtitles on real shows, your own language underneath, and a guide who steps in at natural pauses. Coming soon to iPhone.">
+<meta property="og:title" content="Polycast: Learn a language with real podcasts">
+<meta property="og:description" content="Subtitles on real podcasts, your own language underneath, and a guide who steps in at natural pauses. Coming soon to iPhone.">
+<meta property="og:image" content="https://polycast.app/img/og.png">
+<meta property="og:url" content="https://polycast.app">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1a1a30">
 <link rel="icon" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -15,34 +17,201 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/home.css">
 </head>
-<body>
+<body class="home">
 <header class="top"><div class="wrap">
   <a class="brand" href="/"><img src="/icon.png" alt="">Polycast</a>
-  <nav class="top"><a href="/creators">Creators</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+  <div class="top-actions">
+    <nav class="top"><a href="#how">How it works</a><a href="#plans">Plans</a><a href="/creators">Creators</a></nav>
+    <a class="gh" href="https://github.com/FinlayPanting/polycast/tree/rebuild-ios"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
+  </div>
 </div></header>
 
 <main><div class="wrap">
-  <section class="hero">
-    <img src="/icon.png" alt="The Polycast logo">
-    <h1>Learn a language with real podcasts</h1>
-    <p class="lede">Subtitles on the podcasts people actually listen to in Spanish, French, German, Italian, Portuguese and Swedish, with your own language underneath.</p>
-    <!-- Swap for the App Store link once the listing is live. -->
-    <a class="button" aria-disabled="true">Coming soon to the App Store</a>
+
+  <section class="hero2">
+    <div>
+      <h1>Learn a language with real podcasts</h1>
+      <p class="lede">Polycast puts subtitles on the shows people actually listen to, with your own language underneath. Your guide steps in at the natural pauses, so you keep up without stopping the story.</p>
+      <div class="ctas">
+        <span class="btn btn-store" aria-disabled="true" title="Polycast isn't on the App Store yet">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.54 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.5zM14.2 6.13c.6-.74 1.01-1.75.9-2.77-.87.04-1.94.59-2.56 1.32-.56.64-1.05 1.68-.92 2.67.98.08 1.97-.49 2.58-1.22z"/></svg>
+          App Store <small>coming soon</small>
+        </span>
+        <a class="btn btn-primary" href="mailto:hello@polycast.app?subject=Tell%20me%20when%20Polycast%20launches&amp;body=Hi%20Finlay%2C%20I'd%20love%20to%20hear%20when%20Polycast%20is%20out.%20The%20language%20I'm%20learning%3A%20">Tell me when it’s out</a>
+      </div>
+
+      <div class="langs">
+        <p>Six languages at launch. Pick one:</p>
+        <div class="lang-row" id="langs"></div>
+      </div>
+    </div>
+
+    <div class="stage" aria-live="polite">
+      <div class="stage-head">
+        <svg class="stage-mark" viewBox="0 0 71 105" aria-hidden="true">
+          <rect x="57" y="28" width="14" height="30" rx="7" />
+          <rect x="38" y="19" width="14" height="47" rx="7" />
+          <rect x="19" y="8" width="14" height="67" rx="7" />
+          <rect x="0" y="0" width="14" height="105" rx="7" fill="#FF9C18" />
+        </svg>
+        <div class="stage-title" id="show">A podcast in Swedish<span>Real host, real conversation</span></div>
+      </div>
+      <div class="stage-line">
+        <p class="said" id="said"><b>Grundidén</b> var ju egentligen enkel.</p>
+        <p class="meant">The basic idea was really simple.</p>
+      </div>
+      <div class="stage-cue"><i></i><i></i><i></i> <span id="cue">Mia steps in at the next pause</span></div>
+      <div class="scrub" aria-hidden="true" id="scrub"></div>
+    </div>
   </section>
 
-  <div class="features">
-    <div class="card"><h3>A guide at the pauses</h3><p>Mia or Leo step in when the host pauses: a word to listen for, a quick recap, a phrase replayed in the host's own voice.</p></div>
-    <div class="card"><h3>Words from the moment</h3><p>Tap any word to see what it means in that sentence, and save it with the clip it came from.</p></div>
-    <div class="card"><h3>Your pace</h3><p>Light, Standard or Hands-on guidance, or switch the guide off and keep the subtitles.</p></div>
-  </div>
+  <section class="sec" id="how">
+    <h2>The host is real. Your guide only speaks in the pauses.</h2>
+    <p class="intro"><span class="guide-name">Mia</span> or <span class="guide-name">Leo</span> pick their moments: a word from the host’s own sentence, the story behind a reference, a quick question to check you’re following.</p>
+    <div class="shots">
+      <figure class="shot">
+        <img src="/img/guide-word.webp" width="540" height="1174" loading="lazy" alt="Mia's word spotlight on the Swedish word 'verktyg' (tools), quoting the host's sentence">
+        <figcaption><strong>A word, in context</strong>The word as the host used it, what it means, and one more example.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="/img/guide-culture.webp" width="540" height="1174" loading="lazy" alt="Leo's culture note explaining the German 'Ampel' coalition">
+        <figcaption><strong>The bit you’d miss</strong>Culture notes for the references locals take for granted.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="/img/guide-question.webp" width="540" height="1174" loading="lazy" alt="Leo asks a quick multiple-choice question about the episode">
+        <figcaption><strong>A quick check</strong>One question at a natural break, so you know you’re keeping up.</figcaption>
+      </figure>
+    </div>
+  </section>
 
-  <p style="text-align:center;margin-top:36px"><span class="host">The host is real.</span> Mia and Leo only step in when the host pauses.</p>
-  <p style="text-align:center" class="updated">Questions or ideas? <a href="mailto:hello@polycast.app">hello@polycast.app</a></p>
+  <section class="sec">
+    <h2>From a show you love to words that stick</h2>
+    <p class="intro">Every episode is prepared once, before you listen, so nothing interrupts the host.</p>
+    <div class="shots four">
+      <figure class="shot">
+        <img src="/img/discover.webp" width="540" height="1182" loading="lazy" alt="Discover: tell Mia what you're in the mood for, plus For you and Top charts shelves">
+        <figcaption><span class="step">1</span><strong>Find a show</strong>Tell Mia what you’re in the mood for, or browse the charts in your new language.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="/img/primer.webp" width="540" height="1182" loading="lazy" alt="Episode primer: the gist of the episode in simple Swedish">
+        <figcaption><span class="step">2</span><strong>Get the gist</strong>A short primer in simple language, before you press play.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="/img/words-map.webp" width="540" height="1182" loading="lazy" alt="Words to listen for, and a map of what comes up when">
+        <figcaption><span class="step">3</span><strong>Know what’s coming</strong>Words to listen for and a map of the episode.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="/img/player.webp" width="540" height="1182" loading="lazy" alt="The player with Swedish subtitles, English underneath and Mia's next moment marked on the scrubber">
+        <figcaption><span class="step">4</span><strong>Listen</strong>Subtitles line by line, your language underneath, phone in your pocket.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="pace">
+      <figure class="shot">
+        <img src="/img/guidance.webp" width="540" height="1182" loading="lazy" alt="Choosing Hands-on, Standard or Light guidance">
+      </figure>
+      <div>
+        <h2>As much help as you want, and no more</h2>
+        <p class="intro">Choose how often your guide steps in. Change it whenever you like, episode to episode.</p>
+        <ul class="levels">
+          <li><strong>Hands-on</strong><span>More moments and more words. For when the language is new.</span></li>
+          <li><strong>Standard</strong><span>A steady rhythm of words and recaps through the episode.</span></li>
+          <li><strong>Light</strong><span>The occasional nudge. Mostly just you and the host.</span></li>
+          <li><strong>Guide off</strong><span>Plain subtitles, for when you’re nearly there.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="plans">
+    <h2>Free to start</h2>
+    <p class="intro">Every episode that’s already prepared is yours to listen to with subtitles, free.</p>
+    <div class="plans">
+      <div class="plan">
+        <h3>Free</h3>
+        <p class="price"><b>€0</b></p>
+        <ul>
+          <li>Subtitles on every prepared episode</li>
+          <li>Your guide on one episode a week</li>
+          <li>Save words as you listen</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>Plus</h3>
+        <p class="price"><b>€4.99</b> a month, or €39 a year</p>
+        <ul>
+          <li>Your guide on every episode</li>
+          <li>Up to 5 hours of brand-new episodes a month, from any show</li>
+          <li>Your whole word bank, with spaced reviews</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="maker">
+      <div>
+        <h2>Made in Salzburg, built in the open</h2>
+        <p>Polycast is made by Finlay Panting, who learnt his languages by clipping lines from the podcasts he loved. It’s built for learning for fun, not homework: pick a show you’d enjoy anyway, put your headphones in, and let the language wash over you.</p>
+        <p>The whole app is open on GitHub, if you’d like to see how it works.</p>
+        <div class="ctas">
+          <a class="btn btn-ghost" href="https://github.com/FinlayPanting/polycast/tree/rebuild-ios"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>See the code on GitHub</a>
+          <a class="btn btn-ghost" href="mailto:hello@polycast.app">hello@polycast.app</a>
+        </div>
+      </div>
+      <div class="side">
+        <h3>Make podcasts?</h3>
+        <p>Every listen downloads your episode from your own feed, adverts and all, so it counts in your stats. Polycast never re-hosts your audio.</p>
+        <p><a href="/creators">How Polycast treats your show</a></p>
+      </div>
+    </div>
+  </section>
+
 </div></main>
 
 <footer><div class="wrap">
-  <a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/creators">For podcast creators</a><a href="mailto:hello@polycast.app">Contact</a>
+  <a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/creators">For podcast creators</a><a href="https://github.com/FinlayPanting/polycast/tree/rebuild-ios">GitHub</a><a href="mailto:hello@polycast.app">Contact</a>
 </div></footer>
+
+<script>
+  // The same line in each launch language. The logo's three bars take the flag's colours, as the app icon does.
+  const LANGS = [
+    { id: 'sv', name: 'Swedish', bars: ['#006AA7', '#FECC02', '#006AA7'], word: 'Grundidén', rest: ' var ju egentligen enkel.', guide: 'Mia' },
+    { id: 'de', name: 'German', bars: ['#000000', '#DD0000', '#FFCE00'], word: 'Die Grundidee', rest: ' war eigentlich ganz einfach.', guide: 'Leo' },
+    { id: 'fr', name: 'French', bars: ['#0055A4', '#FFFFFF', '#EF4135'], word: 'L’idée de départ', rest: ' était plutôt simple.', guide: 'Mia' },
+    { id: 'it', name: 'Italian', bars: ['#009246', '#FFFFFF', '#CE2B37'], word: 'L’idea di base', rest: ' era davvero semplice.', guide: 'Leo' },
+    { id: 'es', name: 'Spanish', bars: ['#AA151B', '#F1BF00', '#AA151B'], word: 'La idea básica', rest: ' era bastante sencilla.', guide: 'Mia' },
+    { id: 'pt', name: 'Portuguese', bars: ['#046A38', '#DA291C', '#FFE900'], word: 'A ideia base', rest: ' era bem simples.', guide: 'Leo' },
+  ]
+  const outline = (c) => (c === '#000000' ? '#5A5A66' : 'none')
+  const mini = (b) => `<svg viewBox="0 0 71 105" aria-hidden="true">${[[57, 28, 30, b[2]], [38, 19, 47, b[1]], [19, 8, 67, b[0]], [0, 0, 105, '#FF9C18']].map(([x, y, h, c]) => `<rect x="${x}" y="${y}" width="14" height="${h}" rx="7" fill="${c}" stroke="${outline(c)}" stroke-width="3"/>`).join('')}</svg>`
+  const row = document.getElementById('langs')
+  const bars = [...document.querySelectorAll('.stage-mark rect')].slice(0, 3).reverse()
+  function pick(lang) {
+    lang.bars.forEach((c, i) => { bars[i].setAttribute('fill', c); bars[i].setAttribute('stroke', outline(c)); bars[i].setAttribute('stroke-width', 3) })
+    document.getElementById('said').innerHTML = `<b>${lang.word}</b>${lang.rest}`
+    document.getElementById('show').firstChild.textContent = `A podcast in ${lang.name}`
+    document.getElementById('cue').textContent = `${lang.guide} steps in at the next pause`
+    row.querySelectorAll('.lang').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === lang.id)))
+  }
+  LANGS.forEach((lang) => {
+    const b = document.createElement('button')
+    b.className = 'lang'
+    b.type = 'button'
+    b.dataset.id = lang.id
+    b.innerHTML = mini(lang.bars) + lang.name
+    b.addEventListener('click', () => pick(lang))
+    row.appendChild(b)
+  })
+  // A scrubber like the player's: orange for what you've heard, magenta where the guide will step in.
+  const scrub = document.getElementById('scrub')
+  const guideAt = new Set([16, 22, 27, 33])
+  scrub.innerHTML = Array.from({ length: 38 }, (_, i) => (i === 12 ? '<span class="head"></span>' : `<span class="${i < 12 ? 'done' : guideAt.has(i) ? 'guide' : ''}"></span>`)).join('')
+  pick(LANGS[0])
+</script>
 </body>
 </html>
