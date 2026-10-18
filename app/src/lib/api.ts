@@ -1,4 +1,4 @@
-import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Refusal, Segment, Word } from '@polycast/core'
+import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
 import { demoCall } from '../demo/api'
 import { supabase } from './supabase'
@@ -98,6 +98,8 @@ export const api = {
     call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, level ? { guide, level } : { guide }),
   /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
+  /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
+  primer: (episodeId: string) => call<{ primer: Primer | null }>('GET', `/v1/episodes/${episodeId}/primer`),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
 }
 

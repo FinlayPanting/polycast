@@ -1,4 +1,4 @@
-import { LISTEN, SHELVES, art } from './fixtures'
+import { LISTEN, PRIMER, SHELVES, art } from './fixtures'
 
 /** Answers the app's API calls with sample data in demo mode. */
 export async function demoCall<T>(method: string, path: string): Promise<T> {
@@ -13,6 +13,7 @@ export async function demoCall<T>(method: string, path: string): Promise<T> {
     } as T
   if (path.startsWith('/v1/discover/')) return { shelves: SHELVES } as T
   if (path.startsWith('/v1/episodes/') && path.endsWith('/listen')) return LISTEN as T
+  if (path.startsWith('/v1/episodes/') && path.endsWith('/primer')) return { primer: path.includes('/ep1/') ? PRIMER : null } as T
   if (path === '/v1/podcasts/open')
     return {
       podcast: { id: 'p1', title: 'Svenska Samtal', author: 'Anna & Erik', artwork: art.samtal, language: 'sv' },

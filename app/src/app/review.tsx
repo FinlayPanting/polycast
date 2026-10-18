@@ -1,33 +1,14 @@
 import { isDue, type SavedWord } from '@polycast/core'
-import { createAudioPlayer, type AudioPlayer } from 'expo-audio'
 import { router } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import { Button, Screen, Txt } from '../components/ui'
 import { useSession } from '../lib/session'
 import { useAsync } from '../lib/useAsync'
 import { CLIP_GONE } from '../lib/storage'
 import { listWords, recordReview } from '../lib/words'
+import { useHostClip } from '../lib/useHostClip'
 import { space, usePalette } from '../theme'
-
-/** Plays the stretch of the episode where the host said the word. */
-function useHostClip() {
-  const player = useRef<AudioPlayer | undefined>(undefined)
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => {
-    clearTimeout(timer.current)
-    player.current?.remove()
-  }, [])
-  return async (audioUrl: string, start: number, end: number) => {
-    clearTimeout(timer.current)
-    player.current?.remove()
-    const p = createAudioPlayer(audioUrl)
-    player.current = p
-    await p.seekTo(start)
-    p.play()
-    timer.current = setTimeout(() => p.pause(), Math.max(400, (end - start) * 1000 + 150))
-  }
-}
 
 /** A short review: hear the host say it, try to recall the meaning, then reveal. */
 export default function Review() {

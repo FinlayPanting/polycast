@@ -297,6 +297,18 @@ export function createApi(deps: ApiDeps) {
   })
 
   /**
+   * The Episode Primer (PC-1017-P1, P4): the warm-up shown before pressing play, for everyone
+   * learning the episode, guided or not. Small, so the episode screen can ask for it every time.
+   */
+  app.get('/v1/episodes/:id/primer', async (c) => {
+    const episodeId = c.req.param('id')
+    const [episode] = await sql`select e.status from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
+    if (!episode) return c.json({ error: 'Not found' }, 404)
+    const [row] = episode.status === 'ready' ? await sql`select plan->'primer' as primer from lesson_plans where episode_id = ${episodeId} and plan ? 'primer' limit 1` : []
+    return c.json({ primer: row?.primer ?? null })
+  })
+
+  /**
    * Everything the player needs for one episode: subtitles, and the lesson plan if the guide is on.
    * `/listen` records that the learner started it; `/lesson` is the same, for saving it to the phone
    * ahead of time, and records nothing.

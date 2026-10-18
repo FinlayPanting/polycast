@@ -96,6 +96,12 @@ run('API and worker', () => {
     expect(alerts).toContain(`ready: Tåget for ${anna}`)
     expect(await (await call(anna, 'GET', `/v1/jobs/${prep.jobId}`)).json()).toMatchObject({ status: 'done', stage: 'done' })
 
+    // The primer is there for the episode screen, without starting anything (PC-1017-P4).
+    const { primer } = await (await call(anna, 'GET', `/v1/episodes/${episodeId}/primer`)).json()
+    expect(primer.words.length).toBeGreaterThanOrEqual(3)
+    expect(primer.gist).toBeTruthy()
+    expect((await call(anna, 'GET', `/v1/episodes/00000000-0000-0000-0000-000000000000/primer`)).status).toBe(404)
+
     // Saving the lesson to her phone ahead of time doesn't count as starting it.
     const lesson = await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()
     expect(lesson.guided).toBe(true)

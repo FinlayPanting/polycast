@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, View } from 'react-native'
 import { Artwork, Button, Notice, Screen, Tag, Txt, minutes } from '../../components/ui'
 import { api, refusalOf } from '../../lib/api'
-import { GUIDANCE, guideName, guidanceLevelOr, type GuidanceLevelId } from '../../lib/languages'
+import { GUIDANCE, guideName, guidanceLevelOr, languageName, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
-import { downloadForOffline, isSavedForOffline, removeSaved } from '../../lib/offline'
+import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '../../lib/offline'
+import { primerSource } from '../../lib/primer'
+import { Primer } from '../../components/Primer'
+import type { Primer as PrimerData } from '@polycast/core'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
 import { getEpisode } from '../../lib/data'
@@ -36,6 +39,7 @@ export default function Episode() {
   const [saveError, setSaveError] = useState<string>()
   const [preparedByMe, setPreparedByMe] = useState(false)
   const [offline, setOffline] = useState(false)
+  const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
 
   const { data: ep, reload } = useAsync(async () => {
     const { episode, activeJob, preparedByMe: mine, offline: isOffline } = await getEpisode(id)
@@ -48,6 +52,16 @@ export default function Episode() {
     }
     return episode
   }, [id])
+
+  // The primer, once the episode is ready (PC-1017-P4). Offline, the saved lesson's copy is used.
+  useEffect(() => {
+    if (ep?.status !== 'ready' || offline) return
+    let live = true
+    api.primer(ep.id).then((r) => live && setServerPrimer(r.primer), () => live && setServerPrimer(null))
+    return () => {
+      live = false
+    }
+  }, [ep?.id, ep?.status, offline])
 
   // Follow a preparation until it's done.
   useEffect(() => {
@@ -117,6 +131,9 @@ export default function Episode() {
   if (!ep) return <Screen><Loading /></Screen>
 
   const level = guidanceLevelOr(profile?.guidance_level, 'standard')
+  const listenNow = () => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1', level } })
+  const savedLesson = saved ? loadLesson(ep.id)?.payload : undefined
+  const primer = ep.status === 'ready' ? primerSource(savedLesson && { primer: savedLesson.plan?.primer, audioUrl: savedLesson.episode.audioUrl }, serverPrimer, ep.audio_url, canSyncOnDevice) : undefined
   // The last choice becomes the default for the next episode (PC-1017-F13).
   const chooseLevel = (l: GuidanceLevelId) => void updatePrefs({ guidance_level: l }).catch(() => undefined)
 
@@ -153,7 +170,7 @@ export default function Episode() {
     <Screen edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         <Button kind="quiet" label="Back" onPress={() => router.back()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
-        <Artwork uri={ep.image ?? ep.podcasts.artwork} size={240} radius={20} />
+        <Artwork uri={ep.image ?? ep.podcasts.artwork} size={primer ? 120 : 240} radius={primer ? 14 : 20} />
         <View style={{ gap: space.sm }}>
           <Txt variant="title" accessibilityRole="header">
             {ep.title}
@@ -167,10 +184,14 @@ export default function Episode() {
           </View>
         </View>
 
+        {primer ? (
+          <Primer primer={primer.primer} audioUrl={primer.audioUrl} languageName={languageName(profile?.target_language)} onSkip={listenNow} />
+        ) : null}
+
         {ep.status === 'ready' ? (
           <View style={{ gap: space.sm }}>
             <LevelPicker guide={guideName(profile?.guide_id)} value={level} onChange={chooseLevel} />
-            <Button label={`Listen with ${guideName(profile?.guide_id)}`} onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1', level } })} />
+            <Button label={`Listen with ${guideName(profile?.guide_id)}`} onPress={listenNow} />
             <Button kind="secondary" label="Subtitles only" onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '0' } })} />
             {canSyncOnDevice ? (
               <View style={{ gap: space.xs, paddingTop: space.sm }} accessibilityLiveRegion="polite">

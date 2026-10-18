@@ -2,7 +2,7 @@
  * Sample data for demo mode: a fictional Swedish show, "Svenska Samtal", with one ready episode, its
  * subtitles and lesson plan. Used only for previews and screenshots.
  */
-import type { GuideMoment, Segment, Word } from '@polycast/core'
+import type { GuideMoment, Primer, Segment, Word } from '@polycast/core'
 import type { ListenPayload, Shelf } from '../lib/api'
 
 export const art = {
@@ -100,6 +100,21 @@ export const MOMENTS: GuideMoment[] = [
   },
 ]
 
+/** The demo episode's primer (PC-1017-P1). */
+export const PRIMER: Primer = {
+  gist: 'Eriks tåg är försenat. Han väntar på stationen, tar en fika och läser. Anna tycker att det låter mysigt.',
+  gistNative: 'Erik’s train is late. He waits at the station, has a fika and reads. Anna thinks it sounds cosy.',
+  words: [
+    { text: 'försenat', lemma: 'försenad', meaning: 'delayed, late', at: delayed.start, clip: { start: delayed.start, end: delayed.end } },
+    { text: 'fika', lemma: 'fika', meaning: 'coffee break', at: transcript.segments[5]!.start, clip: { start: transcript.segments[5]!.start, end: transcript.segments[5]!.start + 0.6 } },
+    { text: 'mysigt', lemma: 'mysig', meaning: 'cosy', at: transcript.segments[7]?.start ?? 60, clip: { start: -1, end: -1 } },
+  ],
+  themes: [
+    { title: 'A late train', at: 0 },
+    { title: 'Making the most of the wait', at: transcript.segments[5]!.start },
+  ],
+}
+
 export const LISTEN: ListenPayload = {
   episode: { id: 'ep1', title: 'Tåget till Göteborg', podcastTitle: 'Svenska Samtal', audioUrl: 'demo', image: art.samtal, durationSec: Math.ceil(transcript.words.at(-1)!.end + 2) },
   transcript: {
@@ -125,6 +140,7 @@ export const LISTEN: ListenPayload = {
     hosts: [{ name: 'Anna', description: 'asks the questions' }, { name: 'Erik', description: 'tells the story' }],
     summary: 'Erik’s train to Gothenburg runs an hour late.',
     moments: MOMENTS,
+    primer: PRIMER,
     wrapUpQuestions: [
       { prompt: 'Where was Erik going?', options: ['Malmö', 'Gothenburg', 'Uppsala'], answerIndex: 1 },
       { prompt: 'What did he do while he waited?', options: ['Had a fika and read', 'Took a taxi', 'Went home'], answerIndex: 0 },
