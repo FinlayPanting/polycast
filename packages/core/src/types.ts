@@ -144,6 +144,11 @@ export interface Primer {
   words: PrimerWord[]
   /** The episode's main themes, in the order they come up. */
   themes: PrimerTheme[]
+  /**
+   * Where the conversation moves on: the lesson plan's chapters, for the episode map (PC-1017-P5).
+   * Missing on primers written before 18 Oct 2026, 00:30.
+   */
+  sections?: PrimerTheme[]
 }
 
 export interface PrimerWord extends Term {

@@ -295,7 +295,7 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
     clips: [],
   })
 
-  const primer = draft.primer ? assemblePrimer(draft.primer, transcript, dropped) : undefined
+  const primer = draft.primer ? assemblePrimer(draft.primer, transcript, dropped, draft.chapters) : undefined
 
   // Drop whatever still breaks the rules, and keep word-moment pairs together.
   const problems = validateMoments(moments, opts.durationSec)
@@ -329,7 +329,12 @@ export const PRIMER_MIN_WORDS = 3
  * them saying it), each theme where its line starts. Words the host never says are dropped, repeats
  * kept once, and the list is ordered as they come up. With too few words left there's no primer.
  */
-export function assemblePrimer(draft: NonNullable<PlanDraft['primer']>, transcript: Transcript, dropped: string[] = []): Primer | undefined {
+export function assemblePrimer(
+  draft: NonNullable<PlanDraft['primer']>,
+  transcript: Transcript,
+  dropped: string[] = [],
+  chapters: PlanDraft['chapters'] = [],
+): Primer | undefined {
   const words: PrimerWord[] = []
   const seen = new Set<string>()
   for (const t of draft.words) {
@@ -354,11 +359,17 @@ export function assemblePrimer(draft: NonNullable<PlanDraft['primer']>, transcri
     .map((th) => ({ title: withoutLanguageMarks(th.title).trim(), at: transcript.segments.find((s) => s.id === th.segmentId)?.start ?? -1 }))
     .filter((th) => th.title && th.at >= 0)
     .sort((a, b) => a.at - b.at)
+  // The episode map's sections: the plan's chapters, where each starts (PC-1017-P5).
+  const sections: PrimerTheme[] = chapters
+    .map((ch) => ({ title: withoutLanguageMarks(ch.title).trim(), at: transcript.segments.find((s) => s.id === ch.startSegmentId)?.start ?? -1 }))
+    .filter((ch) => ch.title && ch.at >= 0)
+    .sort((a, b) => a.at - b.at)
   return {
     gist: withoutLanguageMarks(draft.gist).trim(),
     gistNative: withoutLanguageMarks(draft.gistNative).trim(),
     words,
     themes,
+    ...(sections.length ? { sections } : {}),
   }
 }
 

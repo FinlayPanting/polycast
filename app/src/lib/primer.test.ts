@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Primer } from '@polycast/core'
-import { clockTime, earlyPrimerUrl, loadEarlyPrimer, playableClip, primerReveal, primerSource } from './primer'
+import { clockTime, earlyPrimerUrl, episodeMap, jumpStart, loadEarlyPrimer, playableClip, primerReveal, primerSource } from './primer'
 
 const primer = (gist: string): Primer => ({ gist, gistNative: 'en', words: [], themes: [] })
 
@@ -55,5 +55,35 @@ describe('the primer building while Mia prepares (PC-1017-P3)', () => {
   it('appears gist first, then each word, then the themes', () => {
     expect(primerReveal(full)).toEqual(['gist', 'word:0', 'word:1', 'themes'])
     expect(primerReveal({ ...full, themes: [] })).toEqual(['gist', 'word:0', 'word:1'])
+  })
+})
+
+describe('the episode map (PC-1017-P5)', () => {
+  const p: Primer = {
+    gist: '',
+    gistNative: '',
+    words: [],
+    themes: [{ title: 'Coffee', at: 300 }],
+    sections: [{ title: 'Trains', at: 0 }, { title: 'Fika', at: 600 }],
+  }
+
+  it('places sections and themes along the episode', () => {
+    const m = episodeMap(p, 1200)
+    expect(m.sections).toEqual([
+      { title: 'Trains', at: 0, frac: 0, endFrac: 0.5 },
+      { title: 'Fika', at: 600, frac: 0.5, endFrac: 1 },
+    ])
+    expect(m.themes).toEqual([{ title: 'Coffee', at: 300, frac: 0.25 }])
+  })
+
+  it('works without sections, and keeps everything on the line', () => {
+    const m = episodeMap({ ...p, sections: undefined, themes: [{ title: 'Late', at: 5000 }] }, 1200)
+    expect(m.sections).toEqual([])
+    expect(m.themes[0]!.frac).toBe(1)
+  })
+
+  it('starts a jump a few seconds early', () => {
+    expect(jumpStart(300.4)).toBe(297)
+    expect(jumpStart(1)).toBe(0)
   })
 })

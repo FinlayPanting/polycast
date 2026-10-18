@@ -118,6 +118,9 @@ describe('preparing an episode', () => {
     }
     expect(primer.themes.map((t) => t.title)).toEqual(['A late train', 'Getting home'])
     expect(primer.themes[0]!.at).toBe(0)
+    // The plan's chapters become the episode map's sections (PC-1017-P5).
+    expect(primer.sections!.map((s) => s.title)).toEqual(['The train', 'Fika', 'Home'])
+    expect(primer.sections!.map((s) => s.at)).toEqual([...primer.sections!.map((s) => s.at)].sort((a, b) => a - b))
     expect(dropped.join('\n')).toMatch(/primer word "hittepå"/)
   })
 

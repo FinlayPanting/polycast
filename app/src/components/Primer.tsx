@@ -2,7 +2,7 @@ import type { Primer as PrimerData, PrimerWord } from '@polycast/core'
 import { SymbolView } from 'expo-symbols'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AccessibilityInfo, Animated, Pressable, View } from 'react-native'
-import { clockTime, playableClip, primerReveal } from '../lib/primer'
+import { clockTime, episodeMap, playableClip, primerReveal } from '../lib/primer'
 import { useHostClip } from '../lib/useHostClip'
 import { MIN_TAP, motion, space, usePalette } from '../theme'
 import { Button, Txt } from './ui'
@@ -11,7 +11,22 @@ import { Button, Txt } from './ui'
  * The Episode Primer (PC-1017-P2, P4): what the episode is about, the words to listen for in the
  * host's own voice, and its themes. Shown on the episode screen before pressing play.
  */
-export function Primer({ primer, audioUrl, languageName, onSkip }: { primer: PrimerData; audioUrl?: string; languageName: string; onSkip?: () => void }) {
+export function Primer({
+  primer,
+  audioUrl,
+  languageName,
+  onSkip,
+  durationSec,
+  onJump,
+}: {
+  primer: PrimerData
+  audioUrl?: string
+  languageName: string
+  onSkip?: () => void
+  durationSec?: number
+  /** Starts listening from a place on the episode map. */
+  onJump?: (at: number) => void
+}) {
   const p = usePalette()
   const [native, setNative] = useState(false)
   const play = useHostClip()
@@ -47,20 +62,74 @@ export function Primer({ primer, audioUrl, languageName, onSkip }: { primer: Pri
         </View>
       ) : null}
 
-      {primer.themes.length > 0 ? (
-        <View style={{ gap: space.sm }}>
-          <Txt variant="smallStrong" tone="quiet">
-            What comes up
-          </Txt>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-            {primer.themes.map((t) => (
-              <View key={`${t.title}-${t.at}`} style={{ paddingHorizontal: space.md, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: p.line }}>
-                <Txt variant="small">{t.title}</Txt>
-              </View>
-            ))}
-          </View>
-        </View>
+      {durationSec && (primer.themes.length > 0 || primer.sections?.length) ? (
+        <EpisodeMap primer={primer} durationSec={durationSec} onJump={onJump} />
+      ) : primer.themes.length > 0 ? (
+        <Themes primer={primer} />
       ) : null}
+    </View>
+  )
+}
+
+function Themes({ primer }: { primer: PrimerData }) {
+  const p = usePalette()
+  return (
+    <View style={{ gap: space.sm }}>
+      <Txt variant="smallStrong" tone="quiet">
+        What comes up
+      </Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        {primer.themes.map((t) => (
+          <View key={`${t.title}-${t.at}`} style={{ paddingHorizontal: space.md, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: p.line }}>
+            <Txt variant="small">{t.title}</Txt>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * The episode map (PC-1017-P5): a light line through the episode with its sections and where each
+ * theme comes up; tap a place to start listening there.
+ */
+function EpisodeMap({ primer, durationSec, onJump }: { primer: PrimerData; durationSec: number; onJump?: (at: number) => void }) {
+  const p = usePalette()
+  const map = episodeMap(primer, durationSec)
+  const places = [...map.sections.map((s) => ({ ...s, kind: 'section' as const })), ...map.themes.map((t) => ({ ...t, kind: 'theme' as const }))].sort((a, b) => a.at - b.at)
+  return (
+    <View style={{ gap: space.sm }}>
+      <Txt variant="smallStrong" tone="quiet">
+        What comes up, and when
+      </Txt>
+      <View style={{ height: 14, justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <View style={{ height: 4, borderRadius: 2, backgroundColor: p.line, flexDirection: 'row', overflow: 'hidden' }}>
+          {map.sections.map((s, i) => (
+            <View key={`${s.title}-${s.at}`} style={{ position: 'absolute', left: `${s.frac * 100}%`, width: `${(s.endFrac - s.frac) * 100}%`, top: 0, bottom: 0, backgroundColor: i % 2 ? p.line : p.level, opacity: i % 2 ? 1 : 0.35 }} />
+          ))}
+        </View>
+        {map.themes.map((t) => (
+          <View key={`${t.title}-${t.at}`} style={{ position: 'absolute', left: `${t.frac * 100}%`, marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: p.play }} />
+        ))}
+      </View>
+      {places.map((pl) => (
+        <Pressable
+          key={`${pl.kind}-${pl.title}-${pl.at}`}
+          disabled={!onJump}
+          onPress={() => onJump?.(pl.at)}
+          accessibilityRole={onJump ? 'button' : undefined}
+          accessibilityLabel={`${pl.title}, at ${clockTime(pl.at)}${onJump ? '. Listen from here' : ''}`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: MIN_TAP }}
+        >
+          <Txt variant="small" tone="quiet" style={{ width: 44, fontVariant: ['tabular-nums'] }}>
+            {clockTime(pl.at)}
+          </Txt>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: pl.kind === 'theme' ? p.play : p.level }} />
+          <Txt variant={pl.kind === 'section' ? 'smallStrong' : 'small'} style={{ flex: 1 }}>
+            {pl.title}
+          </Txt>
+        </Pressable>
+      ))}
     </View>
   )
 }

@@ -163,6 +163,7 @@ describe('moving a lesson onto the listener\'s copy', () => {
         { text: 'köp', lemma: 'köpa', meaning: 'buy', at: 120, clip: { start: 120, end: 120.4 } },
       ],
       themes: [{ title: 'Greetings', at: 10 }],
+      sections: [{ title: 'Start', at: 10 }, { title: 'End', at: 200 }],
     },
   } as LessonPlan
 
@@ -194,6 +195,7 @@ describe('moving a lesson onto the listener\'s copy', () => {
     expect(b!.at).toBe(130)
     expect(b!.clip).toEqual({ start: -1, end: -1 })
     expect(out.plan!.primer!.themes[0]!.at).toBe(40)
+    expect(out.plan!.primer!.sections!.map((s) => s.at)).toEqual([40, 170])
   })
 
   it('leaves the lesson alone when the match is not trustworthy', () => {

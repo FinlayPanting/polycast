@@ -7,7 +7,7 @@ import { api, refusalOf } from '../../lib/api'
 import { GUIDANCE, guideName, guidanceLevelOr, languageName, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
 import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '../../lib/offline'
-import { earlyPrimerUrl, loadEarlyPrimer, primerSource } from '../../lib/primer'
+import { earlyPrimerUrl, jumpStart, loadEarlyPrimer, primerSource } from '../../lib/primer'
 import { config } from '../../lib/config'
 import { Primer, PrimerBuilding } from '../../components/Primer'
 import type { Primer as PrimerData } from '@polycast/core'
@@ -145,6 +145,8 @@ export default function Episode() {
 
   const level = guidanceLevelOr(profile?.guidance_level, 'standard')
   const listenNow = () => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1', level } })
+  // From the episode map: start listening a few seconds before that place (PC-1017-P5).
+  const listenFrom = (at: number) => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1', level, from: String(jumpStart(at)) } })
   const savedLesson = saved ? loadLesson(ep.id)?.payload : undefined
   const primer = ep.status === 'ready' ? primerSource(savedLesson && { primer: savedLesson.plan?.primer, audioUrl: savedLesson.episode.audioUrl }, serverPrimer, ep.audio_url, canSyncOnDevice) : undefined
   // The last choice becomes the default for the next episode (PC-1017-F13).
@@ -198,7 +200,7 @@ export default function Episode() {
         </View>
 
         {primer ? (
-          <Primer primer={primer.primer} audioUrl={primer.audioUrl} languageName={languageName(profile?.target_language)} onSkip={listenNow} />
+          <Primer primer={primer.primer} audioUrl={primer.audioUrl} languageName={languageName(profile?.target_language)} onSkip={listenNow} durationSec={ep.duration_sec} onJump={listenFrom} />
         ) : null}
 
         {ep.status === 'ready' ? (

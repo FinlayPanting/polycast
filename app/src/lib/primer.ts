@@ -62,3 +62,26 @@ export function primerReveal(primer: Primer | undefined): ('gist' | `word:${numb
   if (!primer) return []
   return ['gist', ...primer.words.map((_, i) => `word:${i}` as const), ...(primer.themes.length ? (['themes'] as const) : [])]
 }
+
+export interface MapPlace {
+  title: string
+  at: number
+  /** Share of the way through the episode, 0 to 1. */
+  frac: number
+}
+
+/**
+ * The episode map (PC-1017-P5): the sections where the conversation moves on, and where each theme
+ * first comes up, placed along the episode. Without sections (older primers) the themes carry it.
+ */
+export function episodeMap(primer: Primer, durationSec: number): { sections: (MapPlace & { endFrac: number })[]; themes: MapPlace[] } {
+  const d = Math.max(1, durationSec)
+  const frac = (t: number) => Math.min(1, Math.max(0, t / d))
+  const sections = (primer.sections ?? []).map((s, i, all) => ({ title: s.title, at: s.at, frac: frac(s.at), endFrac: frac(all[i + 1]?.at ?? d) }))
+  return { sections, themes: primer.themes.map((t) => ({ title: t.title, at: t.at, frac: frac(t.at) })) }
+}
+
+/** Where a jump from the map starts playing: a few seconds early, so the learner hears the lead-in. */
+export function jumpStart(at: number): number {
+  return Math.max(0, Math.floor(at - 3))
+}

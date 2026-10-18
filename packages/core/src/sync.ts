@@ -313,6 +313,7 @@ function retimePrimer(primer: Primer, map: SyncMap): Primer {
       return { ...w, at: nextListenerTime(map, w.at), clip }
     }),
     themes: primer.themes.map((t) => ({ ...t, at: nextListenerTime(map, t.at) })),
+    ...(primer.sections ? { sections: primer.sections.map((t) => ({ ...t, at: nextListenerTime(map, t.at) })) } : {}),
   }
 }
 

@@ -149,7 +149,7 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
 
 export default function Listen() {
   const p = usePalette()
-  const { id, guide, level: levelParam } = useLocalSearchParams<{ id: string; guide?: string; level?: string }>()
+  const { id, guide, level: levelParam, from } = useLocalSearchParams<{ id: string; guide?: string; level?: string; from?: string }>()
   // The intensity chosen on the episode screen for this listen (PC-1017-F13).
   const chosenLevel = levelParam ? guidanceLevelOr(levelParam, 'standard') : undefined
   const { session, profile } = useSession()
@@ -220,7 +220,8 @@ export default function Listen() {
         setData(d)
         const level = d.guidanceLevel ?? 'standard'
         const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
-        const startAt = await resumePosition(id)
+        // A jump from the episode map starts there; otherwise carry on where the learner left off.
+        const startAt = from !== undefined && Number.isFinite(Number(from)) ? Math.max(0, Number(from)) : await resumePosition(id)
         // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
         goodbye.current = undefined
         if (!config.demo && moments.length > 0) {
@@ -257,7 +258,7 @@ export default function Listen() {
       setRemoteHandler(undefined)
       void listen.current?.dispose()
     }
-  }, [id, guide, chosenLevel, session])
+  }, [id, guide, chosenLevel, from, session])
 
   // Hands-free saving: a word the guide teaches goes into the word bank when it's spotlighted.
   useEffect(() => {
