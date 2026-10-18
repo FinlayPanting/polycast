@@ -74,6 +74,15 @@ export default function Plus() {
           </Txt>
         ) : null}
 
+        <Button
+          kind="quiet"
+          label="Prefer to use your own API keys?"
+          onPress={() => {
+            router.back()
+            router.push('/keys')
+          }}
+          style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
+        />
         <Txt variant="small" tone="faint">
           Renews automatically until you cancel, at least 24 hours before the end of the period, in your iPhone’s Settings. Payment is taken by Apple.
         </Txt>

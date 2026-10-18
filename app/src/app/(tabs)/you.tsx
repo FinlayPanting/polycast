@@ -1,11 +1,12 @@
 import { alternateIconName, flagsForLanguage, PLUS_MONTHLY_SEC } from '@polycast/core'
 import { setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons'
-import { router } from 'expo-router'
-import { useState } from 'react'
+import { router, useFocusEffect } from 'expo-router'
+import { useCallback, useState } from 'react'
 import { Alert, Linking, Pressable, ScrollView, Share, View } from 'react-native'
 import { InterestPicker } from '../../components/InterestPicker'
 import { Mark } from '../../components/Mark'
-import { Button, Screen, Txt, minutes } from '../../components/ui'
+import { Button, Screen, Tag, Txt, minutes } from '../../components/ui'
+import { savedKeyNames } from '../../lib/ownKeys'
 import { api } from '../../lib/api'
 import { clearAllDownloads, downloadsSize } from '../../lib/episodeAudio'
 import { formatSize } from '../../lib/storage'
@@ -52,6 +53,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function You() {
   const p = usePalette()
   const { profile, updatePrefs, signOut } = useSession()
+  // Whether this iPhone has both own keys (PC-1017-K2); checked again whenever You comes into view.
+  const [ownKeys, setOwnKeys] = useState(false)
+  useFocusEffect(
+    useCallback(() => {
+      void savedKeyNames().then((k) => setOwnKeys(k.elevenlabs && k.gemini))
+    }, []),
+  )
   const [usedBytes, setUsedBytes] = useState(() => downloadsSize())
   const [error, setError] = useState<string>()
   if (!profile) return <Screen><Loading /></Screen>
@@ -76,6 +84,7 @@ export default function You() {
                 ? 'You’ve used your free episode. Every ready episode is still free, with the guide on one a week.'
                 : 'Your free episode is waiting: pick any show and prepare one episode, up to 2 hours.'}
           </Txt>
+          {ownKeys ? <Tag label="Using your own keys" tone="saved" /> : null}
           {profile.plan !== 'plus' ? <Button label="See Plus" onPress={() => router.push('/plus')} style={{ marginTop: space.sm }} /> : null}
         </View>
 
@@ -162,6 +171,13 @@ export default function You() {
               }
             />
           ) : null}
+        </Section>
+
+        <Section title="Your own API keys">
+          <Txt variant="small" tone="quiet">
+            {ownKeys ? 'Episodes you prepare run on your ElevenLabs and Google keys. Replace or remove them here.' : 'Prepare episodes on your own ElevenLabs and Google accounts instead of Plus.'}
+          </Txt>
+          <Button kind="secondary" label={ownKeys ? 'Manage your keys' : 'Use your own API keys'} onPress={() => router.push('/keys')} style={{ alignSelf: 'flex-start' }} />
         </Section>
 
         <Section title="Account">

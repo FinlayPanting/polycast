@@ -131,3 +131,14 @@ describe('costs', () => {
     expect(after).toBeLessThan(1.15)
   })
 })
+
+describe('own keys: what an hour costs on each account (PC-1017-K2)', () => {
+  it('splits the usual estimate between ElevenLabs and Google, adding up to the whole', async () => {
+    const { ownKeysCostUSD, estimatePrepCostUSD } = await import('../src')
+    const at = new Date('2026-10-18T00:00:00Z')
+    const c = ownKeysCostUSD(3600, at)
+    expect(c.elevenlabs + c.google).toBeCloseTo(estimatePrepCostUSD(3600, { at }), 6)
+    expect(c.elevenlabs).toBeGreaterThan(0.5) // Scribe plus about 13,500 characters of voice
+    expect(c.google).toBeLessThan(0.2)
+  })
+})
