@@ -159,3 +159,9 @@ export interface PrimerTheme {
   /** Roughly when it first comes up. */
   at: number
 }
+
+/**
+ * Where an episode's primer is published (public guide-audio bucket) as soon as its lesson plan is
+ * written, before the guide is voiced, so the prepare screen can show it while Mia works (PC-1017-P3).
+ */
+export const primerPath = (episodeId: string) => `primer/v1/${episodeId}.json`

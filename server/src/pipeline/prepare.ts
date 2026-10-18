@@ -1,5 +1,6 @@
 import {
   buildSegments,
+  primerPath,
   costUSD,
   estimateDifficulty,
   estimatePrepCostUSD,
@@ -122,6 +123,12 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
       nativeLanguage: input.nativeLanguage,
       durationSec: input.durationSec,
     })
+
+    // The primer is ready now: publish it so the prepare screen can show it while the guide is
+    // voiced (PC-1017-P3). Best effort; the finished lesson carries it either way.
+    if (unvoiced.primer) {
+      await deps.storage.put(primerPath(input.episodeId), new TextEncoder().encode(JSON.stringify(unvoiced.primer)), 'application/json').catch(() => undefined)
+    }
 
     await deps.onStage?.('voicing')
     const voiced = await voicePlan(unvoiced, input.guide, { speech: deps.speech, storage: deps.storage, meter })

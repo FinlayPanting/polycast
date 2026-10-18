@@ -7,8 +7,9 @@ import { api, refusalOf } from '../../lib/api'
 import { GUIDANCE, guideName, guidanceLevelOr, languageName, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
 import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '../../lib/offline'
-import { primerSource } from '../../lib/primer'
-import { Primer } from '../../components/Primer'
+import { earlyPrimerUrl, loadEarlyPrimer, primerSource } from '../../lib/primer'
+import { config } from '../../lib/config'
+import { Primer, PrimerBuilding } from '../../components/Primer'
 import type { Primer as PrimerData } from '@polycast/core'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
@@ -40,6 +41,7 @@ export default function Episode() {
   const [preparedByMe, setPreparedByMe] = useState(false)
   const [offline, setOffline] = useState(false)
   const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
+  const [earlyPrimer, setEarlyPrimer] = useState<PrimerData>()
 
   const { data: ep, reload } = useAsync(async () => {
     const { episode, activeJob, preparedByMe: mine, offline: isOffline } = await getEpisode(id)
@@ -62,6 +64,17 @@ export default function Episode() {
       live = false
     }
   }, [ep?.id, ep?.status, offline])
+
+  // While preparing, the primer appears once the lesson plan is written (PC-1017-P3): from the
+  // 'voicing' stage on, look for it on each check until it's there.
+  useEffect(() => {
+    if (!ep || earlyPrimer || config.demo || !(stage === 'voicing' || stage === 'done')) return
+    let live = true
+    void loadEarlyPrimer(earlyPrimerUrl(config.supabaseUrl, ep.id)).then((p) => live && p && setEarlyPrimer(p))
+    return () => {
+      live = false
+    }
+  }, [ep, stage, earlyPrimer])
 
   // Follow a preparation until it's done.
   useEffect(() => {
@@ -218,16 +231,19 @@ export default function Episode() {
             ) : null}
           </View>
         ) : preparing ? (
-          <View style={{ gap: space.sm, backgroundColor: p.raised, borderRadius: 18, padding: space.lg }} accessibilityLiveRegion="polite">
-            <Txt variant="bodyStrong">{STAGES[stage ?? ''] ?? 'Getting started'}…</Txt>
-            <Txt variant="small" tone="quiet">
-              This takes a few minutes. We’ll send you a notification when it’s ready, so you can leave this screen.
-            </Txt>
-            {downloaded !== undefined ? (
+          <View style={{ gap: space.md }}>
+            <View style={{ gap: space.sm, backgroundColor: p.raised, borderRadius: 18, padding: space.lg }} accessibilityLiveRegion="polite">
+              <Txt variant="bodyStrong">{STAGES[stage ?? ''] ?? 'Getting started'}…</Txt>
               <Txt variant="small" tone="quiet">
-                {downloaded >= 1 ? 'Episode saved to your phone.' : `Saving the episode to your phone: ${Math.round(downloaded * 100)}%`}
+                This takes a few minutes. We’ll send you a notification when it’s ready, so you can leave this screen.
               </Txt>
-            ) : null}
+              {downloaded !== undefined ? (
+                <Txt variant="small" tone="quiet">
+                  {downloaded >= 1 ? 'Episode saved to your phone.' : `Saving the episode to your phone: ${Math.round(downloaded * 100)}%`}
+                </Txt>
+              ) : null}
+            </View>
+            {earlyPrimer ? <PrimerBuilding primer={earlyPrimer} guide={guideName(profile?.guide_id)} /> : null}
           </View>
         ) : (
           <View style={{ gap: space.md }}>

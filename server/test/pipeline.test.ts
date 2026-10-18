@@ -1,4 +1,4 @@
-import { findBreaks, GUIDE_SPACING, pauseQuality, selectMoments, type LessonPlan } from '@polycast/core'
+import { findBreaks, GUIDE_SPACING, pauseQuality, primerPath, selectMoments, type LessonPlan } from '@polycast/core'
 import { describe, expect, it } from 'vitest'
 import { memoryLedger, SpendCapReached, SpendGuard, UsageMeter } from '../src/budget'
 import { assemblePlan, assemblePrimer } from '../src/pipeline/lessonPlan'
@@ -119,6 +119,14 @@ describe('preparing an episode', () => {
     expect(primer.themes.map((t) => t.title)).toEqual(['A late train', 'Getting home'])
     expect(primer.themes[0]!.at).toBe(0)
     expect(dropped.join('\n')).toMatch(/primer word "hittepå"/)
+  })
+
+  it('publishes the primer as soon as it is written, before the guide is voiced (PC-1017-P3)', async () => {
+    const d = deps()
+    let atVoicing: Uint8Array | undefined
+    const { plan } = await prepareEpisode(input(d.ep), { ...d, onStage: (s) => void (s === 'voicing' && (atVoicing = d.storage.files.get(primerPath('ep1')))) })
+    expect(atVoicing).toBeDefined()
+    expect(JSON.parse(new TextDecoder().decode(atVoicing))).toEqual(plan.primer)
   })
 
   it('leaves the primer out when too few of its words are in the episode', () => {
