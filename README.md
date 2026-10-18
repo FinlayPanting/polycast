@@ -1,171 +1,130 @@
-# Polycast
+<p align="center">
+  <img src="app/assets/icon.png" alt="Polycast" width="120" />
+</p>
 
-**Learn language through your favourite podcasts.**
+<h1 align="center">Polycast</h1>
 
-Polycast is a mobile-first progressive web app for language learners. It processes foreign-language podcast episodes through an AI pipeline that inserts brief, natural-sounding English summaries at strategic pauses — so you stay immersed in the target language while still following along.
+<p align="center"><strong>Learn a language through the podcasts people there actually listen to.</strong></p>
 
----
-
-## Try it — add to your iPhone
-
-Polycast is a PWA (Progressive Web App), so there's nothing to download. It installs directly from Safari and feels like a native app.
-
-1. Open **Safari** on your iPhone (must be Safari, not Chrome)
-2. Go to **[https://polycast-self.vercel.app](https://polycast-self.vercel.app)**
-3. Tap the **Share** button (the box with an arrow at the bottom of the screen)
-4. Scroll down and tap **"Add to Home Screen"**
-5. Tap **Add**
-
-Polycast now appears on your home screen with its icon and runs fullscreen. You'll need OpenAI and ElevenLabs API keys to process episodes — see [API keys](#api-keys) below.
+<p align="center">Native iPhone app · Spanish, French, German, Italian, Portuguese and Swedish · Coming soon to the App Store</p>
 
 ---
 
-## Screenshots
+Polycast puts subtitles on real podcasts, with your own language underneath, like watching a foreign film. Your guide, **Mia** or **Leo**, steps in at natural pauses: a word to listen for, a quick recap of what you might have missed, a phrase replayed in the host's own voice.
 
-| Home | Episodes | Download Options | Processing |
-|:---:|:---:|:---:|:---:|
-| ![Home](screenshots/homescreen.png) | ![Episodes](screenshots/episodes.png) | ![Download Options](screenshots/download_options.png) | ![Processing](screenshots/download_processing.png) |
+**The host is real. Mia and Leo only step in when the host pauses.**
 
-| Player | Summary | Transcript | Settings |
-|:---:|:---:|:---:|:---:|
-| ![Player](screenshots/player.png) | ![Summary](screenshots/summary.png) | ![Transcript](screenshots/transcript.png) | ![Settings](screenshots/settings.png) |
+It's built for learning for fun, not homework: put your headphones in, pick a show you'd enjoy anyway, and let the language wash over you with a friendly guide at your shoulder.
+
+> **Status:** in TestFlight ahead of a public App Store launch in October 2026. The May 2026 web prototype lives on in [`legacy-web/`](legacy-web) for reference.
 
 ---
+
+## What a listen feels like
+
+1. **Pick a show.** Discover has hand-picked starter shows, each country's top charts, shelves built from your interests, and a box where you can just tell Mia what you're in the mood for ("a calm story for the train"). Any show with a public feed works too.
+2. **Read the primer.** Before you press play, Mia gives you the gist in simple words, the words to listen for (tap one to hear the host say it), and a map of what comes up and when. Tap any point on the map to start there.
+3. **Choose how much guidance.** *Light* (about every 5 minutes), *Standard* (about every 3) or *Hands-on* (about once a minute), or switch the guide off for plain subtitles.
+4. **Listen.** Subtitles follow the host line by line. At a natural pause, the episode fades out, Mia or Leo says their piece in your language (target-language words said with a native accent), then the episode fades back in from just before where it stopped.
+5. **Wrap up.** A few questions, the words you kept, a line you caught to share, and a goodbye from your guide in the language you're learning.
 
 ## Features
 
-- **Background downloads** — tap the download icon on any episode, pick your language and summary frequency, and Polycast processes it in the background
-- **AI summaries at natural breakpoints** — spoken English summaries insert themselves at sentence-boundary pauses, fading the episode audio in and out smoothly
-- **Skip or pause summaries** — tap Skip in the summary card to jump straight back to the episode
-- **Episodes library** — a dedicated tab shows all your downloaded episodes; tap to play, swipe to delete
-- **Dual-language transcript** — scrolling transcript in the original language with English translations; tap any line to seek
-- **Resume from where you left off** — playback position is saved automatically
-- **Lock screen controls** — play, pause, and skip via the iOS/Android media controls even with the screen locked
-- **Offline playback** — once processed, episodes are cached in IndexedDB and play without a connection
-- **No backend** — entirely client-side; your API keys stay on your device
+- **Real podcasts, streamed from the publisher.** Episode audio is never re-hosted, so creators keep their listeners.
+- **Dual-language subtitles.** Tap any word for what it means in that sentence.
+- **A spoken guide that waits its turn.** Moments land only where a speaker has finished an answer or asked a question, never mid-sentence.
+- **Host clips.** Words are taught in the host's own voice, in context, then repeated slowly by the guide.
+- **Words tab.** Save words with the clip they came from and review them later.
+- **Primer and episode map** for every prepared episode.
+- **Works with your phone in your pocket.** Background play, lock screen and headphone controls; pause stops the guide mid-sentence too.
+- **Offline listening.** A prepared episode downloads with its lesson and guide audio, plays without a signal, and can be removed and downloaded again.
+- **Adverts handled.** Polycast lines each lesson up with *your* copy of the episode, even when the host stitches in different adverts for your country. Advert breaks show on the scrubber and Mia waits them out (you can still skip).
+- **Translated show pages.** Show and episode titles and descriptions, with the translation one tap away.
+- **New-episode nudges** for shows you've finished, at most one a week.
+
+## Plans
+
+| | What you get |
+|---|---|
+| **Free** | Every ready episode with subtitles, and the guide on one episode a week |
+| **Plus** · €4.99 a month or €39 a year | The guide on everything, and up to 5 hours of new episodes prepared each month |
+| **Your own API keys** | Optional: add your own ElevenLabs and Google Gemini keys (with a step-by-step set-up guide in the app) and prepare episodes on your own accounts. Keys stay in the iPhone Keychain |
+
+Every episode anyone prepares joins the shared library, so the free catalogue grows as people learn.
 
 ---
 
-## How to use
+## How it works
 
-### 1. Add your API keys
+Each episode is prepared **once**, on the server, and shared by everyone learning it. Nothing is generated while you listen.
 
-Go to the **Settings tab** (bottom nav) and enter:
-- **OpenAI key** — used for Whisper transcription, GPT-4o translation and summarization
-- **ElevenLabs key** — used for the spoken summary voiceovers
+1. **Transcribe**: ElevenLabs Scribe, with word timings, told the show's and hosts' names so it spells them right. A publisher's own word-timed transcript is used instead when the feed has one.
+2. **Translate and gloss**: Gemini translates every line and prepares a glossary so tap-a-word is instant.
+3. **Plan the lesson**: Gemini drafts the guide's moments, primer, sections and wrap-up against subtitle lines. Polycast's own code then places every moment on a natural pause, cuts the host clips and ranks moments into the Light, Standard and Hands-on levels. The AI never picks timestamps.
+4. **Voice the guide**: ElevenLabs Eleven v4 Turbo (Mia is *Bella*, Leo is *Charlie*), with target-language words pronounced natively inside English lines.
+5. **Fingerprint**: a compact loudness fingerprint of the copy we transcribed is stored (never the audio). On the phone, the app fingerprints the learner's own download and moves every time in the lesson onto it, so subtitles, clips and moments stay in sync around different adverts.
 
-Keys are stored in your browser's localStorage and sent only to the respective APIs.
-
-### 2. Find a podcast
-
-Tap the **Search tab** and search for any podcast by name. Tap a result to open it. Tap **Follow** to pin it to your home screen.
-
-### 3. Download an episode
-
-In the podcast episode list, tap the **download icon** on any episode. A sheet appears where you pick:
-- **Language** — the language spoken in the episode
-- **Summary gap** — how often you want an English summary (e.g. every 1–3 minutes)
-
-Tap **Start** and Polycast processes the episode in the background through 6 stages: Download → Transcribe → Translate → Summarise → Voiceover → Cache. Keep the app open during processing (your screen won't auto-lock).
-
-### 4. Listen
-
-Once downloaded, tap the episode from the **Episodes tab** or directly from the podcast page. The player shows:
-- A scrubber with summary markers as dots
-- The episode and podcast artwork
-- Skip back/forward 15 seconds
-- Playback speed (0.8× – 2×)
-- A **Transcript** button (top right of the summaries row) for the dual-language view
-
-When a summary fires, a card slides up with the spoken English text and a **Skip →→** button if you'd rather jump back to the episode immediately.
-
----
-
-## How it works (technical)
-
-1. **Download** — fetches the episode audio with CORS proxy fallbacks
-2. **Transcribe** — sends audio to OpenAI Whisper (`whisper-1`) in up to 20 MB chunks, stitching segments with estimated time offsets
-3. **Translate** — GPT-4o translates transcript segments in batches of 80 lines and the episode title
-4. **Summarise** — GPT-4o generates an intro summary (episode overview + first-section preview) and a preview at each detected breakpoint
-5. **Voiceover** — ElevenLabs synthesises each summary as an MP3
-6. **Cache** — the full `ProcessedEpisode` object (transcript, summaries, audio blobs) is stored in IndexedDB
-
-At playback, a dual-audio engine runs a 250 ms tick loop: when the episode reaches a summary timestamp, it fades the episode audio out, plays the summary clip, then fades back in. All processing retries automatically (4 attempts, exponential backoff) and the entire pipeline is abortable.
-
----
+Costs are tracked in a ledger, every AI call is counted against an allowance, and a daily spending cap stops anything runaway. AI keys never ship in the app.
 
 ## Tech stack
 
 | Layer | Technology |
 |---|---|
-| UI | React 19, TypeScript |
-| Routing | TanStack React Router (file-based) |
-| Styling | Tailwind CSS 4 |
-| Build | Vite 8 |
-| Storage | localStorage + IndexedDB (`idb`) |
-| Transcription | OpenAI Whisper |
-| Translation & Summarisation | OpenAI GPT-4o |
-| Text-to-speech | ElevenLabs |
-| Podcast search | Apple iTunes API |
-| Deployment | Vercel |
+| iPhone app | Expo (React Native), Expo Router, TypeScript |
+| Audio | react-native-track-player (episode), expo-audio (guide) |
+| Sign-in | Sign in with Apple, 6-digit email code (Supabase Auth) |
+| Purchases | App Store in-app purchase via RevenueCat |
+| Server | Node + Hono (API and preparation worker in one process), ffmpeg, deployed on Railway |
+| Database and storage | Supabase (Postgres with row-level security, Frankfurt) |
+| Transcription | ElevenLabs Scribe |
+| Writing and translation | Google Gemini (batch service for Polycast's own re-preparations) |
+| Guide voices | ElevenLabs Eleven v4 Turbo (Google Chirp 3 HD as fallback) |
+| Podcast discovery | Podcast Index, Apple Podcasts charts and search |
+| Crash reports | EAS Observe (nothing personal attached) |
 
----
+## Repository layout
 
-## API keys
-
-You need two API keys — both have free tiers that will take you a long way:
-
-| Service | What it's used for | Get one |
-|---|---|---|
-| OpenAI | Whisper transcription + GPT-4o summaries and translation | [platform.openai.com](https://platform.openai.com/) |
-| ElevenLabs | Spoken summary voiceovers | [elevenlabs.io](https://elevenlabs.io/) |
-
-Cost per episode is roughly $0.05–$0.30 depending on length, split between transcription and TTS.
-
----
+```
+packages/core   Pure TypeScript shared by server and app: lesson plans, guide levels and spacing,
+                natural pauses, host clips, allowances, costs, difficulty, audio sync, RSS parsing
+server          Preparation pipeline and API
+  src/pipeline    transcribe → translate → plan → voice
+  src/providers   AI providers behind interfaces (mocked in tests)
+  supabase/       numbered database migrations
+app             The Expo iPhone app
+  src/app         screens (Discover, Library, Words, You, episode, listen, onboarding, Plus, keys)
+  src/player      the guided-listen engine
+legacy-web      The May 2026 web prototype, kept for reference only
+docs            Build plan, decisions log, App Store listing draft
+```
 
 ## Run it locally
 
 ```bash
 pnpm install
-pnpm dev
+pnpm check            # typecheck and test every package
 ```
 
-Open `http://localhost:5173`. For a production build:
+- **Server tests against a real database:** `source scripts/test-db.sh` first, otherwise those tests are skipped.
+- **The app on an iPhone or simulator:** `pnpm --filter @polycast/app ios` (needs Xcode), or see `scripts/mac-iphone.sh` and `scripts/mac-simulator.sh`.
+- **A browser preview with sample data** (a fictional Swedish show and pretend audio, no iPhone needed):
 
-```bash
-pnpm build
-pnpm preview
-```
+  ```bash
+  cd app && EXPO_PUBLIC_DEMO=1 npx expo export --platform web
+  ```
 
-Enter your API keys in the **Settings** tab once the app is running.
+- **Prepare an episode by hand:** `pnpm --filter @polycast/server prepare-episode` (needs provider keys in your environment).
+
+## Docs
+
+- [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md): milestones and what's left before launch
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): every product and technical decision, newest first, with the reasoning
+- [`docs/APP_STORE.md`](docs/APP_STORE.md): App Store listing draft and review notes
 
 ---
 
-## Project structure
+Made by [Finlay Panting](https://github.com/FinlayPanting) in Salzburg, vibe coded with Claude Code.
 
-```
-src/
-├── lib/
-│   ├── pipeline.ts        # Orchestrator: download → transcribe → translate → summarise → TTS → cache
-│   ├── audio-engine.ts    # Dual-audio playback engine with summary injection, fading, and iOS priming
-│   ├── download-queue.ts  # Module-level background download queue with progress tracking
-│   ├── summarize.ts       # GPT-4o summarisation, translation, and breakpoint detection
-│   ├── whisper.ts         # Whisper transcription with chunked upload for large files
-│   ├── tts.ts             # ElevenLabs TTS synthesis
-│   ├── rss.ts             # RSS feed fetching with Atom fallback and CORS proxy chain
-│   ├── itunes.ts          # iTunes podcast search
-│   └── storage.ts         # localStorage + IndexedDB abstraction
-└── routes/
-    ├── index.tsx           # Home: followed podcasts + search
-    ├── episodes.tsx        # Episodes library: downloads in progress + cached episodes
-    ├── podcast.$id.tsx     # Podcast detail, episode list, and download sheet
-    ├── episode.$id.tsx     # Episode setup, processing screen, and player
-    └── settings.tsx        # API key and preference configuration
-```
-
----
-
-## License
+## Licence
 
 MIT
