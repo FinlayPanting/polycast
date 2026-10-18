@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findBreaks, findOccurrences, sentenceClip, snapToBreak, wordClip } from '../src'
+import { findBreaks, findOccurrences, pauseQuality, sentenceClip, snapToBreak, snapToNaturalPause, wordClip } from '../src'
 import { wordsFrom } from './fixtures'
 
 describe('natural breaks', () => {
@@ -40,6 +40,42 @@ describe('natural breaks', () => {
     const b = wordsFrom('Ses snart.', a.at(-1)!.end + 0.6, {}, 'B')
     const breaks = findBreaks([...a, ...b])
     expect(breaks[0]!.speakerChange).toBe(true)
+  })
+})
+
+describe('natural pauses for the guide (PC-1017-F14)', () => {
+  it('ranks a finished answer or a question above a plain sentence end, and never uses mid-sentence pauses', () => {
+    const a = wordsFrom('Jag tänkte på det länge. Vad tycker du?', 0, { 4: 0.3, 7: 0.4 }, 'A')
+    const b = wordsFrom('Jag håller med dig helt och hållet faktiskt', a.at(-1)!.end + 0.5, { 2: 1.5 }, 'B')
+    const breaks = findBreaks([...a, ...b])
+    const byWord = new Map(breaks.map((x) => [x.afterWord, x]))
+    expect(pauseQuality(byWord.get(4)!)).toBe(1) // sentence end, same speaker, short pause
+    expect(byWord.get(7)!.question).toBe(true)
+    expect(pauseQuality(byWord.get(7)!)).toBe(3) // a question, and the speaker changes
+    expect(pauseQuality(byWord.get(10)!)).toBe(0) // long pause mid-sentence
+  })
+
+  it('counts a long pause after a sentence as a speaker finishing their bit', () => {
+    const w = wordsFrom('Så var det. Och sen gick vi hem.', 0, { 2: 1.2 })
+    expect(pauseQuality(findBreaks(w)[0]!)).toBe(2)
+  })
+
+  it('walks a little further to a finished answer instead of stopping mid-flow or mid-sentence', () => {
+    const a = wordsFrom('Vi pratade. Om allt möjligt hela tiden och', 0, { 1: 0.3, 6: 1.2 }, 'A')
+    const b = wordsFrom('Ja precis.', a.at(-1)!.end + 0.3, { 1: 0.5 }, 'B')
+    const c = wordsFrom('Och sen?', b.at(-1)!.end + 0.5, {}, 'A')
+    const words = [...a, ...b, ...c]
+    const breaks = findBreaks(words)
+    // From just after "pratade.": the mid-sentence pause and the same-speaker sentence end are passed over.
+    const chosen = snapToNaturalPause(words[1]!.end, breaks, 'after')!
+    expect(chosen.afterWord).toBe(a.length + 1) // after B's "precis."
+  })
+
+  it('falls back to a plain sentence end, and gives up rather than cut in mid-sentence', () => {
+    const w = wordsFrom('Vi pratade länge. Om allt möjligt hela tiden och', 0, { 2: 0.3, 7: 1.5 })
+    const breaks = findBreaks(w)
+    expect(snapToNaturalPause(0, breaks, 'after', 2)?.afterWord).toBe(2)
+    expect(snapToNaturalPause(2.5, breaks, 'after', 1.5)).toBeUndefined()
   })
 })
 

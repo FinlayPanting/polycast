@@ -10,6 +10,8 @@ export interface Break {
   afterWord: number
   sentenceEnd: boolean
   speakerChange: boolean
+  /** The word before the pause ends a question. */
+  question: boolean
 }
 
 export interface BreakOptions {
@@ -39,12 +41,13 @@ export function findBreaks(words: Word[], opts: BreakOptions = {}): Break[] {
         afterWord: i,
         sentenceEnd,
         speakerChange: (w.speaker ?? '') !== (next.speaker ?? ''),
+        question: /\?["”»)]*$/u.test(w.text),
       })
     }
   }
   const last = words.at(-1)
   if (last) {
-    breaks.push({ at: last.end, gap: Infinity, afterWord: words.length - 1, sentenceEnd: true, speakerChange: false })
+    breaks.push({ at: last.end, gap: Infinity, afterWord: words.length - 1, sentenceEnd: true, speakerChange: false, question: false })
   }
   return breaks
 }
@@ -73,3 +76,44 @@ export function snapToBreak(
 
 /** How much further the guide will wait to land on a sentence end rather than a mid-sentence pause. */
 export const SENTENCE_END_PREFERENCE_SEC = 5
+
+/** A sentence end followed by at least this much silence counts as a speaker finishing their bit. */
+export const FINISHED_PAUSE_SEC = 1.0
+
+/**
+ * How natural a pause is for the guide to step in (PC-1017-F14), best first:
+ * 3: someone has finished their answer (the speaker changes at a sentence end), just asked a
+ *    question, or the episode has ended;
+ * 2: a sentence end with a real pause after it, where a speaker has finished their bit;
+ * 1: any other sentence end;
+ * 0: mid-sentence, never used for the guide.
+ */
+export function pauseQuality(b: Break): 0 | 1 | 2 | 3 {
+  if (!b.sentenceEnd) return 0
+  if (b.speakerChange || b.question || b.gap === Infinity) return 3
+  if (b.gap >= FINISHED_PAUSE_SEC) return 2
+  return 1
+}
+
+/**
+ * The best natural pause at or before (or at or after) a time, within `maxDistance` seconds: the
+ * nearest of the best quality available, so a finished answer a bit further away beats a sentence end
+ * right there. Never a mid-sentence pause. The pause always wins over exact timing.
+ */
+export function snapToNaturalPause(
+  time: number,
+  breaks: Break[],
+  direction: 'before' | 'after',
+  maxDistance = 45,
+): Break | undefined {
+  const candidates = breaks.filter(
+    (b) =>
+      pauseQuality(b) > 0 &&
+      (direction === 'before' ? b.at <= time && time - b.at <= maxDistance : b.at >= time && b.at - time <= maxDistance),
+  )
+  if (candidates.length === 0) return undefined
+  const best = Math.max(...candidates.map(pauseQuality))
+  return candidates
+    .filter((b) => pauseQuality(b) === best)
+    .reduce((a, b) => (Math.abs(b.at - time) < Math.abs(a.at - time) ? b : a))
+}

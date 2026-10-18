@@ -16,7 +16,7 @@ import { plusInvite } from '../../lib/plusInvite'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
-import { guideName } from '../../lib/languages'
+import { guideName, guidanceLevelOr } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
 import { useSession } from '../../lib/session'
 import { resumePosition, savePosition } from '../../lib/data'
@@ -149,7 +149,9 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
 
 export default function Listen() {
   const p = usePalette()
-  const { id, guide } = useLocalSearchParams<{ id: string; guide?: string }>()
+  const { id, guide, level: levelParam } = useLocalSearchParams<{ id: string; guide?: string; level?: string }>()
+  // The intensity chosen on the episode screen for this listen (PC-1017-F13).
+  const chosenLevel = levelParam ? guidanceLevelOr(levelParam, 'standard') : undefined
   const { session, profile } = useSession()
   const [data, setData] = useState<ListenPayload>()
   const [error, setError] = useState<string>()
@@ -191,7 +193,7 @@ export default function Listen() {
       try {
         let d: ListenPayload
         let synced = false
-        const fetched = await api.listen(id, guide !== '0').catch((e) => {
+        const fetched = await api.listen(id, guide !== '0', chosenLevel).catch((e) => {
           // No connection, a time-out or the server's away: play the copy saved on this phone, if
           // there is one. A clear answer from the server (say, the show was removed) is shown instead.
           const saved = config.demo || !isOfflineError(e) ? undefined : loadLesson(id)
@@ -210,7 +212,8 @@ export default function Listen() {
           if (ready && guide !== '0') saveLesson(d)
         } else {
           const saved = loadLesson(id)!.payload
-          d = guide === '0' ? { ...saved, guided: false } : saved
+          // Offline, the saved plan holds every level, so the chosen one still applies.
+          d = guide === '0' ? { ...saved, guided: false } : chosenLevel && saved.guided ? { ...saved, guidanceLevel: chosenLevel } : saved
           synced = true
         }
         setGetReady(undefined)
@@ -254,7 +257,7 @@ export default function Listen() {
       setRemoteHandler(undefined)
       void listen.current?.dispose()
     }
-  }, [id, guide, session])
+  }, [id, guide, chosenLevel, session])
 
   // Hands-free saving: a word the guide teaches goes into the word bank when it's spotlighted.
   useEffect(() => {

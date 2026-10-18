@@ -93,7 +93,9 @@ export const api = {
   openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show, 25_000),
   prepare: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null }>('GET', `/v1/jobs/${jobId}`),
-  listen: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, { guide }),
+  /** `level` is the guide intensity chosen for this episode; left out, the server uses the learner's default. */
+  listen: (episodeId: string, guide: boolean, level?: 'light' | 'standard' | 'handsOn') =>
+    call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, level ? { guide, level } : { guide }),
   /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),

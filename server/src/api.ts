@@ -307,7 +307,9 @@ export function createApi(deps: ApiDeps) {
     const episodeId = c.req.param('id')
     const body = await c.req.json().catch(() => ({}))
     const [profile] = await sql`select guide_id, guidance_level, plan from profiles where id = ${userId}`
-    const level = body.guide === false ? null : (profile?.guidance_level ?? 'standard')
+    // The guide intensity chosen for this episode (PC-1017-F13), else the learner's default.
+    const chosen = ['light', 'standard', 'handsOn'].includes(body.level) ? (body.level as string) : undefined
+    const level = body.guide === false ? null : (chosen ?? profile?.guidance_level ?? 'standard')
     const [episode] = await sql`select e.*, p.title as podcast_title, p.artwork from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
     if (!episode) return c.json({ error: 'Not found' }, 404)
     if (episode.status !== 'ready') return c.json({ error: 'This episode isn’t ready yet.', status: episode.status }, 409)

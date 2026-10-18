@@ -1,17 +1,17 @@
 import { FREE_EPISODE_MAX_SEC, PLUS_MONTHLY_SEC } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Alert, ScrollView, View } from 'react-native'
+import { Alert, Pressable, ScrollView, View } from 'react-native'
 import { Artwork, Button, Notice, Screen, Tag, Txt, minutes } from '../../components/ui'
 import { api, refusalOf } from '../../lib/api'
-import { guideName } from '../../lib/languages'
+import { GUIDANCE, guideName, guidanceLevelOr, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
 import { downloadForOffline, isSavedForOffline, removeSaved } from '../../lib/offline'
 import { enableReadyNotifications } from '../../lib/notifications'
 import { useSession } from '../../lib/session'
 import { getEpisode } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
-import { space, usePalette } from '../../theme'
+import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 
 const STAGES: Record<string, string> = {
@@ -25,7 +25,7 @@ const STAGES: Record<string, string> = {
 export default function Episode() {
   const p = usePalette()
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { session, profile, refreshProfile } = useSession()
+  const { session, profile, refreshProfile, updatePrefs } = useSession()
   const [jobId, setJobId] = useState<string>()
   const [stage, setStage] = useState<string>()
   const [busy, setBusy] = useState(false)
@@ -116,6 +116,10 @@ export default function Episode() {
 
   if (!ep) return <Screen><Loading /></Screen>
 
+  const level = guidanceLevelOr(profile?.guidance_level, 'standard')
+  // The last choice becomes the default for the next episode (PC-1017-F13).
+  const chooseLevel = (l: GuidanceLevelId) => void updatePrefs({ guidance_level: l }).catch(() => undefined)
+
   const preparing = Boolean(jobId) || ep.status === 'preparing'
   const plus = profile?.plan === 'plus'
   const cost = plus
@@ -165,7 +169,8 @@ export default function Episode() {
 
         {ep.status === 'ready' ? (
           <View style={{ gap: space.sm }}>
-            <Button label={`Listen with ${guideName(profile?.guide_id)}`} onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1' } })} />
+            <LevelPicker guide={guideName(profile?.guide_id)} value={level} onChange={chooseLevel} />
+            <Button label={`Listen with ${guideName(profile?.guide_id)}`} onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1', level } })} />
             <Button kind="secondary" label="Subtitles only" onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '0' } })} />
             {canSyncOnDevice ? (
               <View style={{ gap: space.xs, paddingTop: space.sm }} accessibilityLiveRegion="polite">
@@ -217,5 +222,35 @@ export default function Episode() {
         {message ? <Notice text={message.text} action={message.upgrade && !plus ? { label: 'See Plus', onPress: () => router.push('/plus') } : undefined} /> : null}
       </ScrollView>
     </Screen>
+  )
+}
+
+/** How often the guide steps in on this episode: Hands-on, Standard or Light, each with what it feels like. */
+function LevelPicker({ guide, value, onChange }: { guide: string; value: GuidanceLevelId; onChange: (l: GuidanceLevelId) => void }) {
+  const p = usePalette()
+  return (
+    <View style={{ gap: space.sm, paddingBottom: space.sm }}>
+      <Txt variant="smallStrong">How often should {guide} step in?</Txt>
+      <View style={{ gap: space.xs }} accessibilityRole="radiogroup">
+        {GUIDANCE.map((g) => {
+          const selected = g.id === value
+          return (
+            <Pressable
+              key={g.id}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${g.title}. ${g.line}`}
+              onPress={() => onChange(g.id)}
+              style={{ minHeight: MIN_TAP, paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: 16, backgroundColor: p.raised, borderWidth: selected ? 2 : 1, borderColor: selected ? p.level : p.line, gap: 2 }}
+            >
+              <Txt variant="smallStrong">{g.title}</Txt>
+              <Txt variant="small" tone="quiet">
+                {g.line}
+              </Txt>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
   )
 }

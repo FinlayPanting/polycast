@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignWordMomentLevels, includes, selectMoments, validateMoments, voiceSegments, type GuideMoment } from '../src'
+import { assignMomentLevels, GUIDE_SPACING, LEVELS, includes, selectMoments, validateMoments, voiceSegments, type GuideMoment } from '../src'
 
 const moment = (over: Partial<GuideMoment> & Pick<GuideMoment, 'id' | 'kind' | 'at' | 'minLevel'>): GuideMoment => ({
   script: 'Test',
@@ -15,36 +15,41 @@ describe('guidance levels', () => {
   })
 })
 
-describe('word moment spacing', () => {
-  it('gives Standard the best terms at least 4 minutes apart and Hands-on more at least 2 minutes apart', () => {
-    const candidates = [
-      { termId: 'a', occursAt: 60, priority: 9 },
-      { termId: 'b', occursAt: 150, priority: 8 },
-      { termId: 'c', occursAt: 330, priority: 7 },
-      { termId: 'd', occursAt: 200, priority: 6 },
-      { termId: 'e', occursAt: 600, priority: 5 },
-      { termId: 'f', occursAt: 460, priority: 4 },
-    ]
-    const levels = assignWordMomentLevels(candidates)
-    expect(levels.get('a')).toBe('standard')
-    expect(levels.get('c')).toBe('standard')
-    expect(levels.get('e')).toBe('standard')
-    expect(levels.get('b')).toBe(undefined) // too close to a and c even for Hands-on
-    expect(levels.get('f')).toBe('handsOn')
-    expect(levels.get('d')).toBe('handsOn')
+describe('ranked moments and spacing (PC-1017-F13, F14)', () => {
+  const unit = (id: string, at: number, priority: number, floor: 'light' | 'standard' | 'handsOn' = 'light', end = at) => ({ id, start: at, end, priority, floor })
 
-    const standard = candidates.filter((c) => levels.get(c.termId) === 'standard').map((c) => c.occursAt)
-    standard.sort((x, y) => x - y)
-    for (let i = 1; i < standard.length; i++) expect(standard[i]! - standard[i - 1]!).toBeGreaterThanOrEqual(240)
+  it('gives Light the best moments about 5 minutes apart, Standard about 3 and Hands-on about 1', () => {
+    // A candidate every minute for 20 minutes, usefulness varying.
+    const units = Array.from({ length: 20 }, (_, i) => unit(`u${i}`, 60 + i * 60, (i * 7) % 10))
+    const levels = assignMomentLevels(units)
+    const times = (level: 'light' | 'standard' | 'handsOn') =>
+      units.filter((u) => { const l = levels.get(u.id); return l && LEVELS.indexOf(l) <= LEVELS.indexOf(level) }).map((u) => u.start).sort((a, b) => a - b)
+    for (const level of LEVELS) {
+      const t = times(level)
+      for (let i = 1; i < t.length; i++) expect(t[i]! - t[i - 1]!).toBeGreaterThanOrEqual(GUIDE_SPACING[level])
+    }
+    expect(times('light').length).toBeGreaterThanOrEqual(3)
+    expect(times('standard').length).toBeGreaterThan(times('light').length)
+    expect(times('handsOn')).toHaveLength(20) // a minute apart: every one fits
   })
 
-  it('prefers the more useful term when two compete for the same slot', () => {
-    const levels = assignWordMomentLevels([
-      { termId: 'weak', occursAt: 100, priority: 1 },
-      { termId: 'strong', occursAt: 110, priority: 5 },
-    ])
-    expect(levels.get('strong')).toBe('standard')
+  it('prefers the more useful moment when two compete for the same slot', () => {
+    const levels = assignMomentLevels([unit('weak', 100, 1), unit('strong', 110, 5)])
+    expect(levels.get('strong')).toBe('light')
     expect(levels.get('weak')).toBe(undefined)
+  })
+
+  it('keeps clear of the fixed moments and never goes lighter than a moment’s floor', () => {
+    const levels = assignMomentLevels([unit('nearRecap', 320, 9), unit('q', 900, 9, 'handsOn'), unit('note', 1300, 9, 'standard')], [0, 300])
+    expect(levels.get('nearRecap')).toBe(undefined) // 20 s after a recap
+    expect(levels.get('q')).toBe('handsOn')
+    expect(levels.get('note')).toBe('standard')
+  })
+
+  it('measures a word moment from its listen-for to its spotlight', () => {
+    const levels = assignMomentLevels([unit('pair', 100, 9, 'light', 160), unit('close', 190, 8)])
+    expect(levels.get('pair')).toBe('light')
+    expect(levels.get('close')).toBe(undefined) // 30 s after the spotlight
   })
 })
 

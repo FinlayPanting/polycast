@@ -105,6 +105,9 @@ run('API and worker', () => {
     const listen = await (await call(anna, 'POST', `/v1/episodes/${episodeId}/listen`)).json()
     expect(listen.guided).toBe(true)
     expect(listen.guidanceLevel).toBe('standard')
+    // The intensity chosen for this episode wins over her default; nonsense falls back to it (PC-1017-F13).
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`, { level: 'handsOn' })).json()).guidanceLevel).toBe('handsOn')
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`, { level: 'loud' })).json()).guidanceLevel).toBe('standard')
     expect(listen.episode.audioUrl).toBe('https://cdn.example.com/1.mp3')
     expect(listen.transcript.segments.length).toBeGreaterThan(10)
     expect(listen.plan.moments.length).toBeGreaterThan(5)

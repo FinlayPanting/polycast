@@ -1,4 +1,4 @@
-import { findBreaks, selectMoments, type LessonPlan } from '@polycast/core'
+import { findBreaks, GUIDE_SPACING, pauseQuality, selectMoments, type LessonPlan } from '@polycast/core'
 import { describe, expect, it } from 'vitest'
 import { memoryLedger, SpendCapReached, SpendGuard, UsageMeter } from '../src/budget'
 import { assemblePlan } from '../src/pipeline/lessonPlan'
@@ -67,9 +67,9 @@ describe('preparing an episode', () => {
     expect(kinds.filter((k) => k === 'checkpoint')).toHaveLength(2) // last chapter's recap goes to the wrap-up
     expect(r.plan.wrapUpQuestions).toHaveLength(1) // the broken question is dropped
 
-    // Every moment except the warm-up sits on a natural break.
-    const breakTimes = new Set(findBreaks(r.transcript.words).map((b) => b.at))
-    for (const m of r.plan.moments.filter((m) => m.kind !== 'warmup')) expect(breakTimes.has(m.at)).toBe(true)
+    // Every moment except the warm-up sits on a natural pause: never mid-sentence (PC-1017-F14).
+    const breaks = new Map(findBreaks(r.transcript.words).map((b) => [b.at, b]))
+    for (const m of r.plan.moments.filter((m) => m.kind !== 'warmup')) expect(pauseQuality(breaks.get(m.at)!)).toBeGreaterThan(0)
 
     // Every moment is voiced; host clips sit between guide speech.
     for (const m of r.plan.moments) expect(m.audio?.parts.length).toBeGreaterThan(0)
@@ -87,15 +87,15 @@ describe('preparing an episode', () => {
     const r = await prepareEpisode(input(d.ep), d)
     const level = (lemma: string) => r.plan.moments.find((m) => m.kind === 'listenFor' && m.term?.lemma === lemma)?.minLevel
     expect(level('försenad')).toBe('standard')
-    expect(level('fika')).toBe('standard')
-    expect(level('sambo')).toBe('standard')
-    expect(level('ändå')).toBe(undefined) // 70s after försenad: under the 2-minute Hands-on gap
-    expect(level('jättekul')).toBe(undefined)
+    expect(level('ändå')).toBe('handsOn') // 70s after försenad: past Hands-on's gap, inside Standard's
+    expect(level('fika')).toBe('handsOn') // close to a recap
+    expect(level('jättekul')).toBe(undefined) // 10s after fika
+    expect(level('sambo')).toBe(undefined) // seconds before the wrap-up
     expect(r.dropped.join('\n')).toMatch(/saknas.*not found/)
     expect(r.dropped.join('\n')).toMatch(/warm-up clip for "hittepå"/)
 
     // Each listen-for comes before the host says the term; its spotlight after.
-    for (const lemma of ['försenad', 'fika', 'sambo']) {
+    for (const lemma of ['försenad', 'ändå', 'fika']) {
       const listen = r.plan.moments.find((m) => m.kind === 'listenFor' && m.term?.lemma === lemma)!
       const spot = r.plan.moments.find((m) => m.kind === 'spotlight' && m.term?.lemma === lemma)!
       expect(listen.at).toBeLessThanOrEqual(d.ep.termAt[lemma]!)
@@ -108,9 +108,16 @@ describe('preparing an episode', () => {
     const { plan } = await prepareEpisode(input(d.ep), d)
     const kinds = (level: 'light' | 'standard' | 'handsOn') => new Set(selectMoments(plan.moments, level).map((m) => m.kind))
     expect([...kinds('light')].sort()).toEqual(['checkpoint', 'wrapUp'])
-    expect(kinds('standard').has('cultureNote')).toBe(true)
+    expect(kinds('standard').has('listenFor')).toBe(true)
     expect(kinds('standard').has('quickQuestion')).toBe(false)
     expect(kinds('handsOn').has('quickQuestion')).toBe(true)
+    expect(kinds('handsOn').has('cultureNote')).toBe(true)
+
+    // Spread out: at each level, guide stops (a word moment's pair counts as one) keep that level's gap.
+    for (const level of ['light', 'standard', 'handsOn'] as const) {
+      const stops = selectMoments(plan.moments, level).filter((m) => m.kind !== 'warmup' && m.kind !== 'spotlight').map((m) => m.at)
+      for (let i = 1; i < stops.length; i++) expect(stops[i]! - stops[i - 1]!).toBeGreaterThanOrEqual(Math.min(GUIDE_SPACING[level], 40) - 15)
+    }
   })
 
   it('uses the publisher transcript instead of transcribing when it is word-timed', async () => {

@@ -9,9 +9,12 @@ export function includes(level: GuidanceLevel, minLevel: GuidanceLevel): boolean
 
 /**
  * The lightest level each kind of moment belongs to (spec: Tutor mode, "A listen, start to finish").
- * Word moments are the exception: their level is decided by spacing in `assignWordMomentLevels`.
+ * Word moments, culture notes and questions are ranked: their level is decided in `assignMomentLevels`,
+ * never lighter than this.
  */
-export const KIND_MIN_LEVEL: Record<Exclude<MomentKind, 'listenFor' | 'spotlight'>, GuidanceLevel> = {
+export const KIND_MIN_LEVEL: Record<MomentKind, GuidanceLevel> = {
+  listenFor: 'light',
+  spotlight: 'light',
   warmup: 'light',
   checkpoint: 'light',
   wrapUp: 'light',
@@ -19,52 +22,68 @@ export const KIND_MIN_LEVEL: Record<Exclude<MomentKind, 'listenFor' | 'spotlight
   quickQuestion: 'handsOn',
 }
 
-/** Minimum seconds between word moments at each level. Standard targets one every 4–5 minutes, Hands-on every 2–3. */
-export const WORD_MOMENT_SPACING: Record<'standard' | 'handsOn', number> = {
-  standard: 240,
-  handsOn: 120,
+/**
+ * How often the guide steps in at each level (PC-1017-F13, F14): Hands-on about once a minute,
+ * Standard about every 3 minutes, Light about every 5. Every episode is planned once at Hands-on
+ * density; these are the minimum gaps between guide stops that each level keeps, so moments are
+ * spread out rather than clustered. Picking the best-ranked moments with these gaps lands, on a
+ * typical episode, between one and two gaps apart: about the targets in LEVEL_MINUTES. A natural
+ * pause always wins over exact timing.
+ */
+export const GUIDE_SPACING: Record<GuidanceLevel, number> = {
+  light: 180,
+  standard: 100,
+  handsOn: 40,
 }
 
-/** A word moment the lesson-plan writer proposed: a listen-for and its spotlight, ranked by usefulness. */
-export interface WordMomentCandidate {
-  termId: string
-  /** When the host says the term. */
-  occursAt: number
-  /** Higher is more useful to learn. */
-  priority: number
-}
+/** What each level feels like, roughly: one guide stop every this many minutes. */
+export const LEVEL_MINUTES: Record<GuidanceLevel, number> = { light: 5, standard: 3, handsOn: 1 }
 
 /**
- * Chooses which proposed word moments each level hears. The most useful terms are taken first;
- * Standard keeps those at least 4 minutes apart, Hands-on adds more at least 2 minutes apart,
- * and the rest are dropped. Returns termId → level, or undefined when dropped.
+ * A guide stop that can be ranked: a word moment (its listen-for and spotlight, from `start` to
+ * `end`), a culture note or a quick question. `floor` is the lightest level it may be played at.
  */
-export function assignWordMomentLevels(
-  candidates: WordMomentCandidate[],
-  spacing = WORD_MOMENT_SPACING,
-): Map<string, GuidanceLevel | undefined> {
-  const ranked = [...candidates].sort((a, b) => b.priority - a.priority || a.occursAt - b.occursAt)
-  const result = new Map<string, GuidanceLevel | undefined>()
-  const standardTimes: number[] = []
-  const allTimes: number[] = []
-  const clear = (times: number[], t: number, gap: number) => times.every((s) => Math.abs(s - t) >= gap)
+export interface RankedUnit {
+  id: string
+  start: number
+  end: number
+  /** Higher is more useful. */
+  priority: number
+  floor: GuidanceLevel
+}
 
-  for (const c of ranked) {
-    if (clear(standardTimes, c.occursAt, spacing.standard) && clear(allTimes, c.occursAt, spacing.handsOn)) {
-      standardTimes.push(c.occursAt)
-      allTimes.push(c.occursAt)
-      result.set(c.termId, 'standard')
+const heavier = (a: GuidanceLevel, b: GuidanceLevel): GuidanceLevel => (LEVELS.indexOf(a) >= LEVELS.indexOf(b) ? a : b)
+
+const distance = (a: { start: number; end: number }, b: { start: number; end: number }) =>
+  Math.max(0, a.start - b.end, b.start - a.end)
+
+/**
+ * The ranked approach (PC-1017-F13): decides the lightest level that hears each unit, or undefined
+ * when even Hands-on can't fit it. Light takes the best-ranked units that keep its gap from each
+ * other and from the fixed moments (warm-up, recaps, wrap-up, at `fixed` times); Standard adds the
+ * next best keeping its gap; Hands-on adds the rest that keep its gap. Levels nest: a learner on
+ * a level hears everything lighter too.
+ */
+export function assignMomentLevels(
+  units: RankedUnit[],
+  fixed: number[] = [],
+  spacing: Record<GuidanceLevel, number> = GUIDE_SPACING,
+): Map<string, GuidanceLevel | undefined> {
+  const ranked = [...units].sort((a, b) => b.priority - a.priority || a.start - b.start)
+  const result = new Map<string, GuidanceLevel | undefined>()
+  const chosen: { start: number; end: number; level: GuidanceLevel }[] = fixed.map((t) => ({ start: t, end: t, level: 'light' }))
+  for (const level of LEVELS) {
+    for (const u of ranked) {
+      if (result.has(u.id) || !includes(level, u.floor)) continue
+      // Two stops are heard together from the heavier of their two levels, so that level's gap applies.
+      const clear = chosen.every((c) => distance(u, c) >= spacing[heavier(level, c.level)])
+      if (clear) {
+        chosen.push({ start: u.start, end: u.end, level })
+        result.set(u.id, level)
+      }
     }
   }
-  for (const c of ranked) {
-    if (result.has(c.termId)) continue
-    if (clear(allTimes, c.occursAt, spacing.handsOn)) {
-      allTimes.push(c.occursAt)
-      result.set(c.termId, 'handsOn')
-    } else {
-      result.set(c.termId, undefined)
-    }
-  }
+  for (const u of units) if (!result.has(u.id)) result.set(u.id, undefined)
   return result
 }
 
@@ -200,4 +219,8 @@ export function withoutLanguageMarks(text: string): string {
  * language; word moments placed in the conversation.
  */
 /** 3 (14 Oct 2026): calmer, context-first scripts; the guide repeats each term slowly. */
-export const LESSON_PLAN_VERSION = 3
+/**
+ * 4 (18 Oct 2026): moments only at natural pauses (a finished answer, a question), planned at
+ * Hands-on density of about one a minute and ranked so Standard and Light play the best subset.
+ */
+export const LESSON_PLAN_VERSION = 4

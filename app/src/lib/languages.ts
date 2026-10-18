@@ -27,10 +27,11 @@ export function languageName(code: string | null | undefined): string {
   return (code && INFO[code]?.name) || 'your language'
 }
 
+/** Guide intensity (PC-1017-F13), chosen per episode; the last choice becomes the default. */
 export const GUIDANCE = [
-  { id: 'light', title: 'Light', line: 'A short recap whenever the conversation moves on, and a wrap-up at the end.' },
-  { id: 'standard', title: 'Standard', line: 'Adds a useful word or phrase every few minutes, in the host’s own voice, and the odd culture note.' },
-  { id: 'handsOn', title: 'Hands-on', line: 'More words, more often, and quick questions that check you followed.' },
+  { id: 'handsOn', title: 'Hands-on', line: 'About once a minute: words in the host’s own voice, quick questions and recaps.' },
+  { id: 'standard', title: 'Standard', line: 'About every 3 minutes: the most useful words and the odd culture note.' },
+  { id: 'light', title: 'Light', line: 'About every 5 minutes: a few key words and a recap when the conversation moves on.' },
 ] as const
 
 export const GUIDES = [
@@ -40,4 +41,11 @@ export const GUIDES = [
 
 export function guideName(id: string | undefined): string {
   return GUIDES.find((g) => g.id === id)?.name ?? 'Mia'
+}
+
+export type GuidanceLevelId = (typeof GUIDANCE)[number]['id']
+
+/** A guidance level from a screen parameter, or the fallback when it isn't one. */
+export function guidanceLevelOr(value: string | undefined | null, fallback: GuidanceLevelId): GuidanceLevelId {
+  return GUIDANCE.find((g) => g.id === value)?.id ?? fallback
 }

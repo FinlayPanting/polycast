@@ -1,12 +1,12 @@
 import {
   LESSON_PLAN_VERSION,
   withoutLanguageMarks,
-  assignWordMomentLevels,
+  assignMomentLevels,
   findBreaks,
   findOccurrences,
   KIND_MIN_LEVEL,
   sentenceClip,
-  snapToBreak,
+  snapToNaturalPause,
   validateMoments,
   wordClip,
   type Clip,
@@ -14,6 +14,7 @@ import {
   type Host,
   type LessonPlan,
   type Question,
+  type RankedUnit,
   type Segment,
   type Transcript,
 } from '@polycast/core'
@@ -111,7 +112,8 @@ Write a lesson plan:
   listenFor (under 30 words): said just before the host says it. First where we are, then a lead-in and {term} (the host saying it), then the guide repeats it in [[ ]], then what it means, e.g. "They're complaining about the trains now. Here's Anna: {term}. [[försenad]]. It means delayed. Listen out for it."
   spotlight (under 60 words): said just after. Who said it and why, a lead-in, then {sentence} (the host's line again), then the guide repeats the key part in [[ ]], what it means here, and one more everyday example in [[ ]] with its meaning, e.g. "That was Anna, fed up with her commute: {sentence} [[Tåget var försenat]]: the train was late. You might say: [[Jag är lite försenad]], I'm running a bit late." 
 - cultureNotes: only where a reference, joke or idiom would lose a learner (often none; at most 1 every 10 minutes). Under 35 words each, after the line it relates to, starting with who said it.
-- quickQuestions: about one every 5 minutes, checking the gist of what was just said, after the given line. The prompt starts with a few words of context (e.g. "Erik was just talking about his old camera."), then asks. Three short options, one correct.
+- quickQuestions: about one every 3 minutes, checking the gist of what was just said, after the given line. The prompt starts with a few words of context (e.g. "Erik was just talking about his old camera."), then asks. Three short options, one correct.
+- Placing moments: the guide only ever steps in once a speaker has finished their answer or their bit, or straight after someone asks a question; never mid-sentence or mid-exchange. For culture notes and quick questions, give the id of the line where that happens. Spread everything out through the episode rather than bunching it.
 - wrapUp: script (under 70 words) recapping the episode warmly and honestly, and 3 questions on its content.
 
 Transcript:
@@ -134,6 +136,10 @@ function locateTerm(transcript: Transcript, t: DraftTerm) {
   if (!seg) return all[0]
   return all.find((o) => o.first >= seg.wordStart && o.last < seg.wordEnd) ?? all.reduce((a, b) => (Math.abs(b.start - seg.start) < Math.abs(a.start - seg.start) ? b : a))
 }
+
+/** Culture notes are only written where a learner would be lost, so they rank above most words. */
+const CULTURE_NOTE_PRIORITY = 7
+const QUICK_QUESTION_PRIORITY = 5
 
 const segEnd = (segments: Segment[], id: string) => segments.find((s) => s.id === id)?.end
 
@@ -174,54 +180,47 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
     moments.push({ id: id('warmup'), kind: 'warmup', at: 0, minLevel: KIND_MIN_LEVEL.warmup, script, clips })
   }
 
-  // Word moments: listen-for just before the host says it, spotlight at the next break after.
-  const placed: { termId: string; occursAt: number; priority: number; listen: GuideMoment; spot: GuideMoment }[] = []
+  // Word moments, culture notes and quick questions are ranked, then each level hears the best that
+  // keep its spacing (assignMomentLevels). Warm-up, recaps and wrap-up are fixed.
+  const ranked: { priority: number; moments: GuideMoment[]; label?: string }[] = []
+
+  // Word moments: listen-for just before the host says it, spotlight at the next natural pause after.
   for (const wm of draft.wordMoments) {
     const occ = locateTerm(transcript, wm)
     if (!occ) {
       dropped.push(`word moment "${wm.text}": not found in transcript`)
       continue
     }
-    const before = snapToBreak(occ.start, breaks, 'before', 60)
-    const after = snapToBreak(occ.end, breaks, 'after', 90)
+    const before = snapToNaturalPause(occ.start, breaks, 'before', 60)
+    const after = snapToNaturalPause(occ.end, breaks, 'after', 90)
     if (!before || !after || before.at >= after.at) {
       dropped.push(`word moment "${wm.text}": no natural break nearby`)
       continue
     }
-    const termId = `t${placed.length + 1}`
+    const termId = `t${ranked.length + 1}`
     const term = { text: wm.text, lemma: wm.lemma, meaning: wm.meaning }
     const clip = wordClip(words, occ)
     const line = sentenceClip(segments, occ.first) ?? clip
-    const listen: GuideMoment = { id: id('listen'), kind: 'listenFor', at: before.at, minLevel: 'standard', script: wm.listenFor.replaceAll('{term}', '{clip:0}'), clips: [clip], term, termId }
+    const listen: GuideMoment = { id: id('listen'), kind: 'listenFor', at: before.at, minLevel: KIND_MIN_LEVEL.listenFor, script: wm.listenFor.replaceAll('{term}', '{clip:0}'), clips: [clip], term, termId }
     const spot: GuideMoment = {
       id: id('spot'),
       kind: 'spotlight',
       at: after.at,
-      minLevel: 'standard',
+      minLevel: KIND_MIN_LEVEL.spotlight,
       script: wm.spotlight.replaceAll('{term}', '{clip:0}').replaceAll('{sentence}', '{clip:1}'),
       clips: [clip, line],
       term,
       termId,
     }
-    placed.push({ termId, occursAt: occ.start, priority: wm.priority, listen, spot })
+    ranked.push({ priority: wm.priority, moments: [listen, spot], label: `word moment "${wm.text}"` })
   }
-  const levels = assignWordMomentLevels(placed)
-  for (const p of placed) {
-    const level = levels.get(p.termId)
-    if (!level) {
-      dropped.push(`word moment "${p.listen.term!.text}": too close to a more useful one`)
-      continue
-    }
-    moments.push({ ...p.listen, minLevel: level }, { ...p.spot, minLevel: level })
-  }
-
   // Checkpoints: a recap of each chapter, at the break where the next chapter begins. The last
   // chapter's recap is left to the wrap-up.
   draft.chapters.forEach((ch, i) => {
     const next = draft.chapters[i + 1]
     if (!next) return
     const startOfNext = segments.find((s) => s.id === next.startSegmentId)?.start
-    const b = startOfNext === undefined ? undefined : snapToBreak(startOfNext, breaks, 'before', 30)
+    const b = startOfNext === undefined ? undefined : snapToNaturalPause(startOfNext, breaks, 'before', 30)
     if (!b) {
       dropped.push(`checkpoint after "${ch.title}": no break where the next chapter starts`)
       return
@@ -231,17 +230,17 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
 
   for (const cn of draft.cultureNotes) {
     const end = segEnd(segments, cn.segmentId)
-    const b = end === undefined ? undefined : snapToBreak(end, breaks, 'after', 60)
+    const b = end === undefined ? undefined : snapToNaturalPause(end, breaks, 'after', 60)
     if (!b) dropped.push('culture note: no break after its line')
-    else moments.push({ id: id('culture'), kind: 'cultureNote', at: b.at, minLevel: KIND_MIN_LEVEL.cultureNote, script: cn.script, clips: [] })
+    else ranked.push({ priority: CULTURE_NOTE_PRIORITY, moments: [{ id: id('culture'), kind: 'cultureNote', at: b.at, minLevel: KIND_MIN_LEVEL.cultureNote, script: cn.script, clips: [] }] })
   }
 
   for (const q of draft.quickQuestions) {
     const end = segEnd(segments, q.segmentId)
-    const b = end === undefined ? undefined : snapToBreak(end, breaks, 'after', 60)
+    const b = end === undefined ? undefined : snapToNaturalPause(end, breaks, 'after', 60)
     if (!b) dropped.push('quick question: no break after its line')
     else
-      moments.push({
+      ranked.push({ priority: QUICK_QUESTION_PRIORITY, moments: [{
         id: id('question'),
         kind: 'quickQuestion',
         at: b.at,
@@ -251,8 +250,25 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
         // The question is read aloud from the script (marks and all); on screen it's plain text.
         question: plainQuestion(q),
         waits: true,
-      })
+      }] })
   }
+
+  // Rank and space them out (PC-1017-F13, F14).
+  // The warm-up plays before the episode starts, so it doesn't crowd the first minutes.
+  const fixedTimes = [...moments.filter((m) => m.kind !== 'warmup').map((m) => m.at), lastBreak]
+  const units: RankedUnit[] = ranked.map((r, i) => ({
+    id: String(i),
+    start: Math.min(...r.moments.map((m) => m.at)),
+    end: Math.max(...r.moments.map((m) => m.at)),
+    priority: r.priority,
+    floor: r.moments[0]!.minLevel,
+  }))
+  const levels = assignMomentLevels(units, fixedTimes)
+  ranked.forEach((r, i) => {
+    const level = levels.get(String(i))
+    if (!level) dropped.push(`${r.label ?? r.moments[0]!.kind}: too close to a more useful moment`)
+    else moments.push(...r.moments.map((m) => ({ ...m, minLevel: level })))
+  })
 
   moments.push({
     id: id('wrapup'),
