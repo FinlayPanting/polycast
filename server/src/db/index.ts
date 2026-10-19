@@ -366,3 +366,20 @@ export async function startListen(sql: Sql, userId: string, episodeId: string, g
     return { guided }
   })
 }
+
+/** How long a creator's removal request is kept once it has been handled (PC-1017-10). */
+export const REMOVAL_REQUEST_RETENTION_MONTHS = 12
+
+/**
+ * Creators' contact details don't stay forever: a removal request (show, contact, message) is
+ * deleted 12 months after it was handled. Requests not yet handled are always kept. Returns how
+ * many were deleted.
+ */
+export async function forgetOldRemovalRequests(sql: Sql, now: Date = new Date()): Promise<number> {
+  const rows = await sql`
+    delete from removal_requests
+    where handled_at is not null
+      and handled_at < ${now}::timestamptz - make_interval(months => ${REMOVAL_REQUEST_RETENTION_MONTHS})
+    returning id`
+  return rows.length
+}

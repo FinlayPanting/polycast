@@ -5,7 +5,7 @@
 import { serve } from '@hono/node-server'
 import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
 import { createApi, supabaseVerifier } from './api'
-import { connect, releaseJob } from './db'
+import { connect, forgetOldRemovalRequests, releaseJob } from './db'
 import { ELEVEN_TTS_MODEL, elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
 import { chooseTtsProvider, withFallbackSpeech } from './providers/speechChoice'
 import { elevenVoiceFor } from './voices'
@@ -176,6 +176,19 @@ async function main() {
     const firstTranslate = setTimeout(() => void translateRound(), 15 * 60_000)
     const translateTimer = setInterval(() => void translateRound(), 24 * 60 * 60_000)
     stopping.signal.addEventListener('abort', () => (clearTimeout(firstTranslate), clearInterval(translateTimer)))
+
+    // Creators' removal requests are forgotten 12 months after they're handled (PC-1017-10): daily.
+    const forgetRound = async () => {
+      try {
+        const n = await forgetOldRemovalRequests(sql)
+        if (n) console.log(`Deleted ${n} removal requests handled over 12 months ago`)
+      } catch (e) {
+        console.error('removal request clean-up failed', e)
+      }
+    }
+    const firstForget = setTimeout(() => void forgetRound(), 20 * 60_000)
+    const forgetTimer = setInterval(() => void forgetRound(), 24 * 60 * 60_000)
+    stopping.signal.addEventListener('abort', () => (clearTimeout(firstForget), clearInterval(forgetTimer)))
   }
 
   // Railway stops the old server on every deploy. Hand an unfinished job back to the queue so
