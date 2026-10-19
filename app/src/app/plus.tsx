@@ -2,8 +2,9 @@ import { router } from 'expo-router'
 import { useState } from 'react'
 import { Linking, ScrollView, View } from 'react-native'
 import { Mark } from '../components/Mark'
-import { Button, Screen, Txt } from '../components/ui'
+import { Button, Screen, Tag, Txt } from '../components/ui'
 import { buy, plusOffer, restore } from '../lib/purchases'
+import { DEFAULT_ANNUAL, DEFAULT_MONTHLY, type PlanPrice, yearlyValueLine } from '../lib/planValue'
 import { RESTORE_MESSAGES, restoreErrorMessage } from '../lib/plusPending'
 import { useSession } from '../lib/session'
 import { useAsync } from '../lib/useAsync'
@@ -22,6 +23,11 @@ export default function Plus() {
   const { data: offer, error } = useAsync(plusOffer, [])
   const [busy, setBusy] = useState<string>()
   const [message, setMessage] = useState<string>()
+  const priceOf = (kind: 'monthly' | 'annual', fallback: PlanPrice): PlanPrice => {
+    const product = offer?.[kind]?.product
+    return product ? { amount: product.price, currency: product.currencyCode } : fallback
+  }
+  const yearlyValue = yearlyValueLine(priceOf('annual', DEFAULT_ANNUAL), priceOf('monthly', DEFAULT_MONTHLY))
 
   async function purchase(kind: 'monthly' | 'annual') {
     const pkg = offer?.[kind]
@@ -60,7 +66,19 @@ export default function Plus() {
         </Txt>
 
         <View style={{ gap: space.sm }}>
-          <Button label={offer?.annual ? `${offer.annual.product.priceString} a year` : '€39 a year'} busy={busy === 'annual'} disabled={!offer?.annual} onPress={() => purchase('annual')} />
+          <View style={{ gap: space.xs }}>
+            {yearlyValue ? (
+              <View style={{ alignSelf: 'flex-start' }}>
+                <Tag label="Best value" tone="play" />
+              </View>
+            ) : null}
+            <Button label={offer?.annual ? `${offer.annual.product.priceString} a year` : '€39 a year'} busy={busy === 'annual'} disabled={!offer?.annual} onPress={() => purchase('annual')} />
+            {yearlyValue ? (
+              <Txt variant="small" tone="quiet">
+                {yearlyValue}
+              </Txt>
+            ) : null}
+          </View>
           <Button kind="secondary" label={offer?.monthly ? `${offer.monthly.product.priceString} a month` : '€4.99 a month'} busy={busy === 'monthly'} disabled={!offer?.monthly} onPress={() => purchase('monthly')} />
         </View>
         {error || (offer && !offer.monthly && !offer.annual) ? (
