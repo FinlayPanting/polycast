@@ -1,5 +1,5 @@
 import type { PodcastSummary } from '@polycast/core'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { FlatList, TextInput, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt } from '../components/ui'
@@ -14,7 +14,9 @@ export default function Search() {
   const p = usePalette()
   const { profile } = useSession()
   const language = profile?.target_language ?? 'sv'
-  const [q, setQ] = useState('')
+  // Arriving from the Discover bar (PC-1017-F07), the search starts with what was typed there.
+  const { q: initial } = useLocalSearchParams<{ q?: string }>()
+  const [q, setQ] = useState(initial ?? '')
   const [results, setResults] = useState<PodcastSummary[]>([])
   const [error, setError] = useState<string>()
   // Result titles in the learner's language, in one request per result list (PC-1017-T1).

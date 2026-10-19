@@ -38,15 +38,6 @@ export default function Discover() {
             </Txt>
             <SymbolView name="chevron.down" size={16} tintColor={p.quiet} />
           </Pressable>
-          <Pressable
-            accessibilityRole="search"
-            accessibilityLabel={`Search ${languageName(language)} podcasts`}
-            onPress={() => router.push('/search')}
-            style={{ minHeight: MIN_TAP + 4, borderRadius: 14, backgroundColor: p.raised, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md }}
-          >
-            <SymbolView name="magnifyingglass" tintColor={p.faint} size={18} />
-            <Txt style={[type.body, { color: p.faint }]}>Search any podcast</Txt>
-          </Pressable>
         </View>
 
         <MoodPicks key={language} language={language} guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} />
