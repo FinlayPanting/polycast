@@ -235,3 +235,7 @@ Board item PC-1017-K2, on top of PC-1017-K1. Plus stays the one-tap path; under 
 ## Share a line as a picture (19 Oct 2026)
 
 Board item PC-1017-08. "Share this line" now shares a picture as well as the words and link: a 1080 × 1350 card on Polycast's navy with the learner's mark (their flag on the pole), the host's line, its meaning, "Caught on Polycast, from <show>" and polycast.app. It's drawn with react-native-svg (already in the app, so no new native module) and saved to the phone's cache as a PNG for the share sheet; if the picture can't be made, the words are shared alone as before. Simplest options picked: one 4:5 size that works in both Stories and Messages rather than one per destination, and no show artwork on the card (it would mean fetching and embedding the publisher's image); the show is credited by name. No host audio is ever included.
+
+## Creators' removal requests are deleted after 12 months (19 Oct 2026)
+
+Board item PC-1017-10. A removal request (show, contact details, message) is deleted 12 months after it's marked handled (`handled_at`), by a daily clean-up in the worker (`forgetOldRemovalRequests`); requests not yet handled are kept until they are. The privacy page says so. Simplest option picked: the 12 months count from when the request was handled, not when it was sent, so a slow reply never loses the request.
