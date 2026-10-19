@@ -6,6 +6,7 @@ import { AppState, Modal, Pressable, ScrollView, Share, View } from 'react-nativ
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
+import { ShareCard, type ShareCardHandle } from '../../components/ShareCard'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
@@ -78,6 +79,8 @@ function WordSheet({ word, onSave, onClose, saved }: { word?: { form: string; le
 /** A line the learner caught, as a card they can share: it credits the show and points to Polycast. */
 function ShareLines({ lines, data }: { lines: ShareableLine[]; data: ListenPayload }) {
   const p = usePalette()
+  const { profile } = useSession()
+  const card = useRef<ShareCardHandle>(null)
   const [i, setI] = useState(0)
   const line = lines[Math.min(i, lines.length - 1)]!
   return (
@@ -94,7 +97,16 @@ function ShareLines({ lines, data }: { lines: ShareableLine[]; data: ListenPaylo
         <Txt tone="quiet">{line.translation}</Txt>
       </View>
       {lines.length > 1 ? <Button kind="quiet" label="Another line" onPress={() => setI((n) => (n + 1) % lines.length)} /> : null}
-      <Button kind="secondary" label="Share this line" onPress={() => void Share.share({ message: shareMessage(line, data.episode.podcastTitle) }).catch(() => {})} />
+      <Button
+        kind="secondary"
+        label="Share this line"
+        onPress={() => {
+          const message = shareMessage(line, data.episode.podcastTitle)
+          if (card.current) void card.current.share(message)
+          else void Share.share({ message }).catch(() => {})
+        }}
+      />
+      <ShareCard ref={card} line={line} showTitle={data.episode.podcastTitle} flagId={profile?.flag_id} />
     </View>
   )
 }
