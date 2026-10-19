@@ -14,6 +14,7 @@ import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
+import { skipAdTarget } from '../../lib/skipAd'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
@@ -328,6 +329,7 @@ export default function Listen() {
   const guideOn = state.phase === 'guide' || state.phase === 'question'
   const playing = state.phase === 'playing' || guideOn
   const advert = advertAt(data.adverts, state.position)
+  const skipAd = skipAdTarget(data.adverts, state.position)
   const nextMode: Record<SubtitleMode, SubtitleMode> = { both: 'target', target: 'none', none: 'both' }
   const modeLabel: Record<SubtitleMode, string> = { both: 'Both languages', target: 'Target language only', none: 'Subtitles off' }
 
@@ -372,7 +374,6 @@ export default function Listen() {
             <Txt variant="small" tone="faint" style={{ textAlign: 'center' }}>
               {guideName(voicedGuideId(data?.guideId, profile?.guide_id))} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
             </Txt>
-            <Button kind="quiet" label="Skip to the end of the advert" onPress={() => void l?.seek(advert.end)} />
           </View>
         ) : null}
         {segmentAt(data.transcript.segments, state.position) < 0 ? (
@@ -424,6 +425,8 @@ export default function Listen() {
           <NextGuide guideName={guideName(voicedGuideId(data?.guideId, profile?.guide_id))} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
         ) : null}
 
+        {skipAd && !guideOn ? <SkipAdPill onPress={() => void l?.seek(skipAd.resumeAt)} /> : null}
+
         <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} adverts={data.adverts} onSeek={(s) => void l?.seek(s)} />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -459,6 +462,36 @@ export default function Listen() {
 }
 
 /** A quiet countdown to the guide's next moment, so it never takes the learner by surprise. */
+/** Spotify's pattern, which listeners already know (PC-1017-F05): a clear pill above the scrubber during an advert. */
+function SkipAdPill({ onPress }: { onPress: () => void }) {
+  const p = usePalette()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Skip ad"
+      accessibilityHint="Jumps to where the episode carries on"
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        alignSelf: 'flex-end',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.xs,
+        minHeight: MIN_TAP - 8,
+        paddingHorizontal: space.md,
+        borderRadius: 999,
+        backgroundColor: p.text,
+        opacity: pressed ? 0.75 : 1,
+      })}
+    >
+      <Txt variant="smallStrong" style={{ color: p.bg }}>
+        Skip ad
+      </Txt>
+      <SymbolView name="forward.end.fill" size={14} tintColor={p.bg} />
+    </Pressable>
+  )
+}
+
 function NextGuide({ guideName, flagId, seconds }: { guideName: string; flagId?: string; seconds: number }) {
   const s = Math.max(0, Math.ceil(seconds))
   // Whole seconds only, and only the last 10 every second: a ticking clock is a distraction.
