@@ -16,7 +16,7 @@ const WHAT_YOU_GET = [
   'Your whole word bank, with spaced reviews',
 ]
 
-/** Plus: €4.99 a month or €39 a year (spec: Plans), sold through the App Store. */
+/** Plus: €4.99 a month or €49 a year (spec: Plans; yearly raised from €39 on 19 Oct 2026), sold through the App Store. */
 export default function Plus() {
   const p = usePalette()
   const { confirmPlus } = useSession()
@@ -72,7 +72,7 @@ export default function Plus() {
                 <Tag label="Best value" tone="play" />
               </View>
             ) : null}
-            <Button label={offer?.annual ? `${offer.annual.product.priceString} a year` : '€39 a year'} busy={busy === 'annual'} disabled={!offer?.annual} onPress={() => purchase('annual')} />
+            <Button label={offer?.annual ? `${offer.annual.product.priceString} a year` : '€49 a year'} busy={busy === 'annual'} disabled={!offer?.annual} onPress={() => purchase('annual')} />
             {yearlyValue ? (
               <Txt variant="small" tone="quiet">
                 {yearlyValue}
