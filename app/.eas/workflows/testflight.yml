@@ -1,0 +1,23 @@
+# Builds the iPhone app and sends it to TestFlight whenever the testflight branch moves.
+# The nightly routine pushes rebuild-ios to testflight only when the app itself changed,
+# so a night of server-only work costs no build. Runs on Expo's servers; nothing to do on the Mac.
+name: TestFlight
+
+on:
+  push:
+    branches: ['testflight']
+
+jobs:
+  build_ios:
+    name: Build for iPhone
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit_ios:
+    name: Send to TestFlight
+    needs: [build_ios]
+    type: submit
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}

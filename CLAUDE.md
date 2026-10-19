@@ -26,7 +26,7 @@ Build progress and milestones: `docs/BUILD_PLAN.md`.
 
 - The Polycast Board (https://claude.ai/artifact/97Y4qqcc9rja8Z8MRYMjRw, read and written with the ArtifactData tool) is the list of work: collection `items` (status suggested, next, building, backlog, shipped, dismissed) and `settings/main`. Build only what Finlay marked `next` or asked for in chat; set `building` while working and `shipped` (with a one-line `shippedNote`) when pushed.
 - Live: the server deploys automatically from `rebuild-ios` to Railway (https://polycast-production.up.railway.app). Push only after `pnpm check` passes with the test database running. Database changes go in a new numbered migration in `server/supabase/migrations`; never edit an applied one. A new migration must be applied in the Supabase SQL editor before or with the push, so flag it to Finlay.
-- App changes reach phones only through a new TestFlight build.
+- App changes reach phones only through a new TestFlight build. Pushing to the `testflight` branch builds and submits one automatically (Expo Workflows, `app/.eas/workflows/testflight.yml`). At the end of a run that changed the app (`app/` or `packages/core/`), fast-forward it: `git push origin rebuild-ios:testflight`. Server-only changes don't need a build. Each push spends one of the free plan's limited monthly builds, so push once per run, not per commit.
 
 ## Rules
 

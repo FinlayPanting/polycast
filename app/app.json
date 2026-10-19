@@ -155,6 +155,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e2b4c74f-90fa-40c7-adfd-92fa0704cd0a"
+      }
+    },
+    "owner": "finlaypanting"
   }
 }
