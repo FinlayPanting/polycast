@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
-import { cohortAlert, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
+import { cohortAlert, isTipProduct, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -181,6 +181,8 @@ export function createApi(deps: ApiDeps) {
     }
     const userId = event?.app_user_id
     if (!userId) return c.json({ ok: true })
+    // A tip (PC-1017-K3) is a one-off thank-you: it never touches the learner's plan.
+    if (isTipProduct(event.product_id)) return c.json({ ok: true })
     const active = ['INITIAL_PURCHASE', 'RENEWAL', 'UNCANCELLATION', 'PRODUCT_CHANGE'].includes(event.type)
     const ended = event.type === 'EXPIRATION'
     if (active) {

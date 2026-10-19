@@ -251,6 +251,26 @@ run('API and worker', () => {
     expect(forged.status).toBe(401)
   })
 
+  it('never switches Plus on or off for a tip (PC-1017-K3)', async () => {
+    const tia = await learner()
+    const hook = (event: Record<string, unknown>) =>
+      createApi({ sql, verify: async () => undefined, fetch: fakeFetch, revenueCatSecret: 's3cret' }).request('/webhooks/revenuecat', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer s3cret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: { app_user_id: tia, ...event } }),
+      })
+    const plan = async () => (await sql`select plan from profiles where id = ${tia}`)[0]!.plan
+    expect((await hook({ type: 'NON_RENEWING_PURCHASE', product_id: 'com.finlaypanting.polycast.tip.medium' })).status).toBe(200)
+    expect(await plan()).toBe('free')
+    // Even an event type that would mean Plus is ignored when its product is a tip.
+    await hook({ type: 'INITIAL_PURCHASE', product_id: 'com.finlaypanting.polycast.tip.large' })
+    expect(await plan()).toBe('free')
+    await hook({ type: 'INITIAL_PURCHASE', product_id: 'com.finlaypanting.polycast.plus.monthly' })
+    expect(await plan()).toBe('plus')
+    await hook({ type: 'EXPIRATION', product_id: 'com.finlaypanting.polycast.tip.small' })
+    expect(await plan()).toBe('plus')
+  })
+
   it('deletes a learner’s account and their words and listens, but keeps the shared catalogue', async () => {
     const gone = await learner()
     const [ep] = await sql`select id from episodes where status = 'ready' limit 1`

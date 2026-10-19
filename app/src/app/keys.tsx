@@ -67,6 +67,13 @@ export default function Keys() {
             style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
           />
         ) : null}
+
+        <View style={{ gap: space.xs, marginTop: space.md }}>
+          <Txt variant="small" tone="quiet">
+            Using Polycast on your own keys? If it’s helping, you can leave a one-off tip towards the time and running costs behind it.
+          </Txt>
+          <Button kind="quiet" label="Support Polycast" onPress={() => router.push('/tip')} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
+        </View>
       </ScrollView>
     </Screen>
   )

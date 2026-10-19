@@ -88,6 +88,7 @@ function Routes() {
         <Stack.Screen name="listen/[id]" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="review" options={{ presentation: 'modal' }} />
         <Stack.Screen name="plus" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="tip" options={{ presentation: 'modal' }} />
         <Stack.Screen name="keys" />
       </Stack.Protected>
     </Stack>
