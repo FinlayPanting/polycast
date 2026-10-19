@@ -1,4 +1,3 @@
-import { router } from 'expo-router'
 import { SymbolView } from 'expo-symbols'
 import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
@@ -11,7 +10,7 @@ import { guideName, languageName } from '../../lib/languages'
 import { MoodPicks } from '../../components/MoodPicks'
 import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
-import { MIN_TAP, space, type, usePalette } from '../../theme'
+import { space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 
 export default function Discover() {
