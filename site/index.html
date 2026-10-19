@@ -34,17 +34,31 @@
     <div>
       <h1>Learn a language with real podcasts</h1>
       <p class="lede">Polycast puts subtitles on the shows people actually listen to, with your own language underneath. Your guide steps in at the natural pauses, so you keep up without stopping the story.</p>
-      <div class="ctas">
+      <div class="langs">
+        <p id="langs-label">Six languages at launch. Which one are you learning?</p>
+        <div class="lang-row" id="langs" role="group" aria-labelledby="langs-label"></div>
+      </div>
+
+      <!-- Sign-ups go to Buttondown (double opt-in), which sends people back to /thanks, then /confirmed once they tap the email link. -->
+      <form class="notify" id="notify" action="https://buttondown.com/api/emails/embed-subscribe/polycast" method="post">
+        <label class="sr-only" for="notify-email">Your email</label>
+        <div class="notify-row">
+          <input id="notify-email" type="email" name="email" required autocomplete="email" placeholder="Your email">
+          <button class="btn btn-primary" type="submit">Tell me when it’s out</button>
+        </div>
+        <label class="check"><input type="checkbox" name="tag" value="beta"> I’d like to try the beta on my iPhone before launch</label>
+        <input type="hidden" name="embed" value="1">
+        <input type="hidden" name="tag" value="waitlist">
+        <input type="hidden" name="metadata__source" value="polycast.app">
+        <input type="hidden" name="metadata__language" id="notify-language" value="" disabled>
+        <p class="notify-small">One email when Polycast launches, and nothing else unless you ask. <a href="/privacy#launch-list">Privacy</a></p>
+      </form>
+
+      <div class="store-row">
         <span class="btn btn-store" aria-disabled="true" title="Polycast isn't on the App Store yet">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.54 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.5zM14.2 6.13c.6-.74 1.01-1.75.9-2.77-.87.04-1.94.59-2.56 1.32-.56.64-1.05 1.68-.92 2.67.98.08 1.97-.49 2.58-1.22z"/></svg>
           App Store <small>coming soon</small>
         </span>
-        <a class="btn btn-primary" href="mailto:hello@polycast.app?subject=Tell%20me%20when%20Polycast%20launches&amp;body=Hi%20Finlay%2C%20I'd%20love%20to%20hear%20when%20Polycast%20is%20out.%20The%20language%20I'm%20learning%3A%20">Tell me when it’s out</a>
-      </div>
-
-      <div class="langs">
-        <p>Six languages at launch. Pick one:</p>
-        <div class="lang-row" id="langs"></div>
       </div>
     </div>
 
@@ -204,7 +218,7 @@
     b.type = 'button'
     b.dataset.id = lang.id
     b.innerHTML = mini(lang.bars) + lang.name
-    b.addEventListener('click', () => pick(lang))
+    b.addEventListener('click', () => { pick(lang); chooseLanguage(lang) })
     row.appendChild(b)
   })
   // A scrubber like the player's: orange for what you've heard, magenta where the guide will step in.
@@ -212,6 +226,23 @@
   const guideAt = new Set([16, 22, 27, 33])
   scrub.innerHTML = Array.from({ length: 38 }, (_, i) => (i === 12 ? '<span class="head"></span>' : `<span class="${i < 12 ? 'done' : guideAt.has(i) ? 'guide' : ''}"></span>`)).join('')
   pick(LANGS[0])
+
+  // The launch list: the language a visitor tapped goes with their sign-up, as a tag and a note.
+  // Until they tap one, no language is sent (the demo just starts on Swedish).
+  const form = document.getElementById('notify')
+  const langField = document.getElementById('notify-language')
+  let langTag = null
+  function chooseLanguage(lang) {
+    langField.value = lang.name
+    langField.disabled = false
+    if (!langTag) {
+      langTag = document.createElement('input')
+      langTag.type = 'hidden'
+      langTag.name = 'tag'
+      form.appendChild(langTag)
+    }
+    langTag.value = lang.name.toLowerCase()
+  }
 </script>
 </body>
 </html>
