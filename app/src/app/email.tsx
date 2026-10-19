@@ -2,14 +2,18 @@ import { router } from 'expo-router'
 import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, TextInput, View } from 'react-native'
 import { Button, Screen, Txt } from '../components/ui'
+import { isReviewEmail } from '../lib/reviewAccount'
 import { useSession } from '../lib/session'
 import { space, type, usePalette } from '../theme'
 
 export default function EmailSignIn() {
   const p = usePalette()
-  const { sendEmailCode, verifyEmailCode } = useSession()
+  const { sendEmailCode, verifyEmailCode, signInWithPassword } = useSession()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  // App Review's address asks for a password instead of sending a code (PC-1012-04).
+  const review = isReviewEmail(email)
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -63,6 +67,20 @@ export default function EmailSignIn() {
             autoFocus
           />
         )}
+        {!sent && review ? (
+          <TextInput
+            style={input}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            placeholderTextColor={p.faint}
+            autoCapitalize="none"
+            autoComplete="password"
+            textContentType="password"
+            secureTextEntry
+            accessibilityLabel="Password"
+          />
+        ) : null}
         {error ? (
           <Txt variant="small" tone="saved">
             {error}
@@ -70,7 +88,9 @@ export default function EmailSignIn() {
         ) : null}
 
         <View style={{ gap: space.sm }}>
-          {!sent ? (
+          {!sent && review ? (
+            <Button label="Sign in" busy={busy} disabled={password.length === 0} onPress={() => run(() => signInWithPassword(email.trim().toLowerCase(), password))} />
+          ) : !sent ? (
             <Button label="Send code" busy={busy} disabled={!/^\S+@\S+\.\S+$/.test(email.trim())} onPress={() => run(async () => {
               await sendEmailCode(email.trim())
               setSent(true)

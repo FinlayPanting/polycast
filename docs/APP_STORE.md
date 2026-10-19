@@ -43,3 +43,11 @@ Paste into App Review Information → Notes when "Use your own API keys" ships:
 | Large tip | Consumable | com.finlaypanting.polycast.tip.large | €9.99 |
 
 In RevenueCat: entitlement `plus` on the two Plus products only; offering `default` with Monthly and Annual packages. The tips need no entitlement or offering: the app asks for them by product id. Review note for each tip: "A one-off tip on the Support Polycast screen (You → Leave a tip). It unlocks nothing."
+
+## App Review sign-in (PC-1012-04, 19 Oct 2026)
+
+Reviewers can't receive an emailed code, so `review@polycast.app` signs in with a password instead (`app/src/lib/reviewAccount.ts`); every other address still gets a code. To set it up once:
+
+1. Supabase → Authentication → Users → Add user → Create new user: `review@polycast.app`, a strong generated password, "Auto Confirm User" ticked.
+2. Sign in once on your iPhone with it and finish onboarding (Swedish, guide on), so the reviewer lands on a working Discover.
+3. App Store Connect → the version → App Review Information → Sign-in required: user name `review@polycast.app`, the password. Keep the password only there and in your password manager.
