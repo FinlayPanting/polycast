@@ -124,6 +124,15 @@ run('API and worker', () => {
     await sql`update profiles set plan = 'plus' where id = ${anna}`
     expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()).freeEpisode).toBe(false)
     await sql`update profiles set plan = 'free' where id = ${anna}`
+
+    // She switches to Leo, but this episode was voiced by Mia: the player and the episode screen are
+    // told it's Mia she'll hear (PC-1017-F01).
+    expect(listen.guideId).toBe('mia')
+    await sql`update profiles set guide_id = 'leo' where id = ${anna}`
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()).guideId).toBe('mia')
+    expect((await (await call(anna, 'GET', `/v1/episodes/${episodeId}/primer`)).json()).guideId).toBe('mia')
+    await sql`update profiles set guide_id = 'mia' where id = ${anna}`
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`, { guide: false })).json()).guideId).toBeNull()
   })
 
   it('refuses to load a show from a private address, without fetching it', async () => {

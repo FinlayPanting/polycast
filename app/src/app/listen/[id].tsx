@@ -17,7 +17,7 @@ import { plusInvite } from '../../lib/plusInvite'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
-import { guideName, guidanceLevelOr } from '../../lib/languages'
+import { guideName, guidanceLevelOr, voicedGuideId } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
 import { useSession } from '../../lib/session'
 import { resumePosition, savePosition } from '../../lib/data'
@@ -237,7 +237,7 @@ export default function Listen() {
         // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
         goodbye.current = undefined
         if (!config.demo && moments.length > 0) {
-          void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, profile?.guide_id ?? 'mia')).then((g) => (goodbye.current = g))
+          void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, voicedGuideId(d.guideId, profile?.guide_id))).then((g) => (goodbye.current = g))
         }
 
         const l = new GuidedListen({
@@ -370,7 +370,7 @@ export default function Listen() {
           <View style={{ alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg }}>
             <Txt tone="quiet">Advert break</Txt>
             <Txt variant="small" tone="faint" style={{ textAlign: 'center' }}>
-              {guideName(profile?.guide_id)} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
+              {guideName(voicedGuideId(data?.guideId, profile?.guide_id))} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
             </Txt>
             <Button kind="quiet" label="Skip to the end of the advert" onPress={() => void l?.seek(advert.end)} />
           </View>
@@ -398,7 +398,7 @@ export default function Listen() {
 
       <View style={{ paddingHorizontal: space.lg, gap: space.md }}>
         {guideOn && state.goodbye ? (
-          <View accessible accessibilityLabel={`${guideName(profile?.guide_id)} says ${state.goodbye.text}, meaning ${state.goodbye.meaning}`} style={{ alignItems: 'center', gap: space.xs, paddingVertical: space.md }}>
+          <View accessible accessibilityLabel={`${guideName(voicedGuideId(data?.guideId, profile?.guide_id))} says ${state.goodbye.text}, meaning ${state.goodbye.meaning}`} style={{ alignItems: 'center', gap: space.xs, paddingVertical: space.md }}>
             <Mark height={28} flagId={profile?.flag_id} speaking accessibilityLabel="" />
             <Txt variant="heading" style={{ textAlign: 'center' }}>
               {state.goodbye.text}
@@ -411,7 +411,7 @@ export default function Listen() {
         {guideOn && state.moment ? (
           <GuideCard
             moment={state.moment}
-            guideName={guideName(profile?.guide_id)}
+            guideName={guideName(voicedGuideId(data?.guideId, profile?.guide_id))}
             flagId={profile?.flag_id ?? 'polycast'}
             clipText={clipText}
             answer={state.answer}
@@ -421,7 +421,7 @@ export default function Listen() {
         ) : null}
 
         {!guideOn && state.next && data.guided ? (
-          <NextGuide guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
+          <NextGuide guideName={guideName(voicedGuideId(data?.guideId, profile?.guide_id))} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
         ) : null}
 
         <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} adverts={data.adverts} onSeek={(s) => void l?.seek(s)} />

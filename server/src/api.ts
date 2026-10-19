@@ -369,8 +369,12 @@ export function createApi(deps: ApiDeps) {
     const episodeId = c.req.param('id')
     const [episode] = await sql`select e.status from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
     if (!episode) return c.json({ error: 'Not found' }, 404)
+    // Which guide's voice a listen would play now (PC-1017-F01): the learner's own if it's been
+    // recorded for this episode, else the one it was prepared with. The screen names that guide.
+    const [profile] = await sql`select guide_id from profiles where id = ${c.get('userId')}`
+    const [voice] = episode.status === 'ready' ? await sql`select guide_id from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1` : []
     const [row] = episode.status === 'ready' ? await sql`select plan->'primer' as primer from lesson_plans where episode_id = ${episodeId} and plan ? 'primer' limit 1` : []
-    return c.json({ primer: row?.primer ?? null })
+    return c.json({ primer: row?.primer ?? null, guideId: voice?.guide_id ?? null })
   })
 
   /**
@@ -393,7 +397,7 @@ export function createApi(deps: ApiDeps) {
     const guided = route === 'listen' ? (await startListen(sql, userId, episodeId, level)).guided : await guideAllowed(sql, userId, episodeId, level)
     const [transcript] = await sql`select language, segments, words, glossary from transcripts where episode_id = ${episodeId}`
     const [plan] = guided
-      ? await sql`select plan from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
+      ? await sql`select plan, guide_id from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
       : []
     return c.json({
       episode: { id: episode.id, title: episode.title, podcastTitle: episode.podcast_title, audioUrl: episode.audio_url, image: episode.image ?? episode.artwork, durationSec: episode.duration_sec },
@@ -401,6 +405,9 @@ export function createApi(deps: ApiDeps) {
       guided,
       guidanceLevel: guided ? level : null,
       plan: plan?.plan ?? null,
+      // The guide whose voice this plan was recorded in (PC-1017-F01), so the player names the guide
+      // the learner actually hears, even after they switch guides in settings.
+      guideId: plan?.guide_id ?? null,
       // This is the free episode a free learner chose: its wrap-up gently mentions Plus.
       freeEpisode: profile?.plan !== 'plus' && (await sql`select 1 from prep_jobs where episode_id = ${episodeId} and requested_by = ${userId} and charge = 'freeEpisode' limit 1`).length > 0,
       // Lets the app line the lesson up with the learner's own copy of the episode.

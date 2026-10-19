@@ -77,6 +77,8 @@ export interface ListenPayload {
   freeEpisode?: boolean
   guidanceLevel: 'light' | 'standard' | 'handsOn' | null
   plan: LessonPlan | null
+  /** The guide whose voice this plan was recorded in (PC-1017-F01); missing on lessons saved before 19 Oct 2026. */
+  guideId?: string | null
   /** Fingerprint of the copy we transcribed, to line the lesson up with the learner's copy. */
   syncUrl?: string | null
 }
@@ -107,7 +109,7 @@ export const api = {
   /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
   /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
-  primer: (episodeId: string) => call<{ primer: Primer | null }>('GET', `/v1/episodes/${episodeId}/primer`),
+  primer: (episodeId: string) => call<{ primer: Primer | null; guideId?: string | null }>('GET', `/v1/episodes/${episodeId}/primer`),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
 }
 

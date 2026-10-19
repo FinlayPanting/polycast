@@ -43,6 +43,15 @@ export function guideName(id: string | undefined): string {
   return GUIDES.find((g) => g.id === id)?.name ?? 'Mia'
 }
 
+/**
+ * The guide an episode will actually be heard in (PC-1017-F01): the voice its lesson was recorded
+ * in, when known, rather than the learner's current setting. Switching to Leo doesn't make Mia's
+ * recorded lines say "Leo".
+ */
+export function voicedGuideId(recordedWith: string | null | undefined, chosen: string | undefined): string {
+  return GUIDES.find((g) => g.id === recordedWith)?.id ?? GUIDES.find((g) => g.id === chosen)?.id ?? 'mia'
+}
+
 export type GuidanceLevelId = (typeof GUIDANCE)[number]['id']
 
 /** A guidance level from a screen parameter, or the fallback when it isn't one. */
