@@ -2,7 +2,7 @@ import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wor
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Modal, Pressable, ScrollView, Share, View } from 'react-native'
+import { ActionSheetIOS, Alert, AppState, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native'
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
@@ -15,6 +15,7 @@ import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
+import { playerMenu } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
@@ -330,6 +331,15 @@ export default function Listen() {
   const playing = state.phase === 'playing' || guideOn
   const advert = advertAt(data.adverts, state.position)
   const skipAd = skipAdTarget(data.adverts, state.position)
+  // Quieter actions live in the More menu, not among the main controls (PC-1017-F06).
+  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn })
+  const runMenu = (i: number) => {
+    if (menu.actions[i] === 'replayIntro' && intro) void l?.replayMoment(intro)
+  }
+  const openMenu = () => {
+    if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: menu.options, cancelButtonIndex: menu.cancelIndex }, runMenu)
+    else Alert.alert('More', undefined, [...menu.actions.map((_, i) => ({ text: menu.options[i]!, onPress: () => runMenu(i) })), { text: 'Cancel', style: 'cancel' as const }])
+  }
   const nextMode: Record<SubtitleMode, SubtitleMode> = { both: 'target', target: 'none', none: 'both' }
   const modeLabel: Record<SubtitleMode, string> = { both: 'Both languages', target: 'Target language only', none: 'Subtitles off' }
 
@@ -346,20 +356,8 @@ export default function Listen() {
           </Txt>
         </View>
         <Artwork uri={data.episode.image} size={40} radius={8} />
+        {menu.actions.length ? <Control icon="ellipsis.circle" label="More" onPress={openMenu} size={22} /> : null}
       </View>
-
-      {intro && !guideOn ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void l?.replayMoment(intro)}
-          hitSlop={8}
-          style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: MIN_TAP, justifyContent: 'center', paddingHorizontal: space.lg, opacity: pressed ? 0.6 : 1 })}
-        >
-          <Txt variant="smallStrong" tone="quiet">
-            Hear the introduction again
-          </Txt>
-        </Pressable>
-      ) : null}
 
       {!data.guided && guide !== '0' ? (
         <Txt variant="small" tone="quiet" style={{ paddingHorizontal: space.lg, paddingTop: space.sm }}>
