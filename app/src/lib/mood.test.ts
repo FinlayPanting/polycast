@@ -29,6 +29,6 @@ describe('one search bar, with an AI button', () => {
   })
 
   it('says both things the bar can do', () => {
-    expect(searchOrMoodPlaceholder('Leo')).toBe('Search any podcast, or tell Leo what you fancy')
+    expect(searchOrMoodPlaceholder('Leo')).toBe('Search podcasts, or ask Leo')
   })
 })

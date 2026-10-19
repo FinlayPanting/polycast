@@ -24,4 +24,4 @@ export function searchOrMood(text: string, via: 'keyboard' | 'sparkle'): { kind:
   return t.length >= 2 ? { kind: 'search', q: t } : null
 }
 
-export const searchOrMoodPlaceholder = (guideName: string) => `Search any podcast, or tell ${guideName} what you fancy`
+export const searchOrMoodPlaceholder = (guideName: string) => `Search podcasts, or ask ${guideName}`

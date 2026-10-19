@@ -12,6 +12,8 @@ export default function TabsLayout() {
   const p = usePalette()
   return (
     <Tabs
+      // The tabs are drawn by BottomBar in the root layout, so they stay on every screen (PC-1017-F04).
+      tabBar={() => null}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: p.text,

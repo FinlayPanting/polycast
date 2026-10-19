@@ -206,7 +206,7 @@ export default function Episode() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
+    <Screen edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         <Button kind="quiet" label="Back" onPress={() => router.back()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
         <Artwork uri={ep.image ?? ep.podcasts.artwork} size={primer ? 120 : 240} radius={primer ? 14 : 20} />
