@@ -298,17 +298,26 @@ export function createApi(deps: ApiDeps) {
     const body = await c.req.json()
     let feedUrl: string | undefined = body.feedUrl
     if (!feedUrl && body.podcastId) feedUrl = (await sql`select feed_url from podcasts where id = ${body.podcastId}`)[0]?.feed_url
-    const apple = body.appleId ? await lookupApple(deps.fetch, String(body.appleId)) : undefined
+    // A show already in the catalogue needs no trip to Apple to find its feed (PC-1017-F03).
+    if (!feedUrl && body.appleId) feedUrl = (await sql`select feed_url from podcasts where apple_id = ${String(body.appleId)}`)[0]?.feed_url
+    const apple = !feedUrl && body.appleId ? await lookupApple(deps.fetch, String(body.appleId)) : undefined
     feedUrl ??= apple?.feedUrl
     if (!feedUrl) return c.json({ error: 'We couldn’t find this show’s feed.' }, 404)
-    const [known] = await sql`select id, removed from podcasts where feed_url = ${feedUrl}`
+    const [known] = await sql`select id, removed, updated_at from podcasts where feed_url = ${feedUrl}`
     if (known?.removed) return c.json({ error: 'This show isn’t available on Polycast.' }, 404)
     let podcastId: string
-    try {
-      podcastId = (await syncFeed(sql, deps.fetch, feedUrl, apple, { lookupHost: deps.lookupHost })).podcastId
-    } catch {
-      if (!known) return c.json({ error: 'We couldn’t load this show right now.' }, 502)
-      podcastId = known.id // serve what we have
+    if (known && showIsFresh(known.updated_at, new Date())) podcastId = known.id
+    else {
+      // Re-read the feed. A known show doesn't wait more than a few seconds for a slow feed: it's
+      // served as it was, and the re-read finishes in the background for next time.
+      const sync = syncFeed(sql, deps.fetch, feedUrl, apple, { lookupHost: deps.lookupHost }).then((r) => r.podcastId)
+      try {
+        podcastId = known ? await withDeadline(sync, SHOW_SYNC_WAIT_MS, known.id) : await sync
+      } catch {
+        if (!known) return c.json({ error: 'We couldn’t load this show right now.' }, 502)
+        podcastId = known.id // serve what we have
+      }
+      sync.catch(() => {})
     }
     const [podcast] = await sql`select id, title, author, artwork, language, description from podcasts where id = ${podcastId}`
     const episodes = await sql`
@@ -416,6 +425,31 @@ export function createApi(deps: ApiDeps) {
   })
 
   return app
+}
+
+/**
+ * Opening a show re-read its feed every time, which could take up to 15 seconds (PC-1017-F03). A
+ * show read in the last 15 minutes is served straight from the catalogue; an older one gets a few
+ * seconds for the re-read before it's served as it was.
+ */
+export const SHOW_FRESH_MS = 15 * 60_000
+export const SHOW_SYNC_WAIT_MS = 3_000
+
+export function showIsFresh(updatedAt: Date | string | null | undefined, now: Date): boolean {
+  if (!updatedAt) return false
+  const age = now.getTime() - new Date(updatedAt).getTime()
+  return age >= 0 && age < SHOW_FRESH_MS
+}
+
+/** The promise's value if it settles in time, else `fallback` (the promise carries on regardless). */
+export function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => resolve(fallback), ms)
+    p.then(
+      (v) => (clearTimeout(t), resolve(v)),
+      (e) => (clearTimeout(t), reject(e)),
+    )
+  })
 }
 
 /** The Monday that starts the previous full week, UTC. */

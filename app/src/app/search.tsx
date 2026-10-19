@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { FlatList, TextInput, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt } from '../components/ui'
 import { api } from '../lib/api'
+import { showPeek } from '../lib/showPeek'
 import { languageName } from '../lib/languages'
 import { useSession } from '../lib/session'
 import { useTranslations } from '../lib/translate'
@@ -64,7 +65,7 @@ export default function Search() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
         renderItem={({ item }) => (
-          <Row accessibilityLabel={`${item.title}, ${item.author}`} onPress={() => router.push({ pathname: '/show', params: { appleId: item.appleId } })}>
+          <Row accessibilityLabel={`${item.title}, ${item.author}`} onPress={() => router.push({ pathname: '/show', params: { appleId: item.appleId, ...showPeek(item) } })}>
             <Artwork uri={item.artwork} size={60} />
             <View style={{ flex: 1 }}>
               <Txt variant="bodyStrong" numberOfLines={2}>

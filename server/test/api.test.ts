@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, SLOW_DOWN } from '../src/api'
+import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
 import { ProviderError, type TextModel } from '../src/providers/types'
 import { OWN_KEYS_LIMITS } from '../src/ownKeys'
@@ -145,6 +145,42 @@ run('API and worker', () => {
       expect(res.status).toBe(502)
     }
     expect(fetched).toEqual([])
+  })
+
+  it('opens a show it read recently without re-reading the feed or asking Apple (PC-1017-F03)', async () => {
+    const fetched: string[] = []
+    let slow = false
+    const spy: typeof fetch = async (input, init) => {
+      fetched.push(String(input))
+      if (slow && String(input) === FEED_URL) await new Promise((r) => setTimeout(r, 10_000))
+      return fakeFetch(input, init)
+    }
+    const quick = createApi({ sql, verify: async (t) => t, fetch: spy, lookupHost: publicHost })
+    const user = await learner()
+    const open = async (b: unknown) => (await quick.request('/v1/podcasts/open', { method: 'POST', headers: { Authorization: `Bearer ${user}`, 'Content-Type': 'application/json' }, body: JSON.stringify(b) })).json()
+
+    // Just read by the first test: straight from the catalogue, by Apple id or feed.
+    expect((await open({ appleId: '555' })).episodes.map((e: any) => e.title)).toEqual(['Tåget', 'Fikan'])
+    expect((await open({ feedUrl: FEED_URL })).podcast.title).toBe('Svenska Samtal')
+    expect(fetched).toEqual([])
+
+    // Read an hour ago, and the feed is slow today: served as it was within a few seconds.
+    await sql`update podcasts set updated_at = now() - interval '1 hour' where feed_url = ${FEED_URL}`
+    slow = true
+    const started = Date.now()
+    expect((await open({ feedUrl: FEED_URL })).episodes).toHaveLength(2)
+    expect(Date.now() - started).toBeLessThan(5_000)
+    expect(fetched).toEqual([FEED_URL])
+  }, 20_000)
+
+  it('times the freshness of a show and the wait for a slow feed', async () => {
+    const now = new Date('2026-10-19T12:00:00Z')
+    expect(showIsFresh('2026-10-19T11:50:00Z', now)).toBe(true)
+    expect(showIsFresh('2026-10-19T11:40:00Z', now)).toBe(false)
+    expect(showIsFresh(null, now)).toBe(false)
+    expect(await withDeadline(Promise.resolve('read'), 50, 'as it was')).toBe('read')
+    expect(await withDeadline(new Promise((r) => setTimeout(() => r('read'), 200)), 20, 'as it was')).toBe('as it was')
+    await expect(withDeadline(Promise.reject(new Error('feed down')), 50, 'as it was')).rejects.toThrow('feed down')
   })
 
   it('serves a ready episode free to the next learner, and explains refusals in plain English', async () => {

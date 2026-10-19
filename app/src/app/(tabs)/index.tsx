@@ -17,12 +17,21 @@ export default function Discover() {
   const p = usePalette()
   const { profile, updatePrefs } = useSession()
   const [picking, setPicking] = useState(false)
+  // Only for a pull: the shelves kept from last time refresh quietly behind the scenes.
+  const [refreshing, setRefreshing] = useState(false)
   const language = profile?.target_language ?? 'sv'
-  const { data, error, loading, reload } = useAsync(() => api.discover(language), [language])
+  const { data, error, reload } = useAsync(() => api.discover(language), [language], { cacheKey: `discover:${language}` })
 
   return (
     <Screen>
-      <ScrollView refreshControl={<RefreshControl refreshing={loading && Boolean(data)} onRefresh={reload} tintColor={p.quiet} />} contentContainerStyle={{ paddingBottom: space.xxl, gap: space.xl }}>
+      <ScrollView refreshControl={<RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true)
+              void reload().finally(() => setRefreshing(false))
+            }}
+            tintColor={p.quiet}
+          />} contentContainerStyle={{ paddingBottom: space.xxl, gap: space.xl }}>
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
           <Pressable
             accessibilityRole="button"

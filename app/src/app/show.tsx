@@ -39,8 +39,8 @@ export function EpisodeRow({ e, firstListen = false, translation, translating }:
 
 /** A show's page: its artwork, who makes it, and recent episodes with which are ready. */
 export default function Show() {
-  const params = useLocalSearchParams<{ appleId?: string; feedUrl?: string; podcastId?: string }>()
-  const { data, error, reload } = useAsync(() => api.openShow(params), [params.appleId, params.feedUrl, params.podcastId])
+  const { title: peekTitle, artwork: peekArtwork, author: peekAuthor, ...params } = useLocalSearchParams<{ appleId?: string; feedUrl?: string; podcastId?: string; title?: string; artwork?: string; author?: string }>()
+  const { data, error, reload } = useAsync(() => api.openShow(params), [params.appleId, params.feedUrl, params.podcastId], { cacheKey: `show:${params.podcastId ?? params.appleId ?? params.feedUrl}` })
   // One recent episode a new learner can finish in a sitting, so their first listen reaches the wrap-up.
   const firstListen = useMemo(() => (data ? goodFirstListen(data.episodes) : undefined), [data])
   // Titles and the description in the learner's language, shared and cached on the server (PC-1017-T1).
@@ -72,6 +72,16 @@ export default function Show() {
                 <Txt tone="quiet">{error}</Txt>
                 <Button kind="secondary" label="Try again" onPress={reload} style={{ alignSelf: 'flex-start' }} />
               </View>
+            ) : peekTitle ? (
+              // What the list knew, at once; the episodes follow (PC-1017-F03).
+              <>
+                <Artwork uri={peekArtwork} size={180} radius={20} />
+                <Txt variant="title" accessibilityRole="header">
+                  {peekTitle}
+                </Txt>
+                {peekAuthor ? <Txt tone="quiet">{peekAuthor}</Txt> : null}
+                <Loading label="Loading the episodes…" height={28} fill={false} />
+              </>
             ) : (
               <Loading label="Loading the show…" fill={false} />
             )}

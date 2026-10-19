@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fetchWithTimeout, fromStoredPath, isOfflineError, TimeoutError, toStoredPath } from './net'
+import { fetchWithTimeout, fromStoredPath, isOfflineError, TimeoutError, toStoredPath, apiRoute } from './net'
 
 describe('requests with a time limit', () => {
   it('gives up on a hanging request', async () => {
@@ -45,5 +45,12 @@ describe('saved files survive an app update', () => {
   it('leaves web addresses alone', () => {
     expect(toStoredPath('https://cdn.test/ep.mp3', before)).toBe('https://cdn.test/ep.mp3')
     expect(fromStoredPath('https://cdn.test/Documents/episodes/x.mp3', after)).toBe('https://cdn.test/Documents/episodes/x.mp3')
+  })
+})
+
+describe('timing requests for the playback log', () => {
+  it('logs the route, never ids or what was searched for', () => {
+    expect(apiRoute('/v1/episodes/3f2b1c4d-1111-4a2b-9c3d-123456789abc/listen')).toBe('/v1/episodes/:id/listen')
+    expect(apiRoute('/v1/search?q=kaffe%20med&language=sv')).toBe('/v1/search')
   })
 })
