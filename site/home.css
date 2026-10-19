@@ -131,7 +131,10 @@
 .check input { width: 18px; height: 18px; accent-color: var(--orange); margin: 0; }
 .notify-small { font-size: 14px; color: var(--quiet); margin: 10px 0 0 6px; }
 .notify-small a { color: var(--quiet); }
-.notify-done { font-size: 17px; line-height: 1.5; color: var(--text); background: var(--raised); border: 1.5px solid var(--line); border-left: 4px solid var(--orange); border-radius: 14px; padding: 14px 18px; margin: 0; }
+.notify-status:empty { display: none; }
+.notify-status { font-size: 15px; color: var(--quiet); margin: 10px 0 0 6px; }
+.notify-status.is-error { color: #fc8a7a; }
+.notify-status.is-done { font-size: 17px; line-height: 1.5; color: var(--text); background: var(--raised); border: 1.5px solid var(--line); border-left: 4px solid var(--orange); border-radius: 14px; padding: 14px 18px; margin: 0; }
 .store-row { margin-top: 22px; }
 .btn-store { padding: 9px 18px; font-size: 15px; }
 

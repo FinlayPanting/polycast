@@ -39,19 +39,18 @@
         <div class="lang-row" id="langs" role="group" aria-labelledby="langs-label"></div>
       </div>
 
-      <!-- Sign-ups go to Buttondown (double opt-in), which sends people back to /thanks, then /confirmed once they tap the email link. -->
-      <form class="notify" id="notify" action="https://buttondown.com/api/emails/embed-subscribe/polycast" method="post">
+      <!-- The launch list lives in Loops (double opt-in). The script below sends this form without leaving the page. -->
+      <form class="notify" id="notify" action="https://app.loops.so/api/newsletter-form/LOOPS_FORM_ID" method="post">
         <label class="sr-only" for="notify-email">Your email</label>
         <div class="notify-row">
           <input id="notify-email" type="email" name="email" required autocomplete="email" placeholder="Your email">
           <button class="btn btn-primary" type="submit">Tell me when it’s out</button>
         </div>
-        <label class="check"><input type="checkbox" name="tag" value="beta"> I’d like to try the beta on my iPhone before launch</label>
-        <input type="hidden" name="embed" value="1">
-        <input type="hidden" name="tag" value="waitlist">
-        <input type="hidden" name="metadata__source" value="polycast.app">
-        <input type="hidden" name="metadata__language" id="notify-language" value="" disabled>
-        <p class="notify-small">One email when Polycast launches, and nothing else unless you ask. <a href="/privacy#launch-list">Privacy</a></p>
+        <label class="check"><input type="checkbox" name="betaTester" value="true"> I’d like to try the beta on my iPhone before launch</label>
+        <input type="hidden" name="source" value="polycast.app">
+        <input type="hidden" name="language" id="notify-language" value="" disabled>
+        <p class="notify-small" id="notify-small">One email when Polycast launches, and nothing else unless you ask. <a href="/privacy#launch-list">Privacy</a></p>
+        <p class="notify-status" id="notify-status" role="status" aria-live="polite"></p>
       </form>
 
       <div class="store-row">
@@ -227,22 +226,53 @@
   scrub.innerHTML = Array.from({ length: 38 }, (_, i) => (i === 12 ? '<span class="head"></span>' : `<span class="${i < 12 ? 'done' : guideAt.has(i) ? 'guide' : ''}"></span>`)).join('')
   pick(LANGS[0])
 
-  // The launch list: the language a visitor tapped goes with their sign-up, as a tag and a note.
+  // The launch list: the language a visitor tapped goes with their sign-up.
   // Until they tap one, no language is sent (the demo just starts on Swedish).
   const form = document.getElementById('notify')
   const langField = document.getElementById('notify-language')
-  let langTag = null
   function chooseLanguage(lang) {
     langField.value = lang.name
     langField.disabled = false
-    if (!langTag) {
-      langTag = document.createElement('input')
-      langTag.type = 'hidden'
-      langTag.name = 'tag'
-      form.appendChild(langTag)
-    }
-    langTag.value = lang.name.toLowerCase()
   }
+
+  // Send the sign-up to Loops in the background and answer on the page.
+  const status = document.getElementById('notify-status')
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const email = document.getElementById('notify-email').value.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      status.textContent = 'That email doesn’t look quite right. Please check it and try again.'
+      status.className = 'notify-status is-error'
+      return
+    }
+    const button = form.querySelector('button')
+    button.disabled = true
+    status.textContent = 'Adding you…'
+    status.className = 'notify-status'
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(new FormData(form)).toString(),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body.success !== false) {
+        form.querySelector('.notify-row').hidden = true
+        form.querySelector('.check').hidden = true
+        document.getElementById('notify-small').hidden = true
+        status.textContent = `Nearly there. We’ve emailed ${email} a link: tap it to confirm, and you’ll hear the moment Polycast is out.`
+        status.className = 'notify-status is-done'
+        return
+      }
+      status.textContent = res.status === 429 ? 'Lots of tries in a row. Give it a minute, then try again.' : (body.message || 'That didn’t go through. Please try again in a moment.')
+      status.className = 'notify-status is-error'
+    } catch {
+      status.textContent = 'That didn’t go through. Check your connection and try again, or email hello@polycast.app.'
+      status.className = 'notify-status is-error'
+    } finally {
+      button.disabled = false
+    }
+  })
 </script>
 </body>
 </html>
