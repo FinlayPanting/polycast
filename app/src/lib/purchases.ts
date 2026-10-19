@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
-import Purchases, { type PurchasesPackage } from 'react-native-purchases'
+import { TIP_PRODUCT_IDS } from '@polycast/core'
+import Purchases, { PRODUCT_CATEGORY, type PurchasesPackage, type PurchasesStoreProduct } from 'react-native-purchases'
 import { config } from './config'
 
 /** The entitlement RevenueCat grants for Plus; set up with this id in the RevenueCat dashboard. */
@@ -48,4 +49,25 @@ export async function restore(): Promise<'plus' | 'none'> {
   if (!configured) return 'none'
   const info = await Purchases.restorePurchases()
   return info.entitlements.active[PLUS_ENTITLEMENT] ? 'plus' : 'none'
+}
+
+/**
+ * The tip products the App Store has for this device (PC-1017-K3), by product id. Empty when
+ * purchases aren't set up here (the web preview, a build without the RevenueCat key).
+ */
+export async function tipProducts(): Promise<Map<string, PurchasesStoreProduct>> {
+  if (!configured) return new Map()
+  const products = await Purchases.getProducts(TIP_PRODUCT_IDS, PRODUCT_CATEGORY.NON_SUBSCRIPTION)
+  return new Map(products.map((p) => [p.identifier, p]))
+}
+
+/** Leaves a tip. Returns true once Apple has taken it; false if they cancelled the sheet. */
+export async function buyTip(product: PurchasesStoreProduct): Promise<boolean> {
+  try {
+    await Purchases.purchaseStoreProduct(product)
+    return true
+  } catch (e: any) {
+    if (e?.userCancelled) return false
+    throw e
+  }
 }

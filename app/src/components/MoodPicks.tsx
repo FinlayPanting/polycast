@@ -3,14 +3,18 @@ import { router } from 'expo-router'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { api, type MoodPick } from '../lib/api'
-import { moodPickByline, moodPickRoute } from '../lib/mood'
+import { moodPickByline, moodPickRoute, searchOrMood, searchOrMoodPlaceholder } from '../lib/mood'
 import { MIN_TAP, space, type, usePalette } from '../theme'
 import { Mark } from './Mark'
 import { Artwork, Txt } from './ui'
+import { SymbolView } from 'expo-symbols'
 
 /**
  * "Tell Mia what you're in the mood for" (PC-1016-07): type a mood or tap a chip, and Mia picks
  * three shows or prepared episodes in the language with a line on why each fits.
+ *
+ * One bar for search and mood (PC-1017-F07): the keyboard's search key opens a normal podcast
+ * search for what's typed; the sparkle button sends it to Mia instead.
  */
 export function MoodPicks({ language, guideName, flagId }: { language: string; guideName: string; flagId?: string }) {
   const p = usePalette()
@@ -42,17 +46,37 @@ export function MoodPicks({ language, guideName, flagId }: { language: string; g
   return (
     <View style={{ gap: space.sm }}>
       <View style={{ paddingHorizontal: space.lg }}>
-        <TextInput
-          value={mood}
-          onChangeText={setMood}
-          onSubmitEditing={() => void ask(mood)}
-          maxLength={MOOD_MAX_CHARS}
-          placeholder={`Tell ${guideName} what you're in the mood for`}
-          placeholderTextColor={p.faint}
-          returnKeyType="go"
-          accessibilityLabel={`Tell ${guideName} what you're in the mood for`}
-          style={[type.body, { letterSpacing: 0, minHeight: MIN_TAP + 4, borderRadius: 14, backgroundColor: p.raised, color: p.text, paddingHorizontal: space.md }]}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: MIN_TAP + 4, borderRadius: 14, backgroundColor: p.raised, paddingLeft: space.md }}>
+          <SymbolView name="magnifyingglass" tintColor={p.faint} size={18} />
+          <TextInput
+            value={mood}
+            onChangeText={setMood}
+            onSubmitEditing={() => {
+              const r = searchOrMood(mood, 'keyboard')
+              if (r?.kind === 'search') router.push({ pathname: '/search', params: { q: r.q } })
+            }}
+            maxLength={MOOD_MAX_CHARS}
+            placeholder={searchOrMoodPlaceholder(guideName)}
+            placeholderTextColor={p.faint}
+            returnKeyType="search"
+            accessibilityRole="search"
+            accessibilityLabel={`Search any podcast, or tell ${guideName} what you're in the mood for`}
+            style={[type.body, { letterSpacing: 0, flex: 1, minHeight: MIN_TAP + 4, color: p.text, paddingHorizontal: space.sm }]}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Ask ${guideName}`}
+            accessibilityHint={`${guideName} picks shows to match what you've typed`}
+            onPress={() => {
+              const r = searchOrMood(mood, 'sparkle')
+              if (r?.kind === 'mood') void ask(r.mood)
+            }}
+            hitSlop={4}
+            style={({ pressed }) => ({ width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+          >
+            <SymbolView name="sparkles" tintColor={mood.trim() ? p.guide : p.faint} size={20} />
+          </Pressable>
+        </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm }}>
         {MOOD_CHIPS.map((chip) => (

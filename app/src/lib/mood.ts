@@ -12,3 +12,16 @@ export function moodPickRoute(p: MoodPick): string | { pathname: '/show'; params
 export function moodPickByline(p: MoodPick): string {
   return p.kind === 'episode' ? `Episode of ${p.podcastTitle}` : (p.author ?? '')
 }
+
+/**
+ * One field for both (PC-1017-F07): pressing search on the keyboard does a normal podcast search;
+ * the sparkle button sends the same words to the guide's mood search. Nothing for an empty field,
+ * or a search under two letters (search needs at least two).
+ */
+export function searchOrMood(text: string, via: 'keyboard' | 'sparkle'): { kind: 'search'; q: string } | { kind: 'mood'; mood: string } | null {
+  const t = text.trim()
+  if (via === 'sparkle') return t ? { kind: 'mood', mood: t } : null
+  return t.length >= 2 ? { kind: 'search', q: t } : null
+}
+
+export const searchOrMoodPlaceholder = (guideName: string) => `Search podcasts, or ask ${guideName}`

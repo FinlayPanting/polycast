@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, SLOW_DOWN } from '../src/api'
+import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
 import { ProviderError, type TextModel } from '../src/providers/types'
 import { OWN_KEYS_LIMITS } from '../src/ownKeys'
@@ -124,6 +124,15 @@ run('API and worker', () => {
     await sql`update profiles set plan = 'plus' where id = ${anna}`
     expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()).freeEpisode).toBe(false)
     await sql`update profiles set plan = 'free' where id = ${anna}`
+
+    // She switches to Leo, but this episode was voiced by Mia: the player and the episode screen are
+    // told it's Mia she'll hear (PC-1017-F01).
+    expect(listen.guideId).toBe('mia')
+    await sql`update profiles set guide_id = 'leo' where id = ${anna}`
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`)).json()).guideId).toBe('mia')
+    expect((await (await call(anna, 'GET', `/v1/episodes/${episodeId}/primer`)).json()).guideId).toBe('mia')
+    await sql`update profiles set guide_id = 'mia' where id = ${anna}`
+    expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`, { guide: false })).json()).guideId).toBeNull()
   })
 
   it('refuses to load a show from a private address, without fetching it', async () => {
@@ -136,6 +145,42 @@ run('API and worker', () => {
       expect(res.status).toBe(502)
     }
     expect(fetched).toEqual([])
+  })
+
+  it('opens a show it read recently without re-reading the feed or asking Apple (PC-1017-F03)', async () => {
+    const fetched: string[] = []
+    let slow = false
+    const spy: typeof fetch = async (input, init) => {
+      fetched.push(String(input))
+      if (slow && String(input) === FEED_URL) await new Promise((r) => setTimeout(r, 10_000))
+      return fakeFetch(input, init)
+    }
+    const quick = createApi({ sql, verify: async (t) => t, fetch: spy, lookupHost: publicHost })
+    const user = await learner()
+    const open = async (b: unknown) => (await quick.request('/v1/podcasts/open', { method: 'POST', headers: { Authorization: `Bearer ${user}`, 'Content-Type': 'application/json' }, body: JSON.stringify(b) })).json()
+
+    // Just read by the first test: straight from the catalogue, by Apple id or feed.
+    expect((await open({ appleId: '555' })).episodes.map((e: any) => e.title)).toEqual(['Tåget', 'Fikan'])
+    expect((await open({ feedUrl: FEED_URL })).podcast.title).toBe('Svenska Samtal')
+    expect(fetched).toEqual([])
+
+    // Read an hour ago, and the feed is slow today: served as it was within a few seconds.
+    await sql`update podcasts set updated_at = now() - interval '1 hour' where feed_url = ${FEED_URL}`
+    slow = true
+    const started = Date.now()
+    expect((await open({ feedUrl: FEED_URL })).episodes).toHaveLength(2)
+    expect(Date.now() - started).toBeLessThan(5_000)
+    expect(fetched).toEqual([FEED_URL])
+  }, 20_000)
+
+  it('times the freshness of a show and the wait for a slow feed', async () => {
+    const now = new Date('2026-10-19T12:00:00Z')
+    expect(showIsFresh('2026-10-19T11:50:00Z', now)).toBe(true)
+    expect(showIsFresh('2026-10-19T11:40:00Z', now)).toBe(false)
+    expect(showIsFresh(null, now)).toBe(false)
+    expect(await withDeadline(Promise.resolve('read'), 50, 'as it was')).toBe('read')
+    expect(await withDeadline(new Promise((r) => setTimeout(() => r('read'), 200)), 20, 'as it was')).toBe('as it was')
+    await expect(withDeadline(Promise.reject(new Error('feed down')), 50, 'as it was')).rejects.toThrow('feed down')
   })
 
   it('serves a ready episode free to the next learner, and explains refusals in plain English', async () => {
@@ -204,6 +249,26 @@ run('API and worker', () => {
       body: JSON.stringify({ event: { type: 'INITIAL_PURCHASE', app_user_id: lea } }),
     })
     expect(forged.status).toBe(401)
+  })
+
+  it('never switches Plus on or off for a tip (PC-1017-K3)', async () => {
+    const tia = await learner()
+    const hook = (event: Record<string, unknown>) =>
+      createApi({ sql, verify: async () => undefined, fetch: fakeFetch, revenueCatSecret: 's3cret' }).request('/webhooks/revenuecat', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer s3cret', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: { app_user_id: tia, ...event } }),
+      })
+    const plan = async () => (await sql`select plan from profiles where id = ${tia}`)[0]!.plan
+    expect((await hook({ type: 'NON_RENEWING_PURCHASE', product_id: 'com.finlaypanting.polycast.tip.medium' })).status).toBe(200)
+    expect(await plan()).toBe('free')
+    // Even an event type that would mean Plus is ignored when its product is a tip.
+    await hook({ type: 'INITIAL_PURCHASE', product_id: 'com.finlaypanting.polycast.tip.large' })
+    expect(await plan()).toBe('free')
+    await hook({ type: 'INITIAL_PURCHASE', product_id: 'com.finlaypanting.polycast.plus.monthly' })
+    expect(await plan()).toBe('plus')
+    await hook({ type: 'EXPIRATION', product_id: 'com.finlaypanting.polycast.tip.small' })
+    expect(await plan()).toBe('plus')
   })
 
   it('deletes a learner’s account and their words and listens, but keeps the shared catalogue', async () => {

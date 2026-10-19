@@ -65,7 +65,7 @@ It's built for learning for fun, not homework: put your headphones in, pick a sh
 | | What you get |
 |---|---|
 | **Free** | Every ready episode with subtitles, and the guide on one episode a week |
-| **Plus** · €4.99 a month or €39 a year | The guide on everything, and up to 5 hours of new episodes prepared each month |
+| **Plus** · €4.99 a month or €49 a year | The guide on everything, and up to 5 hours of new episodes prepared each month |
 | **Your own API keys** | Optional: add your own ElevenLabs and Google Gemini keys (with a step-by-step set-up guide in the app) and prepare episodes on your own accounts. Keys stay in the iPhone Keychain |
 
 Every episode anyone prepares joins the shared library, so the free catalogue grows as people learn.

@@ -1,4 +1,3 @@
-import { router } from 'expo-router'
 import { SymbolView } from 'expo-symbols'
 import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
@@ -11,19 +10,28 @@ import { guideName, languageName } from '../../lib/languages'
 import { MoodPicks } from '../../components/MoodPicks'
 import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
-import { MIN_TAP, space, type, usePalette } from '../../theme'
+import { space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 
 export default function Discover() {
   const p = usePalette()
   const { profile, updatePrefs } = useSession()
   const [picking, setPicking] = useState(false)
+  // Only for a pull: the shelves kept from last time refresh quietly behind the scenes.
+  const [refreshing, setRefreshing] = useState(false)
   const language = profile?.target_language ?? 'sv'
-  const { data, error, loading, reload } = useAsync(() => api.discover(language), [language])
+  const { data, error, reload } = useAsync(() => api.discover(language), [language], { cacheKey: `discover:${language}` })
 
   return (
     <Screen>
-      <ScrollView refreshControl={<RefreshControl refreshing={loading && Boolean(data)} onRefresh={reload} tintColor={p.quiet} />} contentContainerStyle={{ paddingBottom: space.xxl, gap: space.xl }}>
+      <ScrollView refreshControl={<RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true)
+              void reload().finally(() => setRefreshing(false))
+            }}
+            tintColor={p.quiet}
+          />} contentContainerStyle={{ paddingBottom: space.xxl, gap: space.xl }}>
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md }}>
           <Pressable
             accessibilityRole="button"
@@ -37,15 +45,6 @@ export default function Discover() {
               {languageName(language)}
             </Txt>
             <SymbolView name="chevron.down" size={16} tintColor={p.quiet} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="search"
-            accessibilityLabel={`Search ${languageName(language)} podcasts`}
-            onPress={() => router.push('/search')}
-            style={{ minHeight: MIN_TAP + 4, borderRadius: 14, backgroundColor: p.raised, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md }}
-          >
-            <SymbolView name="magnifyingglass" tintColor={p.faint} size={18} />
-            <Txt style={[type.body, { color: p.faint }]}>Search any podcast</Txt>
           </Pressable>
         </View>
 

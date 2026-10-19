@@ -1,4 +1,5 @@
 import { router } from 'expo-router'
+import { showPeek as peek } from '../lib/showPeek'
 import { FlatList, Pressable, View } from 'react-native'
 import { chartTag } from '@polycast/core'
 import type { Shelf, ShelfEpisode } from '../lib/api'
@@ -11,9 +12,9 @@ function showsOf(shelf: Shelf): Show[] {
   if (!('shows' in shelf)) return []
   return (shelf.shows as any[]).map((s) => {
     if ('podcastId' in s)
-      return { key: s.podcastId, title: s.title, author: s.author, artwork: s.artwork, note: s.readyEpisodes ? `${s.readyEpisodes} ready` : undefined, open: () => router.push({ pathname: '/show', params: { podcastId: s.podcastId } }) }
-    if ('appleId' in s) return { key: `a${s.appleId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, rank: chartTag(s.chart), open: () => router.push({ pathname: '/show', params: { appleId: s.appleId } }) }
-    return { key: `p${s.podcastIndexId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, open: () => router.push({ pathname: '/show', params: { feedUrl: s.feedUrl } }) }
+      return { key: s.podcastId, title: s.title, author: s.author, artwork: s.artwork, note: s.readyEpisodes ? `${s.readyEpisodes} ready` : undefined, open: () => router.push({ pathname: '/show', params: { podcastId: s.podcastId, ...peek(s) } }) }
+    if ('appleId' in s) return { key: `a${s.appleId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, rank: chartTag(s.chart), open: () => router.push({ pathname: '/show', params: { appleId: s.appleId, ...peek(s) } }) }
+    return { key: `p${s.podcastIndexId}`, title: s.title, author: s.author, artwork: s.artwork, why: s.why, open: () => router.push({ pathname: '/show', params: { feedUrl: s.feedUrl, ...peek(s) } }) }
   })
 }
 

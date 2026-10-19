@@ -61,3 +61,10 @@ export function fromStoredPath(stored: string, folderUri: string): string {
   const old = stored.match(/\/Documents\/episodes\/(.+)$/)
   return old ? `${base}/${old[1]}` : stored
 }
+
+/** A request's route for the log, without its query or ids: "/v1/episodes/:id/listen". */
+export function apiRoute(path: string): string {
+  return path
+    .split('?')[0]!
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
+}

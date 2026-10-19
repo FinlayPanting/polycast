@@ -2,7 +2,8 @@ import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Primer, Refusa
 import { config } from './config'
 import { demoCall } from '../demo/api'
 import { supabase } from './supabase'
-import { fetchWithTimeout, REQUEST_TIMEOUT_MS } from './net'
+import { apiRoute, fetchWithTimeout, REQUEST_TIMEOUT_MS } from './net'
+import { plog } from './playbackLog'
 
 export class ApiError extends Error {
   constructor(
@@ -16,6 +17,7 @@ export class ApiError extends Error {
 
 async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   if (config.demo) return demoCall<T>(method, path)
+  const started = Date.now()
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   // A time limit, so weak Wi-Fi fails (and a saved copy can play) instead of hanging.
@@ -25,6 +27,9 @@ async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: u
     body: body === undefined ? undefined : JSON.stringify(body),
   }, timeoutMs)
   const json = await res.json().catch(() => ({}))
+  // How long each screen waits on the server, in the shareable playback log (PC-1017-F03). The
+  // path only, never a search's words.
+  plog(`api ${method} ${apiRoute(path)} ${res.status} in ${Date.now() - started} ms`)
   if (!res.ok) throw new ApiError(json.message ?? json.error ?? 'Something went wrong. Please try again.', res.status, json)
   return json as T
 }
@@ -77,6 +82,8 @@ export interface ListenPayload {
   freeEpisode?: boolean
   guidanceLevel: 'light' | 'standard' | 'handsOn' | null
   plan: LessonPlan | null
+  /** The guide whose voice this plan was recorded in (PC-1017-F01); missing on lessons saved before 19 Oct 2026. */
+  guideId?: string | null
   /** Fingerprint of the copy we transcribed, to line the lesson up with the learner's copy. */
   syncUrl?: string | null
 }
@@ -107,7 +114,7 @@ export const api = {
   /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
   /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
-  primer: (episodeId: string) => call<{ primer: Primer | null }>('GET', `/v1/episodes/${episodeId}/primer`),
+  primer: (episodeId: string) => call<{ primer: Primer | null; guideId?: string | null }>('GET', `/v1/episodes/${episodeId}/primer`),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
 }
 

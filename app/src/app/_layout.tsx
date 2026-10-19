@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
-import { useColorScheme } from 'react-native'
+import { Platform, useColorScheme, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -22,9 +22,14 @@ import { tidyDownloads } from '../lib/episodeAudio'
 import { savedWordEpisodes } from '../lib/words'
 import { configurePurchases } from '../lib/purchases'
 import { SessionProvider, useSession } from '../lib/session'
+import { BottomBar } from '../components/BottomBar'
+import { PlayerProvider } from '../player/PlayerProvider'
 import { usePalette } from '../theme'
 
 void SplashScreen.preventAutoHideAsync()
+
+// Notifications aren't available in the web preview, where this hook throws.
+const useLastNotificationResponse = Platform.OS === 'web' ? () => null : Notifications.useLastNotificationResponse
 
 function Routes() {
   const { ready, session, profile } = useSession()
@@ -47,7 +52,7 @@ function Routes() {
     if (session) configurePurchases(session.user.id)
   }, [session])
   // Tapping "your episode is ready" or "new episode is out" opens that episode's page.
-  const lastResponse = Notifications.useLastNotificationResponse()
+  const lastResponse = useLastNotificationResponse()
   useEffect(() => {
     if (!ready || !signedIn || !onboarded || !lastResponse) return
     const route = routeForNotification(lastResponse.notification.request.content.data)
@@ -64,6 +69,7 @@ function Routes() {
 
   if (!ready) return null
   return (
+    <View style={{ flex: 1, backgroundColor: p.bg }}>
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="welcome" />
@@ -82,9 +88,12 @@ function Routes() {
         <Stack.Screen name="listen/[id]" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="review" options={{ presentation: 'modal' }} />
         <Stack.Screen name="plus" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="tip" options={{ presentation: 'modal' }} />
         <Stack.Screen name="keys" />
       </Stack.Protected>
     </Stack>
+    {signedIn && onboarded ? <BottomBar /> : null}
+    </View>
   )
 }
 
@@ -104,7 +113,9 @@ function RootLayout() {
       <SafeAreaProvider>
         <SessionProvider>
           <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
-          <Routes />
+          <PlayerProvider>
+            <Routes />
+          </PlayerProvider>
         </SessionProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

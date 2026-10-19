@@ -4,9 +4,9 @@ export interface PlanPrice {
   currency: string
 }
 
-/** Used until the App Store's own prices arrive (spec: €4.99 a month or €39 a year). */
+/** Used until the App Store's own prices arrive (€4.99 a month or €49 a year; yearly raised from €39 on 19 Oct 2026). */
 export const DEFAULT_MONTHLY: PlanPrice = { amount: 4.99, currency: 'EUR' }
-export const DEFAULT_ANNUAL: PlanPrice = { amount: 39, currency: 'EUR' }
+export const DEFAULT_ANNUAL: PlanPrice = { amount: 49, currency: 'EUR' }
 
 export function formatMoney(price: PlanPrice): string {
   try {

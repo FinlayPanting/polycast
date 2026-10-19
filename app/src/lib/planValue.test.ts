@@ -3,7 +3,7 @@ import { DEFAULT_ANNUAL, DEFAULT_MONTHLY, yearlyValueLine } from './planValue'
 
 describe('the yearly plan does the sum for the learner', () => {
   it('shows the monthly equivalent and the saving at launch prices', () => {
-    expect(yearlyValueLine(DEFAULT_ANNUAL, DEFAULT_MONTHLY)).toBe('€3.25 a month, billed yearly: 35% less than monthly')
+    expect(yearlyValueLine(DEFAULT_ANNUAL, DEFAULT_MONTHLY)).toBe('€4.08 a month, billed yearly: 18% less than monthly')
   })
 
   it('follows the App Store prices in other currencies', () => {

@@ -36,6 +36,8 @@ interface SessionValue {
   signInWithApple: () => Promise<void>
   sendEmailCode: (email: string) => Promise<void>
   verifyEmailCode: (email: string, code: string) => Promise<void>
+  /** App Review's account only (PC-1012-04); learners sign in with a code or Apple. */
+  signInWithPassword: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -118,6 +120,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       async verifyEmailCode(email, code) {
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
         if (error) throw new Error('That code didn’t work. Check it, or send a new one.')
+      },
+      async signInWithPassword(email, password) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) throw new Error('That password didn’t work. Check it and try again.')
       },
       async signOut() {
         await supabase.auth.signOut()

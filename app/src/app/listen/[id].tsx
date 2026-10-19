@@ -2,7 +2,7 @@ import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wor
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState, Modal, Pressable, ScrollView, Share, View } from 'react-native'
+import { ActionSheetIOS, Alert, AppState, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native'
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
@@ -14,17 +14,20 @@ import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
 import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
+import { skipAdTarget } from '../../lib/skipAd'
+import { playerMenu } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
-import { guideName, guidanceLevelOr } from '../../lib/languages'
+import { guideName, guidanceLevelOr, voicedGuideId } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
 import { useSession } from '../../lib/session'
 import { resumePosition, savePosition } from '../../lib/data'
 import { listWords, saveWord } from '../../lib/words'
 import { plog } from '../../lib/playbackLog'
 import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
-import { GuidedListen, type ListenState } from '../../player/GuidedListen'
+import { usePlayer } from '../../player/PlayerProvider'
+import { fromParam } from '../../player/session'
 import { setRemoteHandler } from '../../player/remote'
 import { trackPlayerAudio } from '../../player/trackPlayerAudio'
 import { MIN_TAP, space, usePalette } from '../../theme'
@@ -165,18 +168,16 @@ export default function Listen() {
   // The intensity chosen on the episode screen for this listen (PC-1017-F13).
   const chosenLevel = levelParam ? guidanceLevelOr(levelParam, 'standard') : undefined
   const { session, profile } = useSession()
-  const [data, setData] = useState<ListenPayload>()
-  const [error, setError] = useState<string>()
-  const [state, setState] = useState<ListenState>({ phase: 'loading', position: 0, rate: 1 })
+  const player = usePlayer()
+  // Until the player has switched to this episode, show it loading rather than the last one.
+  const mine = player.params?.id === id
+  const data = mine ? player.data : undefined
+  const state = mine ? player.state : { phase: 'loading' as const, position: 0, rate: 1 }
+  const error = mine ? player.error : undefined
+  const getReady = mine ? player.getReady : undefined
+  const { saved, caughtAt, oldFriends, keepWord } = player
   const [mode, setMode] = useState<SubtitleMode>(profile?.subtitle_mode ?? 'both')
-  const [oldFriends, setOldFriends] = useState<Set<number>>(new Set())
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
-  const [saved, setSaved] = useState<string[]>([])
-  // When in the episode the learner caught a word (saved it, or the guide taught it): lines to share.
-  const [caughtAt, setCaughtAt] = useState<number[]>([])
-  const [getReady, setGetReady] = useState<GetReadyStep>()
-  const listen = useRef<GuidedListen | undefined>(undefined)
-  const goodbye = useRef<Goodbye | undefined>(undefined)
 
   const clipText = useCallback(
     (c: Clip) =>
@@ -187,116 +188,29 @@ export default function Listen() {
     [data],
   )
 
-  const keepWord = useCallback(
-    async (lemma: string, form: string, meaning: string, clip: Clip, sentence: string) => {
-      if (!session || !data) return
-      await saveWord(session.user.id, { lemma, form, meaning, language: data.transcript.language, episodeId: data.episode.id, clip, sentence }).catch(() => {})
-      setSaved((s) => (s.includes(lemma) ? s : [...s, lemma]))
-      setCaughtAt((c) => (c.includes(clip.start) ? c : [...c, clip.start]))
-    },
-    [session, data],
-  )
-
-  // Load the episode, its subtitles and (if guided) the lesson plan, then start playing.
+  // The listen lives above the screens (PC-1017-F04): opening the player starts it, or re-attaches
+  // to the one already playing; closing the player leaves it playing in the mini-player.
+  const { open } = player
   useEffect(() => {
-    let disposed = false
-    const abort = new AbortController()
-    ;(async () => {
-      try {
-        let d: ListenPayload
-        let synced = false
-        const fetched = await api.listen(id, guide !== '0', chosenLevel).catch((e) => {
-          // No connection, a time-out or the server's away: play the copy saved on this phone, if
-          // there is one. A clear answer from the server (say, the show was removed) is shown instead.
-          const saved = config.demo || !isOfflineError(e) ? undefined : loadLesson(id)
-          if (!saved) throw e
-          plog('offline: playing the lesson saved on this phone')
-          return undefined
-        })
-        if (disposed) return
-        if (fetched) {
-          // Download the learner's own copy and line the lesson up with it (adverts can differ).
-          const ready = config.demo ? undefined : await getEpisodeReady(fetched, (s) => !disposed && setGetReady(s), abort.signal)
-          if (disposed) return
-          d = ready ? readyPayload(fetched, ready) : fetched
-          synced = Boolean(ready?.synced)
-          // Keep it for offline listening (the guided version; subtitles-only leaves it alone).
-          if (ready && guide !== '0') saveLesson(d)
-        } else {
-          const saved = loadLesson(id)!.payload
-          // Offline, the saved plan holds every level, so the chosen one still applies.
-          d = guide === '0' ? { ...saved, guided: false } : chosenLevel && saved.guided ? { ...saved, guidanceLevel: chosenLevel } : saved
-          synced = true
-        }
-        setGetReady(undefined)
-        setData(d)
-        const level = d.guidanceLevel ?? 'standard'
-        const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
-        // A jump from the episode map starts there; otherwise carry on where the learner left off.
-        const startAt = from !== undefined && Number.isFinite(Number(from)) ? Math.max(0, Number(from)) : await resumePosition(id)
-        // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
-        goodbye.current = undefined
-        if (!config.demo && moments.length > 0) {
-          void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, profile?.guide_id ?? 'mia')).then((g) => (goodbye.current = g))
-        }
-
-        const l = new GuidedListen({
-          audio: config.demo ? demoAudio(d.episode.durationSec) : trackPlayerAudio(),
-          voice: config.demo ? demoVoice() : expoGuideVoice(),
-          moments,
-          segments: d.transcript.segments,
-          onChange: setState,
-          onSavePosition: (sec) => {
-            if (session) void savePosition(session.user.id, id, sec)
-          },
-          inForeground: () => AppState.currentState === 'active',
-          goodbye: () => goodbye.current,
-        })
-        listen.current = l
-        setRemoteHandler((cmd) => void l.remote(cmd))
-        plog(`listen: ${d.episode.title} (${synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
-        if (!config.demo) await prepareGuideAudio()
-        await l.start({ url: d.episode.audioUrl, title: d.episode.title, artist: d.episode.podcastTitle, artwork: d.episode.image ?? undefined, durationSec: d.episode.durationSec }, startAt)
-
-        const known = await listWords(d.transcript.language).catch(() => [])
-        if (!disposed) setOldFriends(new Set(findOldFriends(d.transcript.words, known, d.episode.id, d.transcript.language).map((f) => f.wordIndex)))
-      } catch (e) {
-        if (!disposed) setError(e instanceof Error ? e.message : 'This episode won’t play right now.')
-      }
-    })()
-    return () => {
-      disposed = true
-      abort.abort()
-      setRemoteHandler(undefined)
-      void listen.current?.dispose()
-    }
-  }, [id, guide, chosenLevel, from, session])
-
-  // Hands-free saving: a word the guide teaches goes into the word bank when it's spotlighted.
-  useEffect(() => {
-    const m = state.moment
-    if (state.phase === 'guide' && m?.kind === 'spotlight' && m.term && m.clips[0]) {
-      const sentence = data?.transcript.segments.find((s) => s.start <= m.clips[0]!.start && s.end >= m.clips[0]!.end)?.text ?? ''
-      void keepWord(m.term.lemma, m.term.text, m.term.meaning, m.clips[0], sentence)
-    }
-  }, [state.phase, state.moment, data, keepWord])
-
-  // Finished: mark the listen done.
-  useEffect(() => {
-    if (state.phase === 'finished' && session) void savePosition(session.user.id, id, state.position, true)
-  }, [state.phase, session, id])
+    open({ id, guide, level: chosenLevel, from: fromParam(from) })
+  }, [id, guide, chosenLevel, from, open])
 
   // The introduction plays once at the start; this brings it back whenever the learner wants it.
   const intro = useMemo(() => (data?.guided ? data.plan?.moments.find((m) => m.kind === 'warmup' && m.audio) : undefined), [data])
   const markers = useMemo(() => (data?.plan && data.guided ? selectMoments(data.plan.moments, data.guidanceLevel ?? 'standard').map((m) => m.at) : []), [data])
+  // Swiping down or the chevron keeps it playing; ending it is for errors, Cancel and Done.
   const close = () => router.back()
+  const end = () => {
+    player.stop()
+    router.back()
+  }
 
   if (error) {
     return (
       <Screen edges={['top', 'bottom']} style={{ padding: space.lg, gap: space.md, justifyContent: 'center' }}>
         <Txt variant="heading">This episode won’t play</Txt>
         <Txt tone="quiet">{error}</Txt>
-        <Button label="Close" onPress={close} />
+        <Button label="Close" onPress={end} />
       </Screen>
     )
   }
@@ -318,16 +232,26 @@ export default function Listen() {
             </Txt>
           </View>
         ) : null}
-        <Button kind="secondary" label="Cancel" onPress={close} />
+        <Button kind="secondary" label="Cancel" onPress={end} />
       </Screen>
     )
   }
-  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={close} /></Screen>
+  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={end} /></Screen>
 
-  const l = listen.current
+  const l = player.listen
   const guideOn = state.phase === 'guide' || state.phase === 'question'
   const playing = state.phase === 'playing' || guideOn
   const advert = advertAt(data.adverts, state.position)
+  const skipAd = skipAdTarget(data.adverts, state.position)
+  // Quieter actions live in the More menu, not among the main controls (PC-1017-F06).
+  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn })
+  const runMenu = (i: number) => {
+    if (menu.actions[i] === 'replayIntro' && intro) void l?.replayMoment(intro)
+  }
+  const openMenu = () => {
+    if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: menu.options, cancelButtonIndex: menu.cancelIndex }, runMenu)
+    else Alert.alert('More', undefined, [...menu.actions.map((_, i) => ({ text: menu.options[i]!, onPress: () => runMenu(i) })), { text: 'Cancel', style: 'cancel' as const }])
+  }
   const nextMode: Record<SubtitleMode, SubtitleMode> = { both: 'target', target: 'none', none: 'both' }
   const modeLabel: Record<SubtitleMode, string> = { both: 'Both languages', target: 'Target language only', none: 'Subtitles off' }
 
@@ -344,20 +268,8 @@ export default function Listen() {
           </Txt>
         </View>
         <Artwork uri={data.episode.image} size={40} radius={8} />
+        {menu.actions.length ? <Control icon="ellipsis.circle" label="More" onPress={openMenu} size={22} /> : null}
       </View>
-
-      {intro && !guideOn ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void l?.replayMoment(intro)}
-          hitSlop={8}
-          style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: MIN_TAP, justifyContent: 'center', paddingHorizontal: space.lg, opacity: pressed ? 0.6 : 1 })}
-        >
-          <Txt variant="smallStrong" tone="quiet">
-            Hear the introduction again
-          </Txt>
-        </Pressable>
-      ) : null}
 
       {!data.guided && guide !== '0' ? (
         <Txt variant="small" tone="quiet" style={{ paddingHorizontal: space.lg, paddingTop: space.sm }}>
@@ -370,9 +282,8 @@ export default function Listen() {
           <View style={{ alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg }}>
             <Txt tone="quiet">Advert break</Txt>
             <Txt variant="small" tone="faint" style={{ textAlign: 'center' }}>
-              {guideName(profile?.guide_id)} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
+              {guideName(voicedGuideId(data?.guideId, profile?.guide_id))} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
             </Txt>
-            <Button kind="quiet" label="Skip to the end of the advert" onPress={() => void l?.seek(advert.end)} />
           </View>
         ) : null}
         {segmentAt(data.transcript.segments, state.position) < 0 ? (
@@ -398,7 +309,7 @@ export default function Listen() {
 
       <View style={{ paddingHorizontal: space.lg, gap: space.md }}>
         {guideOn && state.goodbye ? (
-          <View accessible accessibilityLabel={`${guideName(profile?.guide_id)} says ${state.goodbye.text}, meaning ${state.goodbye.meaning}`} style={{ alignItems: 'center', gap: space.xs, paddingVertical: space.md }}>
+          <View accessible accessibilityLabel={`${guideName(voicedGuideId(data?.guideId, profile?.guide_id))} says ${state.goodbye.text}, meaning ${state.goodbye.meaning}`} style={{ alignItems: 'center', gap: space.xs, paddingVertical: space.md }}>
             <Mark height={28} flagId={profile?.flag_id} speaking accessibilityLabel="" />
             <Txt variant="heading" style={{ textAlign: 'center' }}>
               {state.goodbye.text}
@@ -411,7 +322,7 @@ export default function Listen() {
         {guideOn && state.moment ? (
           <GuideCard
             moment={state.moment}
-            guideName={guideName(profile?.guide_id)}
+            guideName={guideName(voicedGuideId(data?.guideId, profile?.guide_id))}
             flagId={profile?.flag_id ?? 'polycast'}
             clipText={clipText}
             answer={state.answer}
@@ -421,8 +332,10 @@ export default function Listen() {
         ) : null}
 
         {!guideOn && state.next && data.guided ? (
-          <NextGuide guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
+          <NextGuide guideName={guideName(voicedGuideId(data?.guideId, profile?.guide_id))} flagId={profile?.flag_id} seconds={(state.next.at - state.position) / (state.rate || 1)} />
         ) : null}
+
+        {skipAd && !guideOn ? <SkipAdPill onPress={() => void l?.seek(skipAd.resumeAt)} /> : null}
 
         <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} adverts={data.adverts} onSeek={(s) => void l?.seek(s)} />
 
@@ -459,6 +372,36 @@ export default function Listen() {
 }
 
 /** A quiet countdown to the guide's next moment, so it never takes the learner by surprise. */
+/** Spotify's pattern, which listeners already know (PC-1017-F05): a clear pill above the scrubber during an advert. */
+function SkipAdPill({ onPress }: { onPress: () => void }) {
+  const p = usePalette()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Skip ad"
+      accessibilityHint="Jumps to where the episode carries on"
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        alignSelf: 'flex-end',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.xs,
+        minHeight: MIN_TAP - 8,
+        paddingHorizontal: space.md,
+        borderRadius: 999,
+        backgroundColor: p.text,
+        opacity: pressed ? 0.75 : 1,
+      })}
+    >
+      <Txt variant="smallStrong" style={{ color: p.bg }}>
+        Skip ad
+      </Txt>
+      <SymbolView name="forward.end.fill" size={14} tintColor={p.bg} />
+    </Pressable>
+  )
+}
+
 function NextGuide({ guideName, flagId, seconds }: { guideName: string; flagId?: string; seconds: number }) {
   const s = Math.max(0, Math.ceil(seconds))
   // Whole seconds only, and only the last 10 every second: a ticking clock is a distraction.

@@ -34,18 +34,32 @@
     <div>
       <h1>Learn a language with real podcasts</h1>
       <p class="lede">Polycast puts subtitles on the shows people actually listen to, with your own language underneath. Your guide steps in at the natural pauses, so you keep up without stopping the story.</p>
-      <div class="ctas">
-        <span class="btn btn-store" aria-disabled="true" title="Polycast isn't on the App Store yet">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.54 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.5zM14.2 6.13c.6-.74 1.01-1.75.9-2.77-.87.04-1.94.59-2.56 1.32-.56.64-1.05 1.68-.92 2.67.98.08 1.97-.49 2.58-1.22z"/></svg>
-          App Store <small>coming soon</small>
-        </span>
-        <a class="btn btn-primary" href="mailto:hello@polycast.app?subject=Tell%20me%20when%20Polycast%20launches&amp;body=Hi%20Finlay%2C%20I'd%20love%20to%20hear%20when%20Polycast%20is%20out.%20The%20language%20I'm%20learning%3A%20">Tell me when it’s out</a>
-      </div>
+      <!-- The launch list lives in Loops (double opt-in). "Tell me when it’s out" opens the form in place;
+           the script below then sends it without leaving the page. -->
+      <form class="notify" id="notify" action="https://app.loops.so/api/newsletter-form/cmvf3loc60m4f0jufqgjcpc43" method="post" novalidate>
+        <div class="ctas">
+          <span class="btn btn-store" aria-disabled="true" title="Polycast isn't on the App Store yet">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.54 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.5zM14.2 6.13c.6-.74 1.01-1.75.9-2.77-.87.04-1.94.59-2.56 1.32-.56.64-1.05 1.68-.92 2.67.98.08 1.97-.49 2.58-1.22z"/></svg>
+            App Store <small>coming soon</small>
+          </span>
+          <label class="sr-only" for="notify-email">Your email</label>
+          <input class="notify-email" id="notify-email" type="email" name="email" autocomplete="email" placeholder="Your email" hidden>
+          <button class="btn btn-primary" id="notify-button" type="submit" aria-expanded="false" aria-controls="notify-extra">Tell me when it’s out</button>
+        </div>
 
-      <div class="langs">
-        <p>Six languages at launch. Pick one:</p>
-        <div class="lang-row" id="langs"></div>
-      </div>
+        <div class="langs">
+          <p id="langs-label">Six languages at launch. <span class="langs-ask">Which one are you learning?</span></p>
+          <div class="lang-row" id="langs" role="group" aria-labelledby="langs-label"></div>
+        </div>
+
+        <div class="notify-extra" id="notify-extra" hidden>
+          <label class="check"><input type="checkbox" name="betaTester" value="true"> I’d like to try the beta on my iPhone before launch</label>
+          <p class="notify-small">You’ll hear when Polycast launches, plus occasional updates. Unsubscribe any time. <a href="/privacy#launch-list">Privacy</a></p>
+        </div>
+        <input type="hidden" name="source" value="polycast.app">
+        <input type="hidden" name="language" id="notify-language" value="" disabled>
+        <p class="notify-status" id="notify-status" role="status" aria-live="polite"></p>
+      </form>
     </div>
 
     <div class="stage" aria-live="polite">
@@ -142,7 +156,7 @@
       </div>
       <div class="plan">
         <h3>Plus</h3>
-        <p class="price"><b>€4.99</b> a month, or €39 a year</p>
+        <p class="price"><b>€4.99</b> a month, or €49 a year</p>
         <ul>
           <li>Your guide on every episode</li>
           <li>Up to 5 hours of brand-new episodes a month, from any show</li>
@@ -204,7 +218,7 @@
     b.type = 'button'
     b.dataset.id = lang.id
     b.innerHTML = mini(lang.bars) + lang.name
-    b.addEventListener('click', () => pick(lang))
+    b.addEventListener('click', () => { pick(lang); chooseLanguage(lang) })
     row.appendChild(b)
   })
   // A scrubber like the player's: orange for what you've heard, magenta where the guide will step in.
@@ -212,6 +226,68 @@
   const guideAt = new Set([16, 22, 27, 33])
   scrub.innerHTML = Array.from({ length: 38 }, (_, i) => (i === 12 ? '<span class="head"></span>' : `<span class="${i < 12 ? 'done' : guideAt.has(i) ? 'guide' : ''}"></span>`)).join('')
   pick(LANGS[0])
+
+  // The launch list: the language a visitor tapped goes with their sign-up.
+  // Until they tap one, no language is sent (the demo just starts on Swedish).
+  const form = document.getElementById('notify')
+  const langField = document.getElementById('notify-language')
+  function chooseLanguage(lang) {
+    langField.value = lang.name
+    langField.disabled = false
+  }
+
+  // "Tell me when it’s out" first opens the form: the email box takes the App Store button's place,
+  // the beta box and privacy note appear under the languages, and the whole area is framed as one form.
+  // The next press sends it to Loops in the background and answers on the page.
+  const status = document.getElementById('notify-status')
+  const emailInput = document.getElementById('notify-email')
+  const button = document.getElementById('notify-button')
+  function openForm() {
+    form.classList.add('is-open')
+    form.querySelector('.btn-store').hidden = true
+    emailInput.hidden = false
+    document.getElementById('notify-extra').hidden = false
+    button.setAttribute('aria-expanded', 'true')
+    emailInput.focus()
+  }
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    if (!form.classList.contains('is-open')) return openForm()
+    const email = emailInput.value.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      status.textContent = email ? 'That email doesn’t look quite right. Please check it and try again.' : 'Pop your email in first.'
+      status.className = 'notify-status is-error'
+      emailInput.focus()
+      return
+    }
+    button.disabled = true
+    status.textContent = 'Adding you…'
+    status.className = 'notify-status'
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(new FormData(form)).toString(),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body.success !== false) {
+        form.classList.add('is-done')
+        form.querySelector('.ctas').hidden = true
+        form.querySelector('.langs').hidden = true
+        document.getElementById('notify-extra').hidden = true
+        status.textContent = `Nearly there. We’ve emailed ${email} a link: tap it to confirm, and you’ll hear the moment Polycast is out.`
+        status.className = 'notify-status is-done'
+        return
+      }
+      status.textContent = res.status === 429 ? 'Lots of tries in a row. Give it a minute, then try again.' : (body.message || 'That didn’t go through. Please try again in a moment.')
+      status.className = 'notify-status is-error'
+    } catch {
+      status.textContent = 'That didn’t go through. Check your connection and try again, or email hello@polycast.app.'
+      status.className = 'notify-status is-error'
+    } finally {
+      button.disabled = false
+    }
+  })
 </script>
 </body>
 </html>

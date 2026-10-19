@@ -180,6 +180,13 @@ export default function You() {
           <Button kind="secondary" label={ownKeys ? 'Manage your keys' : 'Use your own API keys'} onPress={() => router.push('/keys')} style={{ alignSelf: 'flex-start' }} />
         </Section>
 
+        <Section title="Support Polycast">
+          <Txt variant="small" tone="quiet">
+            Enjoying it? A one-off tip helps keep Polycast free for everyone. It doesn’t unlock anything.
+          </Txt>
+          <Button kind="secondary" label="Leave a tip" onPress={() => router.push('/tip')} style={{ alignSelf: 'flex-start' }} />
+        </Section>
+
         <Section title="Account">
           <Button kind="secondary" label="Privacy policy" onPress={() => Linking.openURL('https://polycast.app/privacy')} />
           <Button kind="secondary" label="For podcast creators" onPress={() => Linking.openURL('https://polycast.app/creators')} />

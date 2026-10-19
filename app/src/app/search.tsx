@@ -1,9 +1,10 @@
 import type { PodcastSummary } from '@polycast/core'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { FlatList, TextInput, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt } from '../components/ui'
 import { api } from '../lib/api'
+import { showPeek } from '../lib/showPeek'
 import { languageName } from '../lib/languages'
 import { useSession } from '../lib/session'
 import { useTranslations } from '../lib/translate'
@@ -14,7 +15,9 @@ export default function Search() {
   const p = usePalette()
   const { profile } = useSession()
   const language = profile?.target_language ?? 'sv'
-  const [q, setQ] = useState('')
+  // Arriving from the Discover bar (PC-1017-F07), the search starts with what was typed there.
+  const { q: initial } = useLocalSearchParams<{ q?: string }>()
+  const [q, setQ] = useState(initial ?? '')
   const [results, setResults] = useState<PodcastSummary[]>([])
   const [error, setError] = useState<string>()
   // Result titles in the learner's language, in one request per result list (PC-1017-T1).
@@ -62,7 +65,7 @@ export default function Search() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
         renderItem={({ item }) => (
-          <Row accessibilityLabel={`${item.title}, ${item.author}`} onPress={() => router.push({ pathname: '/show', params: { appleId: item.appleId } })}>
+          <Row accessibilityLabel={`${item.title}, ${item.author}`} onPress={() => router.push({ pathname: '/show', params: { appleId: item.appleId, ...showPeek(item) } })}>
             <Artwork uri={item.artwork} size={60} />
             <View style={{ flex: 1 }}>
               <Txt variant="bodyStrong" numberOfLines={2}>

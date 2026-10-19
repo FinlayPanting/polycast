@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, View } from 'react-native'
 import { Artwork, Button, Notice, Screen, Tag, Txt, minutes } from '../../components/ui'
 import { api, refusalOf } from '../../lib/api'
-import { GUIDANCE, guideName, guidanceLevelOr, languageName, type GuidanceLevelId } from '../../lib/languages'
+import { GUIDANCE, guideName, guidanceLevelOr, languageName, voicedGuideId, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
 import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '../../lib/offline'
 import { earlyPrimerUrl, jumpStart, loadEarlyPrimer, primerSource } from '../../lib/primer'
@@ -51,6 +51,7 @@ export default function Episode() {
     void loadOwnKeys().then(setOwnKeys)
   }, [])
   const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
+  const [serverGuide, setServerGuide] = useState<string>()
   const [earlyPrimer, setEarlyPrimer] = useState<PrimerData>()
 
   const { data: ep, reload } = useAsync(async () => {
@@ -71,7 +72,14 @@ export default function Episode() {
   useEffect(() => {
     if (ep?.status !== 'ready' || offline) return
     let live = true
-    api.primer(ep.id).then((r) => live && setServerPrimer(r.primer), () => live && setServerPrimer(null))
+    api.primer(ep.id).then(
+      (r) => {
+        if (!live) return
+        setServerPrimer(r.primer)
+        setServerGuide(r.guideId ?? undefined)
+      },
+      () => live && setServerPrimer(null),
+    )
     return () => {
       live = false
     }
@@ -160,6 +168,8 @@ export default function Episode() {
   // From the episode map: start listening a few seconds before that place (PC-1017-P5).
   const listenFrom = (at: number) => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '1', level, from: String(jumpStart(at)) } })
   const savedLesson = saved ? loadLesson(ep.id)?.payload : undefined
+  // Named after the voice the learner will hear: the saved lesson's, else the one the server will play (PC-1017-F01).
+  const readyGuide = guideName(voicedGuideId(savedLesson?.guideId ?? serverGuide, profile?.guide_id))
   const primer = ep.status === 'ready' ? primerSource(savedLesson && { primer: savedLesson.plan?.primer, audioUrl: savedLesson.episode.audioUrl }, serverPrimer, ep.audio_url, canSyncOnDevice) : undefined
   // The last choice becomes the default for the next episode (PC-1017-F13).
   const chooseLevel = (l: GuidanceLevelId) => void updatePrefs({ guidance_level: l }).catch(() => undefined)
@@ -196,7 +206,7 @@ export default function Episode() {
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
+    <Screen edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
         <Button kind="quiet" label="Back" onPress={() => router.back()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
         <Artwork uri={ep.image ?? ep.podcasts.artwork} size={primer ? 120 : 240} radius={primer ? 14 : 20} />
@@ -223,8 +233,8 @@ export default function Episode() {
 
         {ep.status === 'ready' ? (
           <View style={{ gap: space.sm }}>
-            <LevelPicker guide={guideName(profile?.guide_id)} value={level} onChange={chooseLevel} />
-            <Button label={`Listen with ${guideName(profile?.guide_id)}`} onPress={listenNow} />
+            <LevelPicker guide={readyGuide} value={level} onChange={chooseLevel} />
+            <Button label={`Listen with ${readyGuide}`} onPress={listenNow} />
             <Button kind="secondary" label="Subtitles only" onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '0' } })} />
             {canSyncOnDevice ? (
               <View style={{ gap: space.xs, paddingTop: space.sm }} accessibilityLiveRegion="polite">
@@ -233,7 +243,7 @@ export default function Episode() {
                     {saving.step === 'downloading'
                       ? `Saving to your phone: the episode, ${Math.round(saving.progress * 100)}%`
                       : saving.step === 'guide'
-                        ? `Saving to your phone: ${guideName(profile?.guide_id)}’s voice, ${Math.round(saving.progress * 100)}%`
+                        ? `Saving to your phone: ${readyGuide}’s voice, ${Math.round(saving.progress * 100)}%`
                         : 'Saving to your phone: lining up your lesson'}
                   </Txt>
                 ) : saved ? (

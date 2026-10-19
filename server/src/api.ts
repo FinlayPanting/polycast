@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
-import { cohortAlert, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
+import { cohortAlert, isTipProduct, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -181,6 +181,8 @@ export function createApi(deps: ApiDeps) {
     }
     const userId = event?.app_user_id
     if (!userId) return c.json({ ok: true })
+    // A tip (PC-1017-K3) is a one-off thank-you: it never touches the learner's plan.
+    if (isTipProduct(event.product_id)) return c.json({ ok: true })
     const active = ['INITIAL_PURCHASE', 'RENEWAL', 'UNCANCELLATION', 'PRODUCT_CHANGE'].includes(event.type)
     const ended = event.type === 'EXPIRATION'
     if (active) {
@@ -298,17 +300,26 @@ export function createApi(deps: ApiDeps) {
     const body = await c.req.json()
     let feedUrl: string | undefined = body.feedUrl
     if (!feedUrl && body.podcastId) feedUrl = (await sql`select feed_url from podcasts where id = ${body.podcastId}`)[0]?.feed_url
-    const apple = body.appleId ? await lookupApple(deps.fetch, String(body.appleId)) : undefined
+    // A show already in the catalogue needs no trip to Apple to find its feed (PC-1017-F03).
+    if (!feedUrl && body.appleId) feedUrl = (await sql`select feed_url from podcasts where apple_id = ${String(body.appleId)}`)[0]?.feed_url
+    const apple = !feedUrl && body.appleId ? await lookupApple(deps.fetch, String(body.appleId)) : undefined
     feedUrl ??= apple?.feedUrl
     if (!feedUrl) return c.json({ error: 'We couldn’t find this show’s feed.' }, 404)
-    const [known] = await sql`select id, removed from podcasts where feed_url = ${feedUrl}`
+    const [known] = await sql`select id, removed, updated_at from podcasts where feed_url = ${feedUrl}`
     if (known?.removed) return c.json({ error: 'This show isn’t available on Polycast.' }, 404)
     let podcastId: string
-    try {
-      podcastId = (await syncFeed(sql, deps.fetch, feedUrl, apple, { lookupHost: deps.lookupHost })).podcastId
-    } catch {
-      if (!known) return c.json({ error: 'We couldn’t load this show right now.' }, 502)
-      podcastId = known.id // serve what we have
+    if (known && showIsFresh(known.updated_at, new Date())) podcastId = known.id
+    else {
+      // Re-read the feed. A known show doesn't wait more than a few seconds for a slow feed: it's
+      // served as it was, and the re-read finishes in the background for next time.
+      const sync = syncFeed(sql, deps.fetch, feedUrl, apple, { lookupHost: deps.lookupHost }).then((r) => r.podcastId)
+      try {
+        podcastId = known ? await withDeadline(sync, SHOW_SYNC_WAIT_MS, known.id) : await sync
+      } catch {
+        if (!known) return c.json({ error: 'We couldn’t load this show right now.' }, 502)
+        podcastId = known.id // serve what we have
+      }
+      sync.catch(() => {})
     }
     const [podcast] = await sql`select id, title, author, artwork, language, description from podcasts where id = ${podcastId}`
     const episodes = await sql`
@@ -369,8 +380,12 @@ export function createApi(deps: ApiDeps) {
     const episodeId = c.req.param('id')
     const [episode] = await sql`select e.status from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`
     if (!episode) return c.json({ error: 'Not found' }, 404)
+    // Which guide's voice a listen would play now (PC-1017-F01): the learner's own if it's been
+    // recorded for this episode, else the one it was prepared with. The screen names that guide.
+    const [profile] = await sql`select guide_id from profiles where id = ${c.get('userId')}`
+    const [voice] = episode.status === 'ready' ? await sql`select guide_id from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1` : []
     const [row] = episode.status === 'ready' ? await sql`select plan->'primer' as primer from lesson_plans where episode_id = ${episodeId} and plan ? 'primer' limit 1` : []
-    return c.json({ primer: row?.primer ?? null })
+    return c.json({ primer: row?.primer ?? null, guideId: voice?.guide_id ?? null })
   })
 
   /**
@@ -393,7 +408,7 @@ export function createApi(deps: ApiDeps) {
     const guided = route === 'listen' ? (await startListen(sql, userId, episodeId, level)).guided : await guideAllowed(sql, userId, episodeId, level)
     const [transcript] = await sql`select language, segments, words, glossary from transcripts where episode_id = ${episodeId}`
     const [plan] = guided
-      ? await sql`select plan from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
+      ? await sql`select plan, guide_id from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
       : []
     return c.json({
       episode: { id: episode.id, title: episode.title, podcastTitle: episode.podcast_title, audioUrl: episode.audio_url, image: episode.image ?? episode.artwork, durationSec: episode.duration_sec },
@@ -401,6 +416,9 @@ export function createApi(deps: ApiDeps) {
       guided,
       guidanceLevel: guided ? level : null,
       plan: plan?.plan ?? null,
+      // The guide whose voice this plan was recorded in (PC-1017-F01), so the player names the guide
+      // the learner actually hears, even after they switch guides in settings.
+      guideId: plan?.guide_id ?? null,
       // This is the free episode a free learner chose: its wrap-up gently mentions Plus.
       freeEpisode: profile?.plan !== 'plus' && (await sql`select 1 from prep_jobs where episode_id = ${episodeId} and requested_by = ${userId} and charge = 'freeEpisode' limit 1`).length > 0,
       // Lets the app line the lesson up with the learner's own copy of the episode.
@@ -409,6 +427,31 @@ export function createApi(deps: ApiDeps) {
   })
 
   return app
+}
+
+/**
+ * Opening a show re-read its feed every time, which could take up to 15 seconds (PC-1017-F03). A
+ * show read in the last 15 minutes is served straight from the catalogue; an older one gets a few
+ * seconds for the re-read before it's served as it was.
+ */
+export const SHOW_FRESH_MS = 15 * 60_000
+export const SHOW_SYNC_WAIT_MS = 3_000
+
+export function showIsFresh(updatedAt: Date | string | null | undefined, now: Date): boolean {
+  if (!updatedAt) return false
+  const age = now.getTime() - new Date(updatedAt).getTime()
+  return age >= 0 && age < SHOW_FRESH_MS
+}
+
+/** The promise's value if it settles in time, else `fallback` (the promise carries on regardless). */
+export function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => resolve(fallback), ms)
+    p.then(
+      (v) => (clearTimeout(t), resolve(v)),
+      (e) => (clearTimeout(t), reject(e)),
+    )
+  })
 }
 
 /** The Monday that starts the previous full week, UTC. */
