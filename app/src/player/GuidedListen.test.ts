@@ -457,4 +457,47 @@ describe('Line by line (PC-1018-07)', () => {
     await listen.resume()
     expect(audio.pos).toBe(5)
   })
+
+  it('pauses at the exact end of the line with a timer, not on the next progress update (PC-1020-03)', async () => {
+    const audio = fakeAudio()
+    const timers: { fn: () => void; ms: number; cancelled: boolean }[] = []
+    const listen = new GuidedListen({
+      audio, voice: fakeVoice(), moments: [], segments, sleep: async () => {},
+      setTimer: (fn, ms) => {
+        const t = { fn, ms, cancelled: false }
+        timers.push(t)
+        return () => void (t.cancelled = true)
+      },
+    })
+    await listen.start(track)
+    listen.setLineByLine(true)
+    await audio.advance(4.0) // s0 ends at 4.5; at 4.0 it's 0.5 s away
+    expect(timers).toHaveLength(1)
+    expect(timers[0]!.ms).toBe(500)
+    expect(listen.current.phase).toBe('playing')
+    timers[0]!.fn()
+    await flush()
+    expect(listen.current.phase).toBe('paused')
+    expect(listen.current.lineHeld).toBe(true)
+    expect(listen.current.position).toBe(4.5)
+
+    // Play carries on from the end of the held line, without stopping on it a second time.
+    await audio.seek(4.5) // where the real playhead is when the timer fires
+    await listen.resume()
+    await listen.setRate(2)
+    await audio.advance(1) // past 4.5 and into s1
+    expect(listen.current.phase).toBe('playing')
+    expect(timers).toHaveLength(1)
+
+    // Sped up, the wait is shorter (armed at 8.5, a second of episode before s1's end); a seek cancels it.
+    await audio.advance(3.5)
+    const armed = timers[timers.length - 1]!
+    expect(timers).toHaveLength(2)
+    expect(armed.ms).toBe(500)
+    await listen.seek(2)
+    expect(armed.cancelled).toBe(true)
+    armed.fn()
+    await flush()
+    expect(listen.current.phase).toBe('playing')
+  })
 })

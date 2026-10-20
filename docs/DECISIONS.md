@@ -335,3 +335,7 @@ Board item PC-1020-01. When a prepare starts from a saved transcript (a retry, o
 ## The Library's new-episodes check (20 Oct 2026)
 
 Board item PC-1020-02. The Library now asks `POST /v1/library/new-episodes` once with every followed show (up to 200), and the server answers from the catalogue: each show's episodes from the last 14 days (up to 10 each). It has its own limit (20 a minute per learner), so opening a show page afterwards never hits "slow down". To keep the catalogue current without opening each show, every call also re-reads, in the background, up to three of those shows whose feeds are older than 15 minutes (stalest first); their new episodes show on the next visit. Simplest options picked: follows stay on the phone and are sent with the request.
+
+## Line by line stops cleanly (20 Oct 2026)
+
+Board item PC-1020-03. Once a line's end is within 0.6 seconds of real time (worked out at the current playback speed), Line by line sets a short timer that pauses at the line's exact end; a seek, pause, speed change, turning it off or the guide stepping in cancels it. The old progress check stays as a fallback but now waits until playback is actually past the end, and the line just held is never stopped on twice, so play carries on cleanly from the held place.

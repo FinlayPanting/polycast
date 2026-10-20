@@ -448,6 +448,14 @@
    "title": "New episodes from every show you follow",
    "description": "The Library now checks all the shows you follow in one go, not just the first 12, and no longer leaves you with 'Give it a moment' when you open a show straight after.",
    "tryIt": "Library, then New episodes"
+  },
+  {
+   "id": "PC-1020-03",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Line by line stops cleanly",
+   "description": "Line by line now pauses exactly at the end of each line, even when sped up, so you no longer hear a clipped first syllable of the next one.",
+   "tryIt": "In the player, More, then Line by line"
   }
  ]
 }

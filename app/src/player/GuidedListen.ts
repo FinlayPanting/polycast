@@ -1,7 +1,7 @@
 import { GuideTimeline, playSteps, replayLineStart, type GuideMoment, type Segment } from '@polycast/core'
 import { plog } from '../lib/playbackLog'
 import type { EpisodeAudio, GuideVoice, RemoteCommand } from './types'
-import { lineJustEnded } from './lineByLine'
+import { lineEndingSoon, lineJustEnded } from './lineByLine'
 
 export type Phase = 'loading' | 'playing' | 'paused' | 'guide' | 'question' | 'finished'
 
@@ -35,6 +35,8 @@ export interface ListenOptions {
   inForeground?: () => boolean
   /** Said after the wrap-up on a guided listen (voiced ahead of time). Missing or unplayable: skipped. */
   goodbye?: () => { url: string; text: string; meaning: string } | undefined
+  /** Timers for Line by line's exact end-of-line pause; tests pass fake ones. Returns a cancel. */
+  setTimer?: (fn: () => void, ms: number) => () => void
 }
 
 /** Trace of what the player does: Terminal in development, and the shareable playback log on a test phone. */
@@ -88,6 +90,10 @@ export class GuidedListen {
   private lineByLine = false
   /** Where the next line starts, while Line by line holds the episode at the end of one. */
   private lineResumeAt: number | undefined
+  /** Line by line's timer for the exact end of the line playing now (PC-1020-03). */
+  private lineTimer: { lineId: string; cancel: () => void } | undefined
+  /** The line just held at: play carries on past its end without stopping on it again. */
+  private heldLineId: string | undefined
 
   constructor(private readonly o: ListenOptions) {
     this.timeline = new GuideTimeline(o.moments)
@@ -137,17 +143,50 @@ export class GuidedListen {
     const due = this.timeline.tick(position)
     if (due.length > 0) return this.runMoments(due)
     if (this.lineByLine) {
+      this.armLineEnd(position)
       const ended = lineJustEnded(this.o.segments, previous, position)
       // The guide is about to step in at this pause anyway: let it, rather than stopping twice.
-      if (ended) {
+      if (ended && ended.line.id !== this.heldLineId) {
         const guideNext = this.timeline.next(position)
-        if (!guideNext || guideNext.at > ended.nextStart + 0.3) await this.holdLine(ended.nextStart)
+        if (!guideNext || guideNext.at > ended.nextStart + 0.3) await this.holdLine(ended.nextStart, undefined, ended.line.id)
       }
     }
   }
 
+  /**
+   * Line by line: as a line nears its end, a short timer pauses at its exact end, allowing for the
+   * playback speed (PC-1020-03). Anything that moves or stops playback cancels it.
+   */
+  private armLineEnd(position: number) {
+    const soon = lineEndingSoon(this.o.segments, position, this.state.rate || 1)
+    if (!soon || this.lineTimer?.lineId === soon.line.id || soon.line.id === this.heldLineId) return
+    this.cancelLineTimer()
+    // The guide is about to step in at this pause anyway: let it, rather than stopping twice.
+    const guideNext = this.timeline.next(position)
+    if (guideNext && guideNext.at <= soon.nextStart + 0.3) return
+    const set = this.o.setTimer ?? ((fn: () => void, ms: number) => {
+      const t = setTimeout(fn, ms)
+      return () => clearTimeout(t)
+    })
+    const lineId = soon.line.id
+    const cancel = set(() => {
+      if (this.lineTimer?.lineId !== lineId) return
+      this.lineTimer = undefined
+      if (this.lineByLine && this.state.phase === 'playing') void this.holdLine(soon.nextStart, soon.line.end, lineId)
+    }, soon.inMs)
+    this.lineTimer = { lineId, cancel }
+  }
+
+  private cancelLineTimer() {
+    this.lineTimer?.cancel()
+    this.lineTimer = undefined
+  }
+
   /** Line by line: hold at the end of this line, with it still on screen, until play. */
-  private async holdLine(nextStart: number) {
+  private async holdLine(nextStart: number, endedAt?: number, lineId?: string) {
+    this.cancelLineTimer()
+    this.heldLineId = lineId
+    if (endedAt !== undefined) this.set({ position: endedAt })
     trace(`line by line: holding, next line at ${fmt(nextStart)}`)
     this.lineResumeAt = nextStart
     this.set({ phase: 'paused', lineHeld: true })
@@ -158,7 +197,10 @@ export class GuidedListen {
   /** Turns Line by line on or off (PC-1018-07). */
   setLineByLine(on: boolean): void {
     this.lineByLine = on
-    if (!on) this.lineResumeAt = undefined
+    if (!on) {
+      this.lineResumeAt = undefined
+      this.cancelLineTimer()
+    }
     this.set({ lineByLine: on, lineHeld: on ? this.state.lineHeld : false })
   }
 
@@ -296,6 +338,7 @@ export class GuidedListen {
       return
     }
     if (this.state.phase !== 'playing') return
+    this.cancelLineTimer()
     await this.o.audio.pause()
     this.set({ phase: 'paused' })
     this.o.onSavePosition?.(this.state.position)
@@ -331,6 +374,8 @@ export class GuidedListen {
       this.skipGuide()
     }
     this.lineResumeAt = undefined
+    this.heldLineId = undefined
+    this.cancelLineTimer()
     this.timeline.seek(to)
     await this.o.audio.seek(to)
     this.set({ position: to, lineHeld: false })
@@ -352,6 +397,8 @@ export class GuidedListen {
   }
 
   async setRate(rate: number): Promise<void> {
+    // The end-of-line timer was worked out at the old speed: the next progress update re-arms it.
+    this.cancelLineTimer()
     await this.o.audio.setRate(rate)
     this.set({ rate })
   }
@@ -391,6 +438,7 @@ export class GuidedListen {
   }
 
   async dispose(): Promise<void> {
+    this.cancelLineTimer()
     this.unsubscribe.forEach((u) => u())
     this.unsubscribe = []
     this.o.voice.stop()
