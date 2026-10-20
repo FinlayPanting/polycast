@@ -418,14 +418,6 @@
    "tryIt": "Search for a show, refine it a few times, then open one"
   },
   {
-   "id": "PC-1019-09",
-   "date": "2026-10-20",
-   "kind": "Feature",
-   "title": "Discover says hello",
-   "description": "Discover now greets you in the language you're learning, by time of day, with the odd local wink. Tap it for the English.",
-   "tryIt": "Open Discover, then tap the greeting under your language"
-  },
-  {
    "id": "PC-1020-09",
    "date": "2026-10-20",
    "kind": "Bug",

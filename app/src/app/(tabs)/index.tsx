@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { LanguageSheet } from '../../components/LanguageSheet'
 import { Mark } from '../../components/Mark'
@@ -9,22 +9,17 @@ import { api } from '../../lib/api'
 import { guideName, languageName } from '../../lib/languages'
 import { MoodPicks } from '../../components/MoodPicks'
 import { useSession } from '../../lib/session'
-import { greeting } from '../../lib/greeting'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 
 export default function Discover() {
   const p = usePalette()
-  const { profile, session, updatePrefs } = useSession()
+  const { profile, updatePrefs } = useSession()
   const [picking, setPicking] = useState(false)
-  const [inEnglish, setInEnglish] = useState(false)
   // Only for a pull: the shelves kept from last time refresh quietly behind the scenes.
   const [refreshing, setRefreshing] = useState(false)
   const language = profile?.target_language ?? 'sv'
-  // A hello in the language being learned, by time of day (PC-1019-09). Worked out when Discover opens.
-  const meta = session?.user?.user_metadata as { full_name?: string; name?: string } | undefined
-  const hello = useMemo(() => greeting(language, new Date(), meta?.full_name ?? meta?.name), [language, meta?.full_name, meta?.name])
   const { data, error, reload } = useAsync(() => api.discover(language), [language], { cacheKey: `discover:${language}` })
 
   return (
@@ -51,19 +46,6 @@ export default function Discover() {
             </Txt>
             <SymbolView name="chevron.down" size={16} tintColor={p.quiet} />
           </Pressable>
-          {hello ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={inEnglish ? `${hello.english}${hello.wink ? `. ${hello.wink.english}` : ''}` : `${hello.text}${hello.wink ? `. ${hello.wink.text}` : ''}`}
-              accessibilityHint={inEnglish ? 'Shows it in the language you are learning' : 'Shows it in English'}
-              onPress={() => setInEnglish((v) => !v)}
-              hitSlop={8}
-              style={({ pressed }) => ({ alignSelf: 'flex-start', opacity: pressed ? 0.6 : 1 })}
-            >
-              <Txt variant="heading">{inEnglish ? hello.english : hello.text}</Txt>
-              {hello.wink ? <Txt tone="quiet">{inEnglish ? hello.wink.english : hello.wink.text}</Txt> : null}
-            </Pressable>
-          ) : null}
         </View>
 
         <MoodPicks key={language} language={language} guideName={guideName(profile?.guide_id)} flagId={profile?.flag_id} />
