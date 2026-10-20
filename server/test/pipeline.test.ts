@@ -226,6 +226,43 @@ describe('fingerprinting the copy we transcribe', () => {
     const r = await prepareEpisode({ ...input(d.ep), savedTranscript: saved, savedSyncUrl: 'https://storage.test/sync/ep1.fp' }, d)
     expect(r.plan.syncUrl).toBe('https://storage.test/sync/ep1.fp')
   })
+
+  it("carries the show's loudness over when a prepare starts from a saved transcript (PC-1020-01)", async () => {
+    const d = deps()
+    let saved: any
+    await prepareEpisode(input(d.ep), { ...d, saveTranscript: async (t) => void (saved = t) })
+    let downloads = 0
+    const r = await prepareEpisode(
+      { ...input(d.ep), savedTranscript: saved, savedLoudnessLufs: -27.5 },
+      { ...d, downloadAudio: async () => (downloads++, new Uint8Array([1])), fingerprint: async (a) => a, loudness: async () => -10 },
+    )
+    expect(r.plan.loudnessLufs).toBe(-27.5)
+    expect(downloads).toBe(0)
+    const none = await prepareEpisode({ ...input(d.ep), savedTranscript: saved }, d)
+    expect(none.plan.loudnessLufs).toBeUndefined()
+  })
+
+  it("measures the loudness of an episode with the feed's own transcript, without fingerprinting it (PC-1020-01)", async () => {
+    const d = deps()
+    const bytes = new Uint8Array([4, 5, 6])
+    let measured: Uint8Array | undefined
+    let fingerprinted = 0
+    let transcribed = 0
+    const transcriber = { transcribe: async (...a: Parameters<typeof d.transcriber.transcribe>) => (transcribed++, d.transcriber.transcribe(...a)) }
+    const r = await prepareEpisode(
+      { ...input(d.ep), feedWords: d.ep.words },
+      { ...d, transcriber, downloadAudio: async () => bytes, fingerprint: async (a) => (fingerprinted++, a), loudness: async (a) => ((measured = a), -21) },
+    )
+    expect(measured).toBe(bytes)
+    expect(r.plan.loudnessLufs).toBe(-21)
+    expect(r.plan.syncUrl).toBeUndefined()
+    expect(fingerprinted).toBe(0)
+    expect(transcribed).toBe(0)
+    // A copy that won't download doesn't stop the lesson.
+    const failed = await prepareEpisode({ ...input(d.ep), feedWords: d.ep.words }, { ...d, downloadAudio: async () => { throw new Error('404') }, fingerprint: async (a) => a, loudness: async () => -21 })
+    expect(failed.plan.loudnessLufs).toBeUndefined()
+    expect(failed.plan.moments.length).toBeGreaterThan(0)
+  })
 })
 
 describe('resuming a retried episode', () => {

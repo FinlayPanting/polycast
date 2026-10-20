@@ -327,3 +327,7 @@ Board item PC-1020-09. The episode screen now asks `GET /v1/episodes/:id/own-key
 ## The line you're hearing, on the lock screen (20 Oct 2026)
 
 Board item PC-1020-08. While an episode plays (or is paused mid-listen), the lock screen and Control Centre show the current subtitle line as the title and its English as the subtitle, through the track player's now-playing details (artwork and length kept). It changes only when the line changes. Simplest options picked: it follows the learner's saved subtitle setting (target only shows the show's name underneath; subtitles off keeps the episode title and show), and before the first line the episode title shows as before.
+
+## Mia's volume match survives re-plans and Leo versions (20 Oct 2026)
+
+Board item PC-1020-01. When a prepare starts from a saved transcript (a retry, or Polycast's re-plan of an older lesson), the loudness measured for the episode's earlier plan is carried into the new plan, as the fingerprint already was. Episodes with the feed's own transcript now have a copy downloaded just to measure loudness (no fingerprint, nothing kept); if the download fails the lesson goes ahead without it. To make the carry-over possible, re-plans no longer delete the old plans when they're queued: the episode is 'preparing' meanwhile so nothing is served, and writing the new plan clears any plan from an older version. A voice pass for a second guide now copies the newest plan.

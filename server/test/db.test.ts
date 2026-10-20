@@ -23,6 +23,7 @@ import {
 } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
 import { LESSON_PLAN_VERSION } from '@polycast/core'
+import { savedLoudness } from '../src/worker'
 
 const run = PG_TEST_URL ? describe : describe.skip
 
@@ -277,15 +278,24 @@ run('database', () => {
       const result = fakeResult(ep, 'mia')
       ;(result.plan as any).syncUrl = 'https://s/sync.fp'
       result.plan.version = LESSON_PLAN_VERSION - 1
+      ;(result.plan as any).loudnessLufs = -26
       await sql`update prep_jobs set status = 'running' where id = ${job!.id}`
       await completePreparation(sql, job!.id, result)
       expect(await queueSyncUpgrades(sql)).toBe(1)
+      expect(await savedLoudness(sql, ep)).toBe(-26)
       const [e] = await sql`select status from episodes where id = ${ep}`
       expect(e!.status).toBe('preparing')
       expect(await sql`select 1 from transcripts where episode_id = ${ep}`).toHaveLength(1)
-      expect(await sql`select 1 from lesson_plans where episode_id = ${ep}`).toHaveLength(0)
-      const [queued] = await sql`select charge, guide_id, requested_by from prep_jobs where episode_id = ${ep} and status = 'queued'`
+      // The old plan waits for the new one, so the re-plan can carry its loudness over (PC-1020-01).
+      expect(await sql`select 1 from lesson_plans where episode_id = ${ep}`).toHaveLength(1)
+      const [queued] = await sql`select id, charge, guide_id, requested_by from prep_jobs where episode_id = ${ep} and status = 'queued'`
       expect(queued).toMatchObject({ charge: 'none', guide_id: 'mia', requested_by: a })
+      expect(await queueSyncUpgrades(sql)).toBe(0)
+      await sql`update prep_jobs set status = 'running' where id = ${queued!.id}`
+      const replanned = fakeResult(ep, 'mia')
+      ;(replanned.plan as any).syncUrl = 'https://s/sync.fp'
+      await completePreparation(sql, queued!.id, replanned)
+      expect((await sql`select version from lesson_plans where episode_id = ${ep}`).map((r) => r.version)).toEqual([LESSON_PLAN_VERSION])
       expect(await queueSyncUpgrades(sql)).toBe(0)
     })
 

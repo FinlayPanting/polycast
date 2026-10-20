@@ -208,6 +208,8 @@ export async function completePreparation(
       insert into lesson_plans (episode_id, guide_id, version, plan)
       values (${episodeId}, ${result.guideId}, ${result.plan.version}, ${tx.json(result.plan as any)})
       on conflict (episode_id, guide_id) do update set plan = excluded.plan, version = excluded.version`
+    // Plans from an older version (other guides' too) are replaced by this one.
+    await tx`delete from lesson_plans where episode_id = ${episodeId} and version < ${result.plan.version}`
     // ready_at stays the first time it was ready, so a quiet re-prep doesn't jump it up 'recently ready'.
     await tx`update episodes set status = 'ready', ready_at = coalesce(ready_at, now()), difficulty = ${tx.json(result.difficulty as any)} where id = ${episodeId}`
     await tx`update prep_jobs set status = 'done', stage = 'done', finished_at = now(), cost_usd = ${costUSD(result.usage)} where id = ${jobId}`
@@ -291,7 +293,9 @@ export async function queueSyncUpgrades(sql: Sql): Promise<number> {
         and exists (select 1 from transcripts t where t.episode_id = e.id)
       for update of e skip locked`
     for (const e of old) {
-      await tx`delete from lesson_plans where episode_id = ${e.id} and version < ${LESSON_PLAN_VERSION}`
+      // The old plans stay until the new one is written (completePreparation clears them), so the
+      // re-plan can carry over what was measured from the audio, like its loudness (PC-1020-01).
+      // The episode is 'preparing' meanwhile, so none of them is served.
       await tx`update episodes set status = 'preparing' where id = ${e.id}`
       await tx`
         insert into prep_jobs (episode_id, requested_by, kind, guide_id, charge, charged_sec)

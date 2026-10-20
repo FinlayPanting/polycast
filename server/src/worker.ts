@@ -75,6 +75,14 @@ async function feedWordsFor(deps: WorkerDeps, feedUrl: string, guid: string, lan
   }
 }
 
+/** The loudness measured for an episode's earlier plan, if any (PC-1020-01). */
+export async function savedLoudness(sql: Sql, episodeId: string): Promise<number | undefined> {
+  const [row] = await sql`
+    select (plan->>'loudnessLufs')::float8 as lufs from lesson_plans
+    where episode_id = ${episodeId} and plan ? 'loudnessLufs' order by created_at desc limit 1`
+  return row && Number.isFinite(row.lufs) ? Number(row.lufs) : undefined
+}
+
 /** The show's title, its hosts (the feed's author) and names that recur in its episode titles. */
 export async function showNamesFor(sql: Sql, podcastId: string): Promise<ShowNames> {
   const [p] = await sql`select title, author from podcasts where id = ${podcastId}`
@@ -117,7 +125,7 @@ async function runJobWith(deps: WorkerDeps, job: ClaimedJob, ownGuard?: SpendGua
   try {
     const g = ownGuard ?? (await guard(deps))
     if (job.kind === 'voice') {
-      const [row] = await sql`select plan from lesson_plans where episode_id = ${job.episodeId} limit 1`
+      const [row] = await sql`select plan from lesson_plans where episode_id = ${job.episodeId} order by version desc, created_at desc limit 1`
       const { plan, usage } = await voiceForGuide(job.id, row!.plan as LessonPlan, guide, ep!.duration_sec, { ...deps, guard: g })
       await sql`insert into lesson_plans (episode_id, guide_id, version, plan) values (${job.episodeId}, ${guide.id}, ${plan.version}, ${sql.json(plan as any)})
                 on conflict (episode_id, guide_id) do update set plan = excluded.plan`
@@ -144,6 +152,7 @@ async function runJobWith(deps: WorkerDeps, job: ClaimedJob, ownGuard?: SpendGua
         feedWords: saved ? undefined : await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
         savedTranscript: saved,
         savedSyncUrl: saved ? await deps.storage.exists?.(syncPath(job.episodeId)) : undefined,
+        savedLoudnessLufs: saved ? await savedLoudness(sql, job.episodeId) : undefined,
         names: saved ? undefined : await showNamesFor(sql, ep!.podcast_id),
       },
       {
