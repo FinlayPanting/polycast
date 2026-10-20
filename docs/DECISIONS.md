@@ -267,3 +267,7 @@ Board item PC-1017-10. A removal request (show, contact details, message) is del
 ## Top charts: plain numbers and genre tags (20 Oct 2026)
 
 Board item PC-1017-F08, replacing PC-1014-07's country tags. The Top charts shelf already says which chart it is, so each show now has just its place (1, 2, 3…) beside its title and a small genre tag (its first Apple genre other than the catch-all "Podcasts") above it. `chartTag` returns the plain number; `chartGenre` picks the genre. Simplest option picked: no genre tag when Apple gives none, and genre tags only on chart shows.
+
+## Listen later, kept on the phone (20 Oct 2026)
+
+Board item PC-1017-F10. Any episode can be kept for later from its page ("Listen later", tap again to take it out) or from the "Later" tap on each episode row of a show page; the list sits at the top of the Library, newest first, each with Remove. Simplest option picked: the list is kept on the phone (AsyncStorage, `app/src/lib/keptList.ts`) rather than on the account, so it needs no new database table; it holds up to 300 episodes. Moving it to the account (so it follows a learner to a new phone) would need a migration and can come later.

@@ -21,6 +21,8 @@ import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 import { loadOwnKeys, type OwnKeys } from '../../lib/ownKeys'
 import { OWN_KEYS_COST_LINE, SLOW_KEY_LINE } from '../../lib/ownKeysCore'
+import { listenLater, useKept } from '../../lib/keptList'
+import { laterId, laterLabel } from '../../lib/keptListCore'
 
 const STAGES: Record<string, string> = {
   transcribing: 'Listening to the episode',
@@ -50,6 +52,7 @@ export default function Episode() {
   useEffect(() => {
     void loadOwnKeys().then(setOwnKeys)
   }, [])
+  const later = useKept(listenLater)
   const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
   const [serverGuide, setServerGuide] = useState<string>()
   const [earlyPrimer, setEarlyPrimer] = useState<PrimerData>()
@@ -225,6 +228,7 @@ export default function Episode() {
             {ep.status === 'ready' ? <Tag label="Ready" tone="play" /> : null}
             {ep.difficulty ? <Tag label={ep.difficulty.label} tone="level" /> : null}
           </View>
+          <LaterButton saved={later.some((l) => laterId(l) === ep.id)} onPress={() => void listenLater.toggle({ episodeId: ep.id, title: ep.title, podcastTitle: ep.podcasts.title, image: ep.image ?? ep.podcasts.artwork, durationSec: ep.duration_sec, addedAt: new Date().toISOString() })} />
         </View>
 
         {primer ? (
@@ -320,4 +324,9 @@ function LevelPicker({ guide, value, onChange }: { guide: string; value: Guidanc
       </View>
     </View>
   )
+}
+
+/** Listen later (PC-1017-F10): keeps the episode in the Library's Listen later list. */
+function LaterButton({ saved, onPress }: { saved: boolean; onPress: () => void }) {
+  return <Button kind="quiet" label={laterLabel(saved)} accessibilityHint={saved ? 'Takes it out of Listen later' : 'Keeps it in your Library for later'} onPress={onPress} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
 }

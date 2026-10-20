@@ -8,6 +8,7 @@ import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 import { isSavedForOffline } from '../../lib/offline'
+import { LaterList } from '../../components/LaterList'
 
 /** Episodes started or finished, most recent first, with where the learner left off. */
 export default function Library() {
@@ -23,9 +24,18 @@ export default function Library() {
         refreshControl={<RefreshControl refreshing={loading && Boolean(data)} onRefresh={reload} tintColor={p.quiet} />}
         contentContainerStyle={{ padding: space.lg, gap: space.xs }}
         ListHeaderComponent={
-          <Txt variant="title" accessibilityRole="header" style={{ marginBottom: space.md }}>
-            Library
-          </Txt>
+          <View style={{ gap: space.md, marginBottom: space.md }}>
+            <Txt variant="title" accessibilityRole="header">
+              Library
+            </Txt>
+            <Txt variant="heading" accessibilityRole="header">
+              Listen later
+            </Txt>
+            <LaterList />
+            <Txt variant="heading" accessibilityRole="header" style={{ marginTop: space.md }}>
+              Your episodes
+            </Txt>
+          </View>
         }
         renderItem={({ item }) => {
           const left = Math.max(0, item.episodes.duration_sec - item.position_sec)

@@ -1,20 +1,42 @@
 import { goodFirstListen } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useMemo } from 'react'
-import { FlatList, View } from 'react-native'
+import { FlatList, Pressable, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/ui'
-import { api, type EpisodeListing } from '../lib/api'
+import { api, type EpisodeListing, type ShowPage } from '../lib/api'
+import { listenLater, useKept } from '../lib/keptList'
+import { laterId, laterLabel } from '../lib/keptListCore'
 import { useAsync } from '../lib/useAsync'
 import { useTranslations } from '../lib/translate'
 import { TranslatedDescription, TranslatedLine } from '../components/Translated'
-import { space } from '../theme'
+import { MIN_TAP, space } from '../theme'
 import { Loading } from '../components/Loading'
 
 function published(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
 
-export function EpisodeRow({ e, firstListen = false, translation, translating }: { e: EpisodeListing; firstListen?: boolean; translation?: string; translating?: boolean }) {
+/** Listen later from an episode row (PC-1017-F10): one tap keeps it, a second takes it out. */
+function LaterToggle({ e, show }: { e: EpisodeListing; show: ShowPage['podcast'] }) {
+  const later = useKept(listenLater)
+  const saved = later.some((l) => laterId(l) === e.id)
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: saved }}
+      accessibilityLabel={`${laterLabel(saved)}: ${e.title}`}
+      hitSlop={8}
+      onPress={() => void listenLater.toggle({ episodeId: e.id, title: e.title, podcastTitle: show.title, image: e.image ?? show.artwork, durationSec: e.duration_sec, addedAt: new Date().toISOString() })}
+      style={({ pressed }) => ({ minHeight: MIN_TAP, justifyContent: 'center', paddingLeft: space.sm, opacity: pressed ? 0.6 : 1 })}
+    >
+      <Txt variant="small" tone={saved ? 'play' : 'quiet'}>
+        {saved ? 'Saved' : 'Later'}
+      </Txt>
+    </Pressable>
+  )
+}
+
+export function EpisodeRow({ e, show, firstListen = false, translation, translating }: { e: EpisodeListing; show?: ShowPage['podcast']; firstListen?: boolean; translation?: string; translating?: boolean }) {
   const date = published(e.published)
   return (
     <Row accessibilityLabel={`${e.title}, ${minutes(e.duration_sec)}${e.status === 'ready' ? ', ready now' : ''}${firstListen ? ', good first listen' : ''}`} onPress={() => router.push(`/episode/${e.id}`)}>
@@ -33,6 +55,7 @@ export function EpisodeRow({ e, firstListen = false, translation, translating }:
           {e.difficulty ? <Tag label={e.difficulty.label.split(',')[0]!} tone="level" /> : null}
         </View>
       </View>
+      {show ? <LaterToggle e={e} show={show} /> : null}
     </Row>
   )
 }
@@ -88,7 +111,7 @@ export default function Show() {
           </View>
         }
         renderItem={({ item, index }) => (
-          <EpisodeRow e={item} firstListen={item.id === firstListen} translation={tr.titles.get(item.title)} translating={tr.pending && index < 39} />
+          <EpisodeRow e={item} show={data?.podcast} firstListen={item.id === firstListen} translation={tr.titles.get(item.title)} translating={tr.pending && index < 39} />
         )}
       />
     </Screen>
