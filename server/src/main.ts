@@ -96,7 +96,10 @@ async function main() {
   const translateText = geminiText(gemini, GEMINI_MODELS.textLite)
   // "Use your own API keys" (PC-1017-K1) is on once OWN_KEYS_SECRET (32 random bytes, base64) is set.
   const ownKeysSecret = process.env.OWN_KEYS_SECRET || undefined
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), translateText, ownKeysSecret, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
+  // Optional calibration of the own-keys cost estimate (PC-1017-K4), from logged preparations. Default 1.
+  const factor = (v: string | undefined) => (v && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 1)
+  const ownKeysCalibration = { elevenlabs: factor(process.env.OWN_KEYS_ELEVEN_FACTOR), google: factor(process.env.OWN_KEYS_GOOGLE_FACTOR) }
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), translateText, ownKeysSecret, ownKeysCalibration, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)

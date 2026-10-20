@@ -521,6 +521,26 @@ run('API and worker', () => {
     expect((await off.request('/v1/translate', { method: 'POST', headers: { Authorization: `Bearer ${someone}`, 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(503)
   })
 
+  it('estimates the cost on own keys from the length, and later says what it used (PC-1017-K4)', async () => {
+    const { ownKeysEstimate } = await import('@polycast/core')
+    const ben = await learner()
+    const est = await (await call(ben, 'GET', '/v1/keys/estimate?durationSec=1800')).json()
+    expect(est).toEqual(ownKeysEstimate(1800))
+    expect((await call(ben, 'GET', '/v1/keys/estimate?durationSec=abc')).status).toBe(400)
+    const calibrated = createApi({ sql, verify: async (t) => t, fetch: fakeFetch, lookupHost: publicHost, ownKeysCalibration: { elevenlabs: 2 } })
+    const doubled = await (await calibrated.request('/v1/keys/estimate?durationSec=1800', { headers: { Authorization: `Bearer ${ben}` } })).json()
+    expect(doubled.elevenlabsUSD).toBeGreaterThan(est.elevenlabsUSD)
+
+    const [show] = await sql`select id from podcasts where feed_url = ${FEED_URL}`
+    const [ep] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language) values (${show!.id}, 'cost-1', 'cost-1', 600, 'https://cdn.example.com/cost-1.mp3', 'sv') returning id`
+    expect(await (await call(ben, 'GET', `/v1/episodes/${ep!.id}/own-keys-cost`)).json()).toEqual({ usedUSD: null })
+    await sql`insert into prep_jobs (episode_id, requested_by, guide_id, charge, status, cost_usd, finished_at) values (${ep!.id}, ${ben}, 'mia', 'ownKeys', 'done', 0.3712, now())`
+    expect(await (await call(ben, 'GET', `/v1/episodes/${ep!.id}/own-keys-cost`)).json()).toEqual({ usedUSD: 0.3712 })
+    // Only the learner who paid sees it.
+    expect(await (await call(await learner(), 'GET', `/v1/episodes/${ep!.id}/own-keys-cost`)).json()).toEqual({ usedUSD: null })
+    expect(await (await call(ben, 'GET', '/v1/episodes/not-an-id/own-keys-cost')).json()).toEqual({ usedUSD: null })
+  })
+
   it('prepares an episode on a learner’s own keys: no allowance, their providers, keys gone afterwards (PC-1017-K1)', async () => {
     const SECRET = Buffer.alloc(32, 3).toString('base64')
     const keys = { elevenlabs: 'sk_eleven_abcdefghijklmnopqrstuvwx', gemini: 'AIzaSy-abcdefghijklmnopqrstuvwxyz0123' }

@@ -15,3 +15,24 @@ export const OWN_KEYS_COST_LINE = 'Prepared on your own API keys, so it doesn’
 
 /** The prepare screen's line while a free Google key's rate limit slows things down. */
 export const SLOW_KEY_LINE = 'Your free Google key is slowing this down'
+
+/** "$0.35" for an estimate already rounded to 5 cents. */
+export const dollars = (usd: number) => `$${usd.toFixed(2)}`
+
+/** The cost estimate by the prepare button (PC-1017-K4); always an estimate. */
+export function estimateLine(totalUSD: number): string {
+  return `About ${dollars(totalUSD)} on your keys`
+}
+
+/** The split, shown on tap: whose account pays for what. */
+export function estimateSplit(e: { elevenlabsUSD: number; googleUSD: number }): string[] {
+  return [`ElevenLabs, for the subtitles and voices: about ${dollars(e.elevenlabsUSD)}`, `Google, for the lessons: about ${dollars(e.googleUSD)}`]
+}
+
+/** On a ready episode: someone already prepared it, so it costs the learner nothing. */
+export const ALREADY_PREPARED_LINE = 'Free, already prepared'
+
+/** After preparing on their keys: what it actually used, at the providers' list prices. */
+export function usedLine(usd: number): string {
+  return `Used about ${dollars(usd < 0.05 ? 0.05 : Math.round(usd * 20) / 20)} on your keys`
+}

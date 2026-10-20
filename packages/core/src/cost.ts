@@ -143,3 +143,21 @@ export function ownKeysCostUSD(durationSec: number, at: Date = new Date()): { el
   const google = costUSD({ ...ZERO_USAGE, textInTokens: u.textInTokens, textOutTokens: u.textOutTokens }, at)
   return { elevenlabs, google }
 }
+
+/** An estimate shown to a learner: to the nearest 5 cents, and never "nothing" for real work. */
+export function toFiveCents(usd: number): number {
+  if (!Number.isFinite(usd) || usd <= 0) return 0
+  return Math.max(0.05, Math.round(usd * 20) / 20)
+}
+
+/**
+ * The cost estimate on an episode for learners on their own keys (PC-1017-K4), from its length
+ * (known from the feed before anything is downloaded). Worked out on the server, so prices and the
+ * calibration factors (from real logged preparations) change without an app update.
+ */
+export function ownKeysEstimate(durationSec: number, opts: { at?: Date; calibration?: { elevenlabs?: number; google?: number } } = {}): { elevenlabsUSD: number; googleUSD: number; totalUSD: number } {
+  const raw = ownKeysCostUSD(Math.max(0, durationSec), opts.at)
+  const e = raw.elevenlabs * (opts.calibration?.elevenlabs ?? 1)
+  const g = raw.google * (opts.calibration?.google ?? 1)
+  return { elevenlabsUSD: toFiveCents(e), googleUSD: toFiveCents(g), totalUSD: toFiveCents(e + g) }
+}

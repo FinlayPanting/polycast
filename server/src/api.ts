@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
-import { cohortAlert, isTipProduct, normaliseMood, REFUSAL_MESSAGES } from '@polycast/core'
+import { cohortAlert, isTipProduct, normaliseMood, ownKeysEstimate, REFUSAL_MESSAGES } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -52,6 +52,8 @@ export interface ApiDeps {
   guard?: SpendGuard
   /** Encrypts learners' own API keys while their job runs (PC-1017-K1). Unset: own keys are off. */
   ownKeysSecret?: string
+  /** Scales the own-keys cost estimate per provider, calibrated from logged preparations (PC-1017-K4). */
+  ownKeysCalibration?: { elevenlabs?: number; google?: number }
 }
 
 type Env = { Variables: { userId: string } }
@@ -362,6 +364,24 @@ export function createApi(deps: ApiDeps) {
       if (threshold) await notify(deps, 'free-cohort', `${threshold} free episodes have now been claimed.`)
     }
     return c.json(result)
+  })
+
+  // Cost estimate for learners on their own keys (PC-1017-K4): worked out here, so prices and
+  // calibration change without an app update. From the episode's length; nothing is called.
+  app.get('/v1/keys/estimate', (c) => {
+    const durationSec = Number(c.req.query('durationSec'))
+    if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > 6 * 3600) return c.json({ error: 'durationSec must be a length in seconds' }, 400)
+    return c.json(ownKeysEstimate(durationSec, { calibration: deps.ownKeysCalibration }))
+  })
+
+  // What preparing this episode on the learner's own keys actually used, at list prices (PC-1017-K4).
+  app.get('/v1/episodes/:id/own-keys-cost', async (c) => {
+    if (!/^[0-9a-f-]{36}$/i.test(c.req.param('id'))) return c.json({ usedUSD: null })
+    const [job] = await sql`
+      select cost_usd from prep_jobs
+      where episode_id = ${c.req.param('id')} and requested_by = ${c.get('userId')} and charge = 'ownKeys' and status = 'done' and cost_usd is not null
+      order by finished_at desc nulls last limit 1`
+    return c.json({ usedUSD: job ? Number(job.cost_usd) : null })
   })
 
   app.get('/v1/jobs/:id', async (c) => {

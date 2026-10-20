@@ -107,6 +107,10 @@ export const api = {
     call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, ownKeys ? { ownKeys } : undefined),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null; message?: string }>('GET', `/v1/jobs/${jobId}`),
   testKey: (provider: 'elevenlabs' | 'gemini', key: string) => call<{ ok: true } | { ok: false; message: string }>('POST', '/v1/keys/test', { provider, key }),
+  /** Own-keys cost estimate from an episode's length, worked out on the server (PC-1017-K4). */
+  ownKeysEstimate: (durationSec: number) => call<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>('GET', `/v1/keys/estimate?durationSec=${Math.round(durationSec)}`),
+  /** What preparing this episode on the learner's own keys actually used, if they did. */
+  ownKeysCost: (episodeId: string) => call<{ usedUSD: number | null }>('GET', `/v1/episodes/${episodeId}/own-keys-cost`),
   forgetKeys: () => call<{ ok: true }>('DELETE', '/v1/keys'),
   /** `level` is the guide intensity chosen for this episode; left out, the server uses the learner's default. */
   listen: (episodeId: string, guide: boolean, level?: 'light' | 'standard' | 'handsOn') =>

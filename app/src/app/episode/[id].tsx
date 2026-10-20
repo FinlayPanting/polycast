@@ -20,7 +20,7 @@ import { useAsync } from '../../lib/useAsync'
 import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 import { loadOwnKeys, type OwnKeys } from '../../lib/ownKeys'
-import { OWN_KEYS_COST_LINE, SLOW_KEY_LINE } from '../../lib/ownKeysCore'
+import { ALREADY_PREPARED_LINE, estimateLine, estimateSplit, OWN_KEYS_COST_LINE, SLOW_KEY_LINE, usedLine } from '../../lib/ownKeysCore'
 import { listenLater, useKept } from '../../lib/keptList'
 import { laterId, laterLabel } from '../../lib/keptListCore'
 
@@ -53,6 +53,10 @@ export default function Episode() {
     void loadOwnKeys().then(setOwnKeys)
   }, [])
   const later = useKept(listenLater)
+  // Own keys (PC-1017-K4): an estimate before preparing, and what it used afterwards.
+  const [estimate, setEstimate] = useState<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>()
+  const [showSplit, setShowSplit] = useState(false)
+  const [usedUSD, setUsedUSD] = useState<number | null>()
   const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
   const [serverGuide, setServerGuide] = useState<string>()
   const [earlyPrimer, setEarlyPrimer] = useState<PrimerData>()
@@ -70,6 +74,17 @@ export default function Episode() {
   }, [id])
   // The title and description in the learner's language, made once and shared (PC-1017-T1).
   const tr = useTranslations({ titles: ep ? [ep.title] : [], episodeId: ep?.description ? ep.id : undefined }, Boolean(ep) && !offline)
+
+  useEffect(() => {
+    if (!ownKeys || !ep || offline) return
+    let live = true
+    if (ep.status === 'ready') {
+      if (preparedByMe) api.ownKeysCost(ep.id).then((r) => live && setUsedUSD(r.usedUSD), () => {})
+    } else api.ownKeysEstimate(ep.duration_sec).then((r) => live && setEstimate(r), () => {})
+    return () => {
+      live = false
+    }
+  }, [ownKeys, ep?.id, ep?.status, ep?.duration_sec, preparedByMe, offline])
 
   // The primer, once the episode is ready (PC-1017-P4). Offline, the saved lesson's copy is used.
   useEffect(() => {
@@ -240,6 +255,11 @@ export default function Episode() {
             <LevelPicker guide={readyGuide} value={level} onChange={chooseLevel} />
             <Button label={`Listen with ${readyGuide}`} onPress={listenNow} />
             <Button kind="secondary" label="Subtitles only" onPress={() => router.push({ pathname: '/listen/[id]', params: { id: ep.id, guide: '0' } })} />
+            {ownKeys ? (
+              <Txt variant="small" tone="quiet">
+                {preparedByMe && usedUSD ? usedLine(usedUSD) : preparedByMe ? '' : ALREADY_PREPARED_LINE}
+              </Txt>
+            ) : null}
             {canSyncOnDevice ? (
               <View style={{ gap: space.xs, paddingTop: space.sm }} accessibilityLiveRegion="polite">
                 {saving ? (
@@ -282,6 +302,18 @@ export default function Episode() {
         ) : (
           <View style={{ gap: space.md }}>
             <Txt tone="quiet">{cost}</Txt>
+            {ownKeys && estimate ? (
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: showSplit }} accessibilityHint="Shows what each provider charges" onPress={() => setShowSplit((v) => !v)} style={{ minHeight: MIN_TAP, justifyContent: 'center', gap: 2 }}>
+                <Txt variant="smallStrong">{estimateLine(estimate.totalUSD)}</Txt>
+                {showSplit
+                  ? estimateSplit(estimate).map((line) => (
+                      <Txt key={line} variant="small" tone="quiet">
+                        {line}
+                      </Txt>
+                    ))
+                  : null}
+              </Pressable>
+            ) : null}
             {ownKeys || plus || (!profile?.free_episode_used && ep.duration_sec <= FREE_EPISODE_MAX_SEC) ? (
               <Button label="Prepare this episode" busy={busy} onPress={prepare} />
             ) : (
