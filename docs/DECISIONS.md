@@ -271,3 +271,7 @@ Board item PC-1017-F08, replacing PC-1014-07's country tags. The Top charts shel
 ## Listen later, kept on the phone (20 Oct 2026)
 
 Board item PC-1017-F10. Any episode can be kept for later from its page ("Listen later", tap again to take it out) or from the "Later" tap on each episode row of a show page; the list sits at the top of the Library, newest first, each with Remove. Simplest option picked: the list is kept on the phone (AsyncStorage, `app/src/lib/keptList.ts`) rather than on the account, so it needs no new database table; it holds up to 300 episodes. Moving it to the account (so it follows a learner to a new phone) would need a migration and can come later.
+
+## A Library built for keeping up (20 Oct 2026)
+
+Board item PC-1017-F11. The Library now reads top to bottom: Recently listened (shows, newest first, as artwork tiles like Discover's shelves), Carry on listening (episodes started and not finished, so the spec's "where you left off" stays), New episodes (from followed shows: the last fortnight, newest first, leaving out anything already started), Listen later and Downloads. Section titles use the same heading style as Discover. Simplest options picked: new episodes come from the shows' pages the server already serves (the first 12 followed shows, each re-read at most every 15 minutes on the server), so no new route or table; finished episodes no longer get their own list, as their shows sit in Recently listened.

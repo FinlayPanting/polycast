@@ -23,7 +23,7 @@ export interface ListenRow {
   position_sec: number
   finished_at: string | null
   updated_at: string
-  episodes: { title: string; duration_sec: number; image: string | null; podcasts: { title: string; artwork: string | null } }
+  episodes: { title: string; duration_sec: number; image: string | null; podcast_id?: string; podcasts: { title: string; artwork: string | null } }
 }
 
 export async function getEpisode(id: string): Promise<{ episode: EpisodeDetail; activeJob?: { id: string; stage: string | null }; offline?: boolean; preparedByMe?: boolean }> {
@@ -45,7 +45,7 @@ export async function listListens(): Promise<ListenRow[]> {
   if (config.demo) return demo.listListens()
   const { data, error } = await supabase
     .from('listens')
-    .select('episode_id, position_sec, finished_at, updated_at, episodes(title, duration_sec, image, podcasts(title, artwork))')
+    .select('episode_id, position_sec, finished_at, updated_at, episodes(title, duration_sec, image, podcast_id, podcasts(title, artwork))')
     .order('updated_at', { ascending: false })
     .limit(100)
   // Offline: what's saved on the phone.
