@@ -401,3 +401,60 @@ describe('the goodbye', () => {
     expect(l2.current.phase).toBe('finished')
   })
 })
+
+describe('Line by line (PC-1018-07)', () => {
+  it('pauses at the end of each line, keeps it on screen, and play takes the next line', async () => {
+    const { audio, listen } = setup([])
+    await listen.start(track)
+    listen.setLineByLine(true)
+    await audio.advance(4.5) // s0 runs 0–4.5
+    expect(listen.current.phase).toBe('paused')
+    expect(listen.current.lineHeld).toBe(true)
+    expect(audio.playing).toBe(false)
+    expect(audio.pos).toBeLessThan(5)
+    await audio.advance(3) // nothing moves while held
+    expect(audio.pos).toBeLessThan(5)
+
+    await listen.resume()
+    expect(listen.current.phase).toBe('playing')
+    expect(listen.current.lineHeld).toBe(false)
+    await audio.advance(5) // s1 runs 5–9.5
+    expect(listen.current.lineHeld).toBe(true)
+    expect(audio.pos).toBeGreaterThan(9)
+    expect(audio.pos).toBeLessThan(10)
+  })
+
+  it('a headphone forward press plays the next line, and turning it off just carries on', async () => {
+    const { audio, listen } = setup([])
+    await listen.start(track)
+    listen.setLineByLine(true)
+    await audio.advance(4.5)
+    await listen.remote('next')
+    expect(listen.current.phase).toBe('playing')
+    listen.setLineByLine(false)
+    await audio.advance(10)
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.pos).toBeGreaterThan(14)
+  })
+
+  it('the guide steps in at its moment instead of a line pause there', async () => {
+    const { audio, voice, listen } = setup([spotlight])
+    await listen.start(track)
+    listen.setLineByLine(true)
+    await audio.advance(4.5)
+    await listen.resume()
+    await audio.advance(6) // s1 ends at 9.5 and the spotlight is due at 10
+    expect(listen.current.lineHeld).toBeFalsy()
+    expect(voice.played).toEqual(['guide-1.m4a'])
+  })
+
+  it('starts the next line cleanly if playback ran a moment into it', async () => {
+    const { audio, listen } = setup([])
+    await listen.start(track)
+    listen.setLineByLine(true)
+    await audio.advance(4.5)
+    await audio.seek(5.3) // as if the pause landed late
+    await listen.resume()
+    expect(audio.pos).toBe(5)
+  })
+})

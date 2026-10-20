@@ -244,9 +244,10 @@ export default function Listen() {
   const advert = advertAt(data.adverts, state.position)
   const skipAd = skipAdTarget(data.adverts, state.position)
   // Quieter actions live in the More menu, not among the main controls (PC-1017-F06).
-  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn })
+  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn, lineByLine: Boolean(state.lineByLine) })
   const runMenu = (i: number) => {
     if (menu.actions[i] === 'replayIntro' && intro) void l?.replayMoment(intro)
+    if (menu.actions[i] === 'lineByLine') l?.setLineByLine(!state.lineByLine)
   }
   const openMenu = () => {
     if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: menu.options, cancelButtonIndex: menu.cancelIndex }, runMenu)
@@ -270,6 +271,11 @@ export default function Listen() {
         <Artwork uri={data.episode.image} size={40} radius={8} />
         {menu.actions.length ? <Control icon="ellipsis.circle" label="More" onPress={openMenu} size={22} /> : null}
       </View>
+      {state.lineByLine ? (
+        <Txt variant="small" tone="quiet" accessibilityLiveRegion="polite" style={{ paddingHorizontal: space.lg, paddingTop: space.sm }}>
+          {state.lineHeld ? 'Line by line: tap play for the next line' : 'Line by line is on'}
+        </Txt>
+      ) : null}
 
       {!data.guided && guide !== '0' ? (
         <Txt variant="small" tone="quiet" style={{ paddingHorizontal: space.lg, paddingTop: space.sm }}>

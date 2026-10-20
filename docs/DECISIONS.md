@@ -291,3 +291,7 @@ Board item PC-1018-02. `saveWord` now inserts first and only merges the new form
 ## Follow a show (20 Oct 2026)
 
 Board item PC-1017-F09. Every show page has a Follow button under the host's name (Following, once tapped; tap again to stop). Followed shows feed New episodes in the Library (PC-1017-F11). Simplest options picked: follows are kept on the phone alongside Listen later (no new table), and their new episodes sit in the Library, as Finlay's 17 Oct cards ask, rather than on Discover as the spec's older line says. "New episode of your show" nudges still follow the shows a learner has listened to, since the server can't see phone-kept follows; moving follows to the account would let both use them.
+
+## Line by line (20 Oct 2026)
+
+Board item PC-1018-07. "Line by line: pause after each line" in the player's More menu: the episode pauses at the end of each subtitle line (a touch early, as progress arrives four times a second), the line stays on screen, and play (on screen, the mini-player, headphones or the lock screen; forward on headphones too) plays the next line from its start. Lines under 0.6 seconds run on into the next, and where the guide is about to step in the guide takes the pause instead of stopping twice. Simplest options picked: a menu switch rather than a new button among the main controls, and it lasts for the current listen only.

@@ -1,6 +1,7 @@
 import { GuideTimeline, playSteps, replayLineStart, type GuideMoment, type Segment } from '@polycast/core'
 import { plog } from '../lib/playbackLog'
 import type { EpisodeAudio, GuideVoice, RemoteCommand } from './types'
+import { lineJustEnded } from './lineByLine'
 
 export type Phase = 'loading' | 'playing' | 'paused' | 'guide' | 'question' | 'finished'
 
@@ -15,6 +16,10 @@ export interface ListenState {
   rate: number
   /** The guide's goodbye in the target language, on screen while it's said at the very end. */
   goodbye?: { text: string; meaning: string }
+  /** Line by line is on: the episode pauses after each subtitle line (PC-1018-07). */
+  lineByLine?: boolean
+  /** Paused at the end of a line by Line by line; play takes the next one. */
+  lineHeld?: boolean
 }
 
 export interface ListenOptions {
@@ -80,6 +85,9 @@ export class GuidedListen {
   private hold: { promise: Promise<void>; release: () => void; phase: 'guide' | 'question' } | undefined
   /** The guide's line (or host clip) in progress was cut short by a pause, so it plays again. */
   private interrupted = false
+  private lineByLine = false
+  /** Where the next line starts, while Line by line holds the episode at the end of one. */
+  private lineResumeAt: number | undefined
 
   constructor(private readonly o: ListenOptions) {
     this.timeline = new GuideTimeline(o.moments)
@@ -119,6 +127,7 @@ export class GuidedListen {
       return
     }
     if (this.state.phase !== 'playing') return
+    const previous = this.state.position
     this.set({ position })
     // Either direction: after jumping back from 30:00 to 5:00, the new place is saved straight away.
     if (Math.abs(position - this.lastSaved) >= 15) {
@@ -126,7 +135,31 @@ export class GuidedListen {
       this.o.onSavePosition?.(position)
     }
     const due = this.timeline.tick(position)
-    if (due.length > 0) await this.runMoments(due)
+    if (due.length > 0) return this.runMoments(due)
+    if (this.lineByLine) {
+      const ended = lineJustEnded(this.o.segments, previous, position)
+      // The guide is about to step in at this pause anyway: let it, rather than stopping twice.
+      if (ended) {
+        const guideNext = this.timeline.next(position)
+        if (!guideNext || guideNext.at > ended.nextStart + 0.3) await this.holdLine(ended.nextStart)
+      }
+    }
+  }
+
+  /** Line by line: hold at the end of this line, with it still on screen, until play. */
+  private async holdLine(nextStart: number) {
+    trace(`line by line: holding, next line at ${fmt(nextStart)}`)
+    this.lineResumeAt = nextStart
+    this.set({ phase: 'paused', lineHeld: true })
+    await this.o.audio.pause()
+    this.o.onSavePosition?.(this.state.position)
+  }
+
+  /** Turns Line by line on or off (PC-1018-07). */
+  setLineByLine(on: boolean): void {
+    this.lineByLine = on
+    if (!on) this.lineResumeAt = undefined
+    this.set({ lineByLine: on, lineHeld: on ? this.state.lineHeld : false })
   }
 
   private async runMoments(due: GuideMoment[]) {
@@ -277,7 +310,17 @@ export class GuidedListen {
       return
     }
     if (this.state.phase !== 'paused') return
-    this.set({ phase: 'playing' })
+    const nextLine = this.lineResumeAt
+    this.lineResumeAt = undefined
+    if (nextLine !== undefined) {
+      // A progress update can land a moment into the next line: start it cleanly from its beginning.
+      const at = await this.o.audio.position()
+      if (at > nextLine + 0.05) {
+        await this.o.audio.seek(nextLine)
+        this.timeline.seek(nextLine)
+      }
+      this.set({ phase: 'playing', lineHeld: false, position: Math.min(at, nextLine) })
+    } else this.set({ phase: 'playing' })
     await this.o.audio.play()
   }
 
@@ -287,9 +330,10 @@ export class GuidedListen {
       this.resumeOverride = to
       this.skipGuide()
     }
+    this.lineResumeAt = undefined
     this.timeline.seek(to)
     await this.o.audio.seek(to)
-    this.set({ position: to })
+    this.set({ position: to, lineHeld: false })
   }
 
   /** Back to the start of the line just heard. */
@@ -319,6 +363,7 @@ export class GuidedListen {
     if (cmd === 'previous') return this.replayLine()
     if (cmd === 'next') {
       if (this.state.phase === 'guide' || this.state.phase === 'question' || this.hold) return this.skipGuide()
+      if (this.state.lineHeld) return this.resume() // Line by line: forward plays the next line
       return this.seek((await this.o.audio.position()) + 30)
     }
     return this.seek(cmd.seek)
