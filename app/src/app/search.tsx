@@ -1,6 +1,6 @@
 import type { PodcastSummary } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FlatList, TextInput, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt } from '../components/ui'
 import { api } from '../lib/api'
@@ -8,6 +8,7 @@ import { showPeek } from '../lib/showPeek'
 import { languageName } from '../lib/languages'
 import { useSession } from '../lib/session'
 import { useTranslations } from '../lib/translate'
+import { settler } from '../lib/settle'
 import { TranslatedLine } from '../components/Translated'
 import { space, type, usePalette } from '../theme'
 
@@ -20,8 +21,15 @@ export default function Search() {
   const [q, setQ] = useState(initial ?? '')
   const [results, setResults] = useState<PodcastSummary[]>([])
   const [error, setError] = useState<string>()
-  // Result titles in the learner's language, in one request per result list (PC-1017-T1).
-  const tr = useTranslations({ titles: results.map((r) => r.title) }, results.length > 0)
+  // Result titles in the learner's language, in one request per result list (PC-1017-T1), once the
+  // results have settled for a moment or the search key is pressed (PC-1019-06), so typing doesn't
+  // use up the translation allowance the show page needs next.
+  const [settledTitles, setSettledTitles] = useState<string[]>([])
+  const settle = useMemo(() => settler<string[]>(setSettledTitles), [])
+  useEffect(() => () => settle.cancel(), [settle])
+  useEffect(() => settle.update(results.map((r) => r.title)), [results, settle])
+  const tr = useTranslations({ titles: settledTitles }, settledTitles.length > 0)
+  const waiting = results.some((r) => !settledTitles.includes(r.title))
 
   useEffect(() => {
     const query = q.trim()
@@ -47,6 +55,7 @@ export default function Search() {
           placeholder={`Search ${languageName(language)} podcasts`}
           placeholderTextColor={p.faint}
           returnKeyType="search"
+          onSubmitEditing={() => settle.flush()}
           accessibilityLabel="Search podcasts"
           // letterSpacing 0 on purpose: iOS reuses text fields, and one could keep the sign-in code's wide
           // spacing (6) if this didn't set its own.
@@ -71,7 +80,7 @@ export default function Search() {
               <Txt variant="bodyStrong" numberOfLines={2}>
                 {item.title}
               </Txt>
-              <TranslatedLine text={tr.titles.get(item.title)} pending={tr.pending} />
+              <TranslatedLine text={tr.titles.get(item.title)} pending={tr.pending || waiting} />
               <Txt variant="small" tone="quiet" numberOfLines={1}>
                 {item.author}
               </Txt>

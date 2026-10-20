@@ -311,3 +311,7 @@ Board item PC-1018-04. Press and hold the subtitle line in the player (or choose
 ## Hop back after the episode map (20 Oct 2026)
 
 Board item PC-1018-10. After a jump from the episode map, the player shows "Back to where you were, 32:10" for 15 seconds; a tap goes back there. The place is the saved position when the listen starts from the map, or the current position when the episode was already playing. Simplest options picked: no chip when there was no real place yet (under 10 seconds in) or the jump moved less than 20 seconds; it sits where the Skip ad pill goes and gives way to it during an advert.
+
+## Search translations wait until you stop typing (20 Oct 2026)
+
+Board item PC-1019-06. Search asks for result-title translations only once the results have stayed the same for 1.5 seconds, or at once when the search key is pressed; leaving the screen cancels a pending request. New titles shimmer while they wait. No server change: the per-minute translation limit stays as it is.

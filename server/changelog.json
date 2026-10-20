@@ -408,6 +408,14 @@
    "title": "Hop back after the episode map",
    "description": "Jump to a place on the episode map and a small 'Back to where you were' button shows for 15 seconds, so peeking never loses your place.",
    "tryIt": "Open an episode you've started, tap a theme on its map, then tap 'Back to where you were'"
+  },
+  {
+   "id": "PC-1019-06",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Searching no longer uses up translations",
+   "description": "Search translates result titles once you stop typing (or press Search), so the show you open next still gets its English lines.",
+   "tryIt": "Search for a show, refine it a few times, then open one"
   }
  ]
 }
