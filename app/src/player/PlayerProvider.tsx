@@ -44,7 +44,8 @@ export interface Player {
   stop: () => void
   /** One tap on the mini-player: pause, play, or carry on with the last episode in the background. */
   toggle: () => void
-  keepWord: (lemma: string, form: string, meaning: string, clip: Clip, sentence: string) => Promise<void>
+  /** True once the word is really in the bank; false if saving failed (PC-1018-02). */
+  keepWord: (lemma: string, form: string, meaning: string, clip: Clip, sentence: string) => Promise<boolean>
 }
 
 const LOADING: ListenState = { phase: 'loading', position: 0, rate: 1 }
@@ -217,10 +218,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const keepWord = useCallback(
     async (lemma: string, form: string, meaning: string, clip: Clip, sentence: string) => {
       const s = sessionRef.current
-      if (!s || !data) return
-      await saveWord(s.user.id, { lemma, form, meaning, language: data.transcript.language, episodeId: data.episode.id, clip, sentence }).catch(() => {})
+      if (!s || !data) return false
+      try {
+        await saveWord(s.user.id, { lemma, form, meaning, language: data.transcript.language, episodeId: data.episode.id, clip, sentence })
+      } catch {
+        return false // never shown as saved when it isn't
+      }
       setSaved((v) => (v.includes(lemma) ? v : [...v, lemma]))
       setCaughtAt((c) => (c.includes(clip.start) ? c : [...c, clip.start]))
+      return true
     },
     [data],
   )

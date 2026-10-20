@@ -23,7 +23,7 @@ import { guideName, guidanceLevelOr, voicedGuideId } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
 import { useSession } from '../../lib/session'
 import { resumePosition, savePosition } from '../../lib/data'
-import { listWords, saveWord } from '../../lib/words'
+import { listWords, SAVE_WORD_FAILED } from '../../lib/words'
 import { plog } from '../../lib/playbackLog'
 import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
 import { usePlayer } from '../../player/PlayerProvider'
@@ -364,7 +364,9 @@ export default function Listen() {
           const w = data.transcript.words
           const occ = { first: tapped.index, last: tapped.index, start: w[tapped.index]!.start, end: w[tapped.index]!.end }
           const sentence = data.transcript.segments.find((s) => tapped.index >= s.wordStart && tapped.index < s.wordEnd)?.text ?? ''
-          void keepWord(tapped.lemma, tapped.form, tapped.meaning, wordClip(w, occ), sentence)
+          void keepWord(tapped.lemma, tapped.form, tapped.meaning, wordClip(w, occ), sentence).then((ok) => {
+            if (!ok) Alert.alert(SAVE_WORD_FAILED)
+          })
         }}
       />
     </Screen>
