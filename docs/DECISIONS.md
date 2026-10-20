@@ -307,3 +307,7 @@ Board item PC-1019-F01. The wrap-up's main share is now "Share your lesson recap
 ## That looks wrong: report a line (20 Oct 2026)
 
 Board item PC-1018-04. Press and hold the subtitle line in the player (or choose "That line looks wrong" in More while a line is showing; VoiceOver has it as an action on the line) and Polycast sends only the episode and the line's id, then says "Thanks, we'll take a look." Nothing about the learner is kept: no user id, no account link. Reports go into the existing server-only `alerts` table (kind `line_report`), so no migration was needed; they don't ping Finlay's phone. The readable lessons page (`/admin/lessons/:id`) opens with a "Reported lines" section (the line, its translation, how many reports and when last), and `/admin/lessons` lists episodes with reports first, with a `reports` count. Each learner can send 20 reports an hour. Simplest options picked: no reason field (one tap, as the card asks) and no "fixed" state yet, so a report stays on the page until its row is deleted from `alerts`.
+
+## Hop back after the episode map (20 Oct 2026)
+
+Board item PC-1018-10. After a jump from the episode map, the player shows "Back to where you were, 32:10" for 15 seconds; a tap goes back there. The place is the saved position when the listen starts from the map, or the current position when the episode was already playing. Simplest options picked: no chip when there was no real place yet (under 10 seconds in) or the jump moved less than 20 seconds; it sits where the Skip ad pill goes and gives way to it during an advert.

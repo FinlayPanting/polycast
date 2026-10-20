@@ -12,6 +12,7 @@ import { voicedGuideId } from '../lib/languages'
 import { isOfflineError } from '../lib/net'
 import { loadLesson, localPosition, readyPayload, saveLesson } from '../lib/offline'
 import { plog } from '../lib/playbackLog'
+import { HOP_BACK_MS, hopBackOffer, type HopBack } from '../lib/hopBack'
 import { useSession } from '../lib/session'
 import { listWords, saveWord } from '../lib/words'
 import { expoGuideVoice, prepareGuideAudio } from './expoGuideVoice'
@@ -46,6 +47,10 @@ export interface Player {
   toggle: () => void
   /** True once the word is really in the bank; false if saving failed (PC-1018-02). */
   keepWord: (lemma: string, form: string, meaning: string, clip: Clip, sentence: string) => Promise<boolean>
+  /** After a jump from the episode map, where the learner was, offered for 15 seconds (PC-1018-10). */
+  hopBack?: HopBack
+  /** Goes back to that place. */
+  takeHopBack: () => void
 }
 
 const LOADING: ListenState = { phase: 'loading', position: 0, rate: 1 }
@@ -68,6 +73,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [caughtAt, setCaughtAt] = useState<number[]>([])
   const [oldFriends, setOldFriends] = useState<Set<number>>(new Set())
   const [last, setLast] = useState<LastPlayed>()
+  const [hopBack, setHopBack] = useState<HopBack>()
+  const stateRef = useRef(state)
+  stateRef.current = state
   const listen = useRef<GuidedListen | undefined>(undefined)
   const goodbye = useRef<Goodbye | undefined>(undefined)
   const run = useRef<{ key: string; abort: AbortController; disposed: boolean } | undefined>(undefined)
@@ -150,7 +158,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           const level = d.guidanceLevel ?? 'standard'
           const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
           // A jump from the episode map starts there; otherwise carry on where the learner left off.
-          const startAt = from !== undefined ? from : await resumePosition(id)
+          const resumeAt = await resumePosition(id)
+          const startAt = from !== undefined ? from : resumeAt
           if (r.disposed) return
           // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
           goodbye.current = undefined
@@ -177,6 +186,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           if (!config.demo) await prepareGuideAudio()
           if (r.disposed) return
           await l.start({ url: d.episode.audioUrl, title: d.episode.title, artist: d.episode.podcastTitle, artwork: d.episode.image ?? undefined, durationSec: d.episode.durationSec }, startAt)
+          if (!r.disposed && from !== undefined) setHopBack(hopBackOffer(resumeAt, from, Date.now()))
           const known = await listWords(d.transcript.language).catch(() => [])
           if (!r.disposed) setOldFriends(new Set(findOldFriends(d.transcript.words, known, d.episode.id, d.transcript.language).map((f) => f.wordIndex)))
         } catch (e) {
@@ -193,15 +203,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (decision === 'reuse') return
       if (decision === 'seek') {
         setParams(p)
+        setHopBack(hopBackOffer(stateRef.current.position, p.from!, Date.now()))
         void listen.current?.seek(p.from!)
         return
       }
+      setHopBack(undefined)
       start(p)
     },
     [start],
   )
 
+  // The offer goes away on its own after 15 seconds.
+  useEffect(() => {
+    if (!hopBack) return
+    const t = setTimeout(() => setHopBack(undefined), Math.max(0, hopBack.until - Date.now()))
+    return () => clearTimeout(t)
+  }, [hopBack])
+  const takeHopBack = useCallback(() => {
+    if (hopBack) void listen.current?.seek(hopBack.to)
+    setHopBack(undefined)
+  }, [hopBack])
+
   const stop = useCallback(() => {
+    setHopBack(undefined)
     teardown()
     setParams(undefined)
     setData(undefined)
@@ -266,6 +290,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     void (mini.playing ? l.pause() : l.resume())
   }, [mini, last, open])
 
-  const value: Player = { params, data, state, error, getReady, listen: listen.current, saved, caughtAt, oldFriends, mini, open, stop, toggle, keepWord }
+  const value: Player = { params, data, state, error, getReady, listen: listen.current, saved, caughtAt, oldFriends, mini, open, stop, toggle, keepWord, hopBack, takeHopBack }
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
 }

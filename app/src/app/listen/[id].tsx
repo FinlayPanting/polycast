@@ -17,6 +17,7 @@ import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
+import { hopBackLabel } from '../../lib/hopBack'
 import { playerMenu, REPORT_FAILED, REPORT_THANKS } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
@@ -401,6 +402,7 @@ export default function Listen() {
         ) : null}
 
         {skipAd && !guideOn ? <SkipAdPill onPress={() => void l?.seek(skipAd.resumeAt)} /> : null}
+        {player.hopBack && !skipAd ? <HopBackChip label={hopBackLabel(player.hopBack)} onPress={player.takeHopBack} /> : null}
 
         <Scrubber position={state.position} duration={data.episode.durationSec} markers={markers} adverts={data.adverts} onSeek={(s) => void l?.seek(s)} />
 
@@ -465,6 +467,34 @@ function SkipAdPill({ onPress }: { onPress: () => void }) {
         Skip ad
       </Txt>
       <SymbolView name="forward.end.fill" size={14} tintColor={p.bg} />
+    </Pressable>
+  )
+}
+
+/** After a jump from the episode map: back to the place the learner was at (PC-1018-10). */
+function HopBackChip({ label, onPress }: { label: string; onPress: () => void }) {
+  const p = usePalette()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.xs,
+        minHeight: MIN_TAP - 8,
+        paddingHorizontal: space.md,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: p.faint,
+        opacity: pressed ? 0.75 : 1,
+      })}
+    >
+      <SymbolView name="arrow.uturn.backward" size={14} tintColor={p.text} />
+      <Txt variant="smallStrong">{label}</Txt>
     </Pressable>
   )
 }

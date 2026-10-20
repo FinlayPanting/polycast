@@ -400,6 +400,14 @@
    "title": "Tell us when a line looks wrong",
    "description": "If a subtitle or its translation looks off, flag it from the player and we'll fix it before the next person hears it. Only the line is sent, nothing about you.",
    "tryIt": "Press and hold a subtitle line in the player, or open More while a line is showing"
+  },
+  {
+   "id": "PC-1018-10",
+   "date": "2026-10-20",
+   "kind": "Refinement",
+   "title": "Hop back after the episode map",
+   "description": "Jump to a place on the episode map and a small 'Back to where you were' button shows for 15 seconds, so peeking never loses your place.",
+   "tryIt": "Open an episode you've started, tap a theme on its map, then tap 'Back to where you were'"
   }
  ]
 }
