@@ -18,6 +18,8 @@ Target: public App Store launch before the On Air Fest pitch (aim 23 Oct 2026). 
 - Website pages the app links to: privacy policy, terms, creators (removal requests). Written in `site/` (18 Oct), hosted on Vercel at polycast.app; Finlay to review the legal wording.
 - App Store listing: screenshots, description (first draft in docs/APP_STORE.md), privacy labels, reviewer demo account.
 - On a real iPhone: background play with the screen locked, headphone presses, the guide's voice over a paused episode, Sign in with Apple, purchases. The two audio libraries share the iPhone's audio session; if they fight, swap the guide's voice onto the track player (one file to change).
+- Mia matches the show's volume (PC-1017-F16): step 1 is built (measured loudness, matched guide level); step 2, boosting very quiet episodes with a native gain on iOS, isn't.
+- Listen later and followed shows (PC-1017-F09, F10) are kept on the phone; moving them to the account (a migration) would carry them to a new phone and let new-episode nudges use follows.
 - One server test (Discover shelves) failed once in about a dozen runs and hasn't reproduced; watch for it.
 
 ## Preview without an iPhone
