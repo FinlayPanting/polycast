@@ -311,3 +311,7 @@ Board item PC-1018-04. Press and hold the subtitle line in the player (or choose
 ## Hop back after the episode map (20 Oct 2026)
 
 Board item PC-1018-10. After a jump from the episode map, the player shows "Back to where you were, 32:10" for 15 seconds; a tap goes back there. The place is the saved position when the listen starts from the map, or the current position when the episode was already playing. Simplest options picked: no chip when there was no real place yet (under 10 seconds in) or the jump moved less than 20 seconds; it sits where the Skip ad pill goes and gives way to it during an advert.
+
+## Count who sees the Plus screen (20 Oct 2026)
+
+Board item PC-1018-08. A second anonymous daily counter beside first opens (migration 0012, table `plus_screen_views`, server-only): the app says "opened" when the Plus screen shows and "left" when it closes without a purchase or restore, with no identifier. The weekly funnel adds one line under the steps: "Plus screen (everyone that week): opened N times, closed without buying M (x%)". Simplest options picked: counted per visit, not per person (nothing identifies a person), and kept off the step-by-step percentages because it covers everyone that week, not just that week's sign-ups.

@@ -12,7 +12,7 @@ import { cachedMood, MoodUnavailable, recommendByMood } from './mood'
 import { translateTexts } from './translations'
 import type { TextModel } from './providers/types'
 import { SpendCapReached, type SpendGuard } from './budget'
-import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
+import { countFirstOpen, countPlusScreen, funnelText, weeklyFunnel } from './funnel'
 import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
@@ -139,6 +139,18 @@ export function createApi(deps: ApiDeps) {
   // The app says this once per install, before sign-in. Nothing identifies the phone.
   app.post('/events/first-open', async (c) => {
     await countFirstOpen(sql)
+    return c.json({ ok: true })
+  })
+
+  // The Plus screen was opened, or closed without buying (PC-1018-08). Nothing identifies anyone;
+  // each address gets a generous hourly allowance so a script can't skew the counts.
+  const plusScreenLimit = rateLimiter(120, 60 * 60_000)
+  app.post('/events/plus-screen', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const event = body?.event
+    if (event !== 'opened' && event !== 'left') return c.json({ error: 'event must be opened or left' }, 400)
+    if (!plusScreenLimit.hit(clientAddress((n) => c.req.header(n)))) return c.json({ ok: true })
+    await countPlusScreen(sql, event)
     return c.json({ ok: true })
   })
 

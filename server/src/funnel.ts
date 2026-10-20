@@ -13,12 +13,29 @@ export const FUNNEL_STEPS = [
 ] as const
 
 export type FunnelStep = (typeof FUNNEL_STEPS)[number][0]
-export type Funnel = { weekStart: string } & Record<FunnelStep, number>
+/** Plus screen counts (PC-1018-08): times it was opened that week, and times it closed without a purchase. */
+export interface PlusScreen {
+  opens: number
+  leftWithoutBuying: number
+}
+export type Funnel = { weekStart: string; plusScreen: PlusScreen } & Record<FunnelStep, number>
 
 /** Counts one first open of the app. No identifier is sent or stored. */
 export async function countFirstOpen(sql: Sql): Promise<void> {
   await sql`insert into first_opens (opens) values (1)
             on conflict (day) do update set opens = first_opens.opens + 1`
+}
+
+export type PlusScreenEvent = 'opened' | 'left'
+
+/** Counts one opening of the Plus screen, or one closing without buying. No identifier is sent or stored. */
+export async function countPlusScreen(sql: Sql, event: PlusScreenEvent): Promise<void> {
+  if (event === 'opened')
+    await sql`insert into plus_screen_views (opens) values (1)
+              on conflict (day) do update set opens = plus_screen_views.opens + 1`
+  else
+    await sql`insert into plus_screen_views (left_without_buying) values (1)
+              on conflict (day) do update set left_without_buying = plus_screen_views.left_without_buying + 1`
 }
 
 /**
@@ -30,6 +47,10 @@ export async function countFirstOpen(sql: Sql): Promise<void> {
 export async function weeklyFunnel(sql: Sql, weekStart: string): Promise<Funnel> {
   const [opens] = await sql`
     select coalesce(sum(opens), 0)::int as n from first_opens
+    where day >= ${weekStart}::date and day < ${weekStart}::date + 7`
+  const [plus] = await sql`
+    select coalesce(sum(opens), 0)::int as opens, coalesce(sum(left_without_buying), 0)::int as left
+    from plus_screen_views
     where day >= ${weekStart}::date and day < ${weekStart}::date + 7`
   const [row] = await sql`
     with cohort as (
@@ -56,6 +77,7 @@ export async function weeklyFunnel(sql: Sql, weekStart: string): Promise<Funnel>
     usedFreeEpisode: row!.used_free_episode,
     startedPlus: row!.started_plus,
     cameBack: row!.came_back,
+    plusScreen: { opens: Number(plus!.opens), leftWithoutBuying: Number(plus!.left) },
   }
 }
 
@@ -68,5 +90,8 @@ export function funnelText(f: Funnel): string {
     previous = n
     return `${label}: ${n}${share}`
   })
-  return [`Week of ${f.weekStart}`, ...lines].join('\n')
+  // Everyone's visits that week, not just the week's sign-ups: tells 'nobody saw the offer' from 'saw it and said no'.
+  const { opens, leftWithoutBuying } = f.plusScreen
+  const plus = `Plus screen (everyone that week): opened ${opens} ${opens === 1 ? 'time' : 'times'}, closed without buying ${leftWithoutBuying}${opens ? ` (${Math.round((100 * leftWithoutBuying) / opens)}%)` : ''}`
+  return [`Week of ${f.weekStart}`, ...lines, plus].join('\n')
 }

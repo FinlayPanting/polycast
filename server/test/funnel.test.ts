@@ -54,8 +54,22 @@ run('weekly funnel', () => {
     expect(f).toEqual({
       weekStart: '2026-10-05', opened: 3, signedUp: 3, pickedLanguage: 2, startedGuided: 2,
       finishedGuided: 1, usedFreeEpisode: 1, startedPlus: 1, cameBack: 1,
+      plusScreen: { opens: 0, leftWithoutBuying: 0 },
     })
     expect(funnelText(f)).toContain('Picked a language: 2 (67%)')
+  })
+
+  it('counts Plus screen opens and closes without buying, with nothing that identifies anyone (PC-1018-08)', async () => {
+    const send = (event: unknown) => api().request('/events/plus-screen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event }) })
+    for (let i = 0; i < 4; i++) expect((await send('opened')).status).toBe(200)
+    for (let i = 0; i < 3; i++) expect((await send('left')).status).toBe(200)
+    expect((await send('bought')).status).toBe(400)
+    await sql`update plus_screen_views set day = '2026-10-07'`
+    expect(Object.keys((await sql`select * from plus_screen_views`)[0]!).sort()).toEqual(['day', 'left_without_buying', 'opens'])
+    const f = await weeklyFunnel(sql, '2026-10-05')
+    expect(f.plusScreen).toEqual({ opens: 4, leftWithoutBuying: 3 })
+    expect(funnelText(f)).toContain('Plus screen (everyone that week): opened 4 times, closed without buying 3 (75%)')
+    expect((await weeklyFunnel(sql, '2026-10-12')).plusScreen).toEqual({ opens: 0, leftWithoutBuying: 0 })
   })
 
   it('serves the funnel only with the token', async () => {

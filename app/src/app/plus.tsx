@@ -1,5 +1,5 @@
 import { router } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Linking, ScrollView, View } from 'react-native'
 import { Mark } from '../components/Mark'
 import { Button, Screen, Tag, Txt } from '../components/ui'
@@ -8,6 +8,8 @@ import { DEFAULT_ANNUAL, DEFAULT_MONTHLY, type PlanPrice, yearlyValueLine } from
 import { RESTORE_MESSAGES, restoreErrorMessage } from '../lib/plusPending'
 import { useSession } from '../lib/session'
 import { useAsync } from '../lib/useAsync'
+import { config } from '../lib/config'
+import { plusScreenVisit } from '../lib/plusScreenCount'
 import { space, usePalette } from '../theme'
 
 const WHAT_YOU_GET = [
@@ -23,6 +25,16 @@ export default function Plus() {
   const { data: offer, error } = useAsync(plusOffer, [])
   const [busy, setBusy] = useState<string>()
   const [message, setMessage] = useState<string>()
+  // Anonymous counts of who sees this screen and who leaves without buying (PC-1018-08).
+  const visit = useRef<ReturnType<typeof plusScreenVisit>>(undefined)
+  useEffect(() => {
+    if (config.demo) return
+    const v = plusScreenVisit((event) =>
+      fetch(`${config.apiUrl}/events/plus-screen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event }) }),
+    )
+    visit.current = v
+    return () => v.close()
+  }, [])
   const priceOf = (kind: 'monthly' | 'annual', fallback: PlanPrice): PlanPrice => {
     const product = offer?.[kind]?.product
     return product ? { amount: product.price, currency: product.currencyCode } : fallback
@@ -37,6 +49,7 @@ export default function Plus() {
     try {
       if (await buy(pkg)) {
         // The App Store said yes: Plus shows now, and the app keeps checking until the server agrees.
+        visit.current?.becamePlus()
         confirmPlus()
         router.back()
       }
@@ -114,6 +127,7 @@ export default function Plus() {
               setMessage(undefined)
               try {
                 if ((await restore()) === 'plus') {
+                  visit.current?.becamePlus()
                   confirmPlus()
                   router.back()
                 } else setMessage(RESTORE_MESSAGES.none)
