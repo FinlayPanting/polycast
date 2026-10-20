@@ -572,6 +572,38 @@ run('API and worker', () => {
     expect(await (await call(ben, 'GET', '/v1/episodes/not-an-id/own-keys-cost')).json()).toEqual({ usedUSD: null })
   })
 
+  it("gives the Library every followed show's new episodes in one call, from the catalogue, under its own limit (PC-1020-02)", async () => {
+    const { NEW_EPISODES_LIMITS } = await import('../src/api')
+    const dana = await learner()
+    let feedReads = 0
+    const counting: typeof fetch = async (input, init) => (String(input).startsWith('https://feeds.example.com/lib-') && feedReads++, fakeFetch(input, init))
+    const lib = createApi({ sql, verify: async (t) => t, fetch: counting, lookupHost: publicHost })
+    const post = (body: unknown) => lib.request('/v1/library/new-episodes', { method: 'POST', headers: { Authorization: `Bearer ${dana}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const shows: string[] = []
+    for (let i = 0; i < 14; i++) {
+      const [p] = await sql`insert into podcasts (feed_url, title, language, updated_at) values (${`https://feeds.example.com/lib-${i}.xml`}, ${`Show ${i}`}, 'sv', ${i < 13 ? sql`now()` : sql`now() - interval '1 day'`}) returning id`
+      shows.push(p!.id)
+      await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language, published) values
+        (${p!.id}, 'new', ${`New ${i}`}, 600, 'https://cdn.example.com/n.mp3', 'sv', now() - interval '2 days'),
+        (${p!.id}, 'old', ${`Old ${i}`}, 600, 'https://cdn.example.com/o.mp3', 'sv', now() - interval '40 days')`
+    }
+    const res = await post({ podcastIds: [...shows, 'not-an-id'] })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    // Every follow, the thirteenth and fourteenth included, with only recent episodes.
+    expect(body.shows).toHaveLength(14)
+    const last = body.shows.find((s: any) => s.podcast.id === shows[13])
+    expect(last.episodes.map((e: any) => e.title)).toEqual(['New 13'])
+    expect(last.episodes[0]).toMatchObject({ duration_sec: 600, status: 'none' })
+    // Only the stale feed is re-read, in the background.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(feedReads).toBe(1)
+    expect(await (await post({ podcastIds: [] })).json()).toEqual({ shows: [] })
+    // Its own limit: the show-page limit isn't touched.
+    for (let i = 0; i < NEW_EPISODES_LIMITS.perMinute - 2; i++) await post({ podcastIds: [shows[0]] })
+    expect((await post({ podcastIds: [shows[0]] })).status).toBe(429)
+  })
+
   it('estimates an episode on own keys without transcription when the transcript is already there (PC-1020-09)', async () => {
     const { ownKeysEstimate } = await import('@polycast/core')
     const TX_FEED = 'https://feeds.example.com/tx.xml'

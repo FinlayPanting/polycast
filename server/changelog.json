@@ -440,6 +440,14 @@
    "title": "The line you're hearing, on the lock screen",
    "description": "With your phone locked, the lock screen and Control Centre now show the line the host is saying, with its English underneath, changing once per line.",
    "tryIt": "Start an episode, lock your phone and glance at the lock screen"
+  },
+  {
+   "id": "PC-1020-02",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "New episodes from every show you follow",
+   "description": "The Library now checks all the shows you follow in one go, not just the first 12, and no longer leaves you with 'Give it a moment' when you open a show straight after.",
+   "tryIt": "Library, then New episodes"
   }
  ]
 }

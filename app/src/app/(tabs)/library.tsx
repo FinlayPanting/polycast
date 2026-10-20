@@ -14,8 +14,8 @@ import { carryOn, LIBRARY_SECTIONS, newEpisodes, recentShows, type NewEpisode, t
 
 const SECTION = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.id, s])) as Record<(typeof LIBRARY_SECTIONS)[number]['id'], (typeof LIBRARY_SECTIONS)[number]>
 
-/** At most this many followed shows are checked for new episodes each time the Library opens. */
-const SHOWS_CHECKED = 12
+/** Up to this many followed shows are checked for new episodes, in one call (PC-1020-02). */
+const SHOWS_CHECKED = 200
 
 /**
  * The Library, built for keeping up (PC-1017-F11): the shows listened to recently along the top,
@@ -25,12 +25,12 @@ export default function Library() {
   const p = usePalette()
   const { data, loading, reload } = useAsync(listListens, [])
   const follows = useKept(followedShows)
-  const followKey = follows.slice(0, SHOWS_CHECKED).map((f) => f.podcastId).join(',')
+  // Sorted, so the same follows in another order don't ask again.
+  const followKey = follows.slice(0, SHOWS_CHECKED).map((f) => f.podcastId).sort().join(',')
   const fresh = useAsync(
     async () => {
       if (!followKey) return []
-      const pages = await Promise.allSettled(followKey.split(',').map((podcastId) => api.openShow({ podcastId })))
-      return pages.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+      return (await api.newEpisodes(followKey.split(','))).shows
     },
     [followKey],
     { cacheKey: `library:new:${followKey}` },

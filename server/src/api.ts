@@ -83,6 +83,13 @@ export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddr
  * can't hammer them on Polycast's behalf. Generous enough that a person never notices.
  */
 export const LEARNER_LIMITS = { searchPerMinute: 30, openPerMinute: 30, preparePerMinute: 10, searchMaxChars: 100 }
+
+/**
+ * The Library's new episodes from followed shows (PC-1020-02): one call for every follow, from the
+ * catalogue, under its own limit. A few of the stalest feeds are re-read in the background each
+ * time, so new episodes turn up without anyone opening the show.
+ */
+export const NEW_EPISODES_LIMITS = { perMinute: 20, shows: 200, days: 14, perShow: 10, refreshPerCall: 3 }
 export const SLOW_DOWN = 'Give it a moment, then try again.'
 
 /**
@@ -361,6 +368,42 @@ export function createApi(deps: ApiDeps) {
       select id, title, published, duration_sec, image, status, difficulty, description from episodes
       where podcast_id = ${podcastId} order by published desc nulls last limit 50`
     return c.json({ podcast, episodes })
+  })
+
+  const newEpisodesLimit = rateLimiter(NEW_EPISODES_LIMITS.perMinute, 60_000)
+  app.post('/v1/library/new-episodes', async (c) => {
+    if (!newEpisodesLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
+    const body = await c.req.json().catch(() => ({}))
+    const ids = (Array.isArray(body?.podcastIds) ? body.podcastIds : [])
+      .filter((x: unknown): x is string => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x))
+      .slice(0, NEW_EPISODES_LIMITS.shows)
+    if (!ids.length) return c.json({ shows: [] })
+    const podcasts = await sql`select id, title, artwork, feed_url, updated_at from podcasts where id = any(${ids}::uuid[]) and not removed`
+    const episodes = podcasts.length
+      ? await sql`
+          select * from (
+            select e.id, e.podcast_id, e.title, e.published, e.duration_sec, e.image, e.status,
+              row_number() over (partition by e.podcast_id order by e.published desc) as n
+            from episodes e
+            where e.podcast_id = any(${podcasts.map((p) => p.id)}::uuid[])
+              and e.published > now() - make_interval(days => ${NEW_EPISODES_LIMITS.days})
+          ) x where n <= ${NEW_EPISODES_LIMITS.perShow}
+          order by published desc`
+      : []
+    const now = new Date()
+    const stale = podcasts
+      .filter((p) => !showIsFresh(p.updated_at, now))
+      .sort((a, b) => new Date(a.updated_at ?? 0).getTime() - new Date(b.updated_at ?? 0).getTime())
+      .slice(0, NEW_EPISODES_LIMITS.refreshPerCall)
+    for (const p of stale) syncFeed(sql, deps.fetch, p.feed_url, undefined, { lookupHost: deps.lookupHost }).catch(() => {})
+    return c.json({
+      shows: podcasts.map((p) => ({
+        podcast: { id: p.id, title: p.title, artwork: p.artwork },
+        episodes: episodes
+          .filter((e) => e.podcast_id === p.id)
+          .map((e) => ({ id: e.id, title: e.title, published: e.published, duration_sec: e.duration_sec, image: e.image, status: e.status })),
+      })),
+    })
   })
 
   // "Use your own API keys" (PC-1017-K1): check a key with a tiny call, and forget every copy.

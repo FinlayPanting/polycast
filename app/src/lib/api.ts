@@ -1,3 +1,4 @@
+import type { ShowEpisodes } from './libraryCore'
 import type { EpisodeEstimate } from './ownKeysCore'
 import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
@@ -99,6 +100,8 @@ export const api = {
   discover: (language: string) => call<{ shelves: Shelf[] }>('GET', `/v1/discover/${language}`),
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
   // Opening a show re-reads its feed on the server, which may take up to 15 seconds itself.
+  /** New episodes from every followed show, in one call from the catalogue (PC-1020-02). */
+  newEpisodes: (podcastIds: string[]) => call<{ shows: ShowEpisodes[] }>('POST', '/v1/library/new-episodes', { podcastIds }),
   openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show, 25_000),
   /** Shared translations (PC-1017-T1): a list's titles, and a show's or episode's description by id. */
   translate: (req: { titles?: string[]; podcastId?: string; episodeId?: string }) =>

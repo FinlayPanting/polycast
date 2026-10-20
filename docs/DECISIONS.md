@@ -331,3 +331,7 @@ Board item PC-1020-08. While an episode plays (or is paused mid-listen), the loc
 ## Mia's volume match survives re-plans and Leo versions (20 Oct 2026)
 
 Board item PC-1020-01. When a prepare starts from a saved transcript (a retry, or Polycast's re-plan of an older lesson), the loudness measured for the episode's earlier plan is carried into the new plan, as the fingerprint already was. Episodes with the feed's own transcript now have a copy downloaded just to measure loudness (no fingerprint, nothing kept); if the download fails the lesson goes ahead without it. To make the carry-over possible, re-plans no longer delete the old plans when they're queued: the episode is 'preparing' meanwhile so nothing is served, and writing the new plan clears any plan from an older version. A voice pass for a second guide now copies the newest plan.
+
+## The Library's new-episodes check (20 Oct 2026)
+
+Board item PC-1020-02. The Library now asks `POST /v1/library/new-episodes` once with every followed show (up to 200), and the server answers from the catalogue: each show's episodes from the last 14 days (up to 10 each). It has its own limit (20 a minute per learner), so opening a show page afterwards never hits "slow down". To keep the catalogue current without opening each show, every call also re-reads, in the background, up to three of those shows whose feeds are older than 15 minutes (stalest first); their new episodes show on the next visit. Simplest options picked: follows stay on the phone and are sent with the request.
