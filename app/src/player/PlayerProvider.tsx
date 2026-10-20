@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { findOldFriends, selectMoments, type Clip, type GuideMoment } from '@polycast/core'
+import { findOldFriends, guideVolume, selectMoments, type Clip, type GuideMoment } from '@polycast/core'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { demoAudio, demoVoice } from '../demo/audio'
@@ -159,7 +159,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
           const l = new GuidedListen({
             audio: config.demo ? demoAudio(d.episode.durationSec) : trackPlayerAudio(),
-            voice: config.demo ? demoVoice() : expoGuideVoice(),
+            voice: config.demo ? demoVoice() : expoGuideVoice({ volume: guideVolume(d.plan?.loudnessLufs) }),
             moments,
             segments: d.transcript.segments,
             onChange: (s) => !r.disposed && setState(s),

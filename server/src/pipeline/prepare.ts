@@ -56,6 +56,8 @@ export interface PrepareDeps {
    */
   downloadAudio?: (url: string) => Promise<Uint8Array>
   fingerprint?: (audio: Uint8Array) => Promise<Uint8Array>
+  /** Measures the downloaded copy's loudness in LUFS (PC-1017-F16). Best effort: undefined if it can't. */
+  loudness?: (audio: Uint8Array) => Promise<number | undefined>
 }
 
 /** Where an episode's fingerprint is stored. */
@@ -87,6 +89,7 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
   const meter = new UsageMeter()
   const resumed = input.savedTranscript
   let syncUrl = resumed ? input.savedSyncUrl : undefined
+  let loudnessLufs: number | undefined
   await deps.guard.reserve(input.jobId, estimatePrepCostUSD(input.durationSec, { feedTranscript: Boolean(input.feedWords || resumed) }))
   try {
     let transcript: Transcript
@@ -100,6 +103,7 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
         if (deps.downloadAudio && deps.fingerprint) {
           audio = await withRetry(() => deps.downloadAudio!(input.audioUrl))
           syncUrl = await deps.storage.put(syncPath(input.episodeId), await deps.fingerprint(audio), 'application/octet-stream')
+          loudnessLufs = await deps.loudness?.(audio).catch(() => undefined)
         }
         const result = await withRetry(() => deps.transcriber.transcribe({ audioUrl: input.audioUrl, language: input.language, durationSec: input.durationSec, audio, names: input.names }))
         audio = undefined // never kept
@@ -132,7 +136,7 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
 
     await deps.onStage?.('voicing')
     const voiced = await voicePlan(unvoiced, input.guide, { speech: deps.speech, storage: deps.storage, meter })
-    const plan = syncUrl ? { ...voiced, syncUrl } : voiced
+    const plan = { ...voiced, ...(syncUrl ? { syncUrl } : {}), ...(loudnessLufs !== undefined ? { loudnessLufs } : {}) }
 
     await deps.onStage?.('done')
     return {

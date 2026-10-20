@@ -129,6 +129,11 @@ export interface LessonPlan {
   syncUrl?: string
   /** Written once while preparing (PC-1017-P1); missing on plans written before 18 Oct 2026. */
   primer?: Primer
+  /**
+   * The episode's integrated loudness in LUFS, measured on the server's copy while preparing
+   * (PC-1017-F16), so the guide plays at a matching level. Missing on older plans.
+   */
+  loudnessLufs?: number
 }
 
 /**

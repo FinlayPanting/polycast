@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fingerprintFromPcm } from '@polycast/core'
-import { ffmpegAacEncoder, ffmpegFingerprint, silentWav, wavDurationSec } from '../src/audio'
+import { ffmpegAacEncoder, ffmpegFingerprint, ffmpegLoudness, guideFilter, pcmToWav, silentWav, wavDurationSec } from '../src/audio'
 import { elevenLabsSpeech, resolveElevenModel } from '../src/providers/elevenlabs'
 import { chooseTtsProvider, withFallbackSpeech } from '../src/providers/speechChoice'
 import { elevenVoiceFor, guideById } from '../src/voices'
@@ -191,6 +191,28 @@ describe('audio', () => {
     expect(mimeType).toBe('audio/mp4')
     expect(audio.byteLength).toBeGreaterThan(100)
     expect(audio.byteLength).toBeLessThan(wav.byteLength / 4)
+  })
+
+  // PC-1017-F16: guide lines at the podcast standard with short fades; episodes measured.
+  const tone = (seconds: number, amplitude: number, rate = 24000) => {
+    const pcm = Int16Array.from({ length: Math.round(rate * seconds) }, (_, i) => Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * amplitude))
+    return pcmToWav(new Uint8Array(pcm.buffer), rate)
+  }
+
+  it('renders a guide line at -16 LUFS with fades in and out', async () => {
+    expect(guideFilter(2)).toBe('loudnorm=I=-16:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.03,afade=t=out:st=1.970:d=0.03')
+    const { audio } = await ffmpegAacEncoder()(tone(3, 1500)) // a quiet line, about -30 LUFS
+    const lufs = await ffmpegLoudness()(audio)
+    expect(lufs).toBeDefined()
+    expect(lufs!).toBeGreaterThan(-18.5)
+    expect(lufs!).toBeLessThan(-13.5)
+  })
+
+  it("measures an episode's loudness, and gives nothing for bytes it can't read", async () => {
+    const loud = await ffmpegLoudness()(tone(3, 16000))
+    const quiet = await ffmpegLoudness()(tone(3, 1000))
+    expect(loud!).toBeGreaterThan(quiet! + 20)
+    expect(await ffmpegLoudness()(new Uint8Array([1, 2, 3, 4]))).toBeUndefined()
   })
 })
 

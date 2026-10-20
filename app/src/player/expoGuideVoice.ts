@@ -22,7 +22,9 @@ export function prepareGuideAudio(): Promise<void> {
 }
 
 /** The guide's voice through expo-audio. Mixes with the episode player so neither cuts the other off. */
-export function expoGuideVoice(): GuideVoice {
+/** `volume` (0–1) matches the guide to the episode's measured loudness (PC-1017-F16); full by default. */
+export function expoGuideVoice(opts: { volume?: number } = {}): GuideVoice {
+  const volume = Math.max(0, Math.min(1, opts.volume ?? 1))
   let player: AudioPlayer | undefined
   let finish: (() => void) | undefined
 
@@ -46,6 +48,7 @@ export function expoGuideVoice(): GuideVoice {
         // stayed paused after the guide. The simulator doesn't enforce this, so it only showed on phones.
         const p = createAudioPlayer(url, { updateInterval: 200, keepAudioSessionActive: true })
         player = p
+        p.volume = volume
         // Never leave the listen stuck on a clip that won't load or never reports finishing: give
         // up 15 s after starting, or 3 s after its length once that's known, and carry on.
         let guard = setTimeout(() => {

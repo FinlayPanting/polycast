@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { FINGERPRINT_SAMPLE_RATE, FingerprintBuilder } from '@polycast/core'
+import { FINGERPRINT_SAMPLE_RATE, FingerprintBuilder, GUIDE_LUFS, parseIntegratedLoudness } from '@polycast/core'
 import { POLYCAST_UA, safeFetch, TooLarge, UnsafeUrl, type LookupHost } from './safeFetch'
 
 /** Duration of a PCM WAV file from its header. */
@@ -49,11 +49,30 @@ export function silentWav(seconds: number, sampleRate = 24000): Uint8Array {
   return new Uint8Array(buf)
 }
 
+/** Short fades on every guide line, so it never clicks in or out (PC-1017-F16). */
+export const GUIDE_FADE_SEC = 0.03
+
+/**
+ * The ffmpeg filter for a guide line: brought to the podcast standard (GUIDE_LUFS) so the app can
+ * match it to each episode's measured loudness, with short fades in and out.
+ */
+export function guideFilter(durationSec: number): string {
+  const fadeOutAt = Math.max(0, durationSec - GUIDE_FADE_SEC)
+  return [`loudnorm=I=${GUIDE_LUFS}:TP=-1.5:LRA=11`, `afade=t=in:st=0:d=${GUIDE_FADE_SEC}`, `afade=t=out:st=${fadeOutAt.toFixed(3)}:d=${GUIDE_FADE_SEC}`].join(',')
+}
+
 /** WAV → 64 kbit/s AAC in an M4A container with ffmpeg: about 0.5 MB a minute of guide speech. */
 export function ffmpegAacEncoder(ffmpegPath = 'ffmpeg') {
   return (wav: Uint8Array): Promise<{ audio: Uint8Array; mimeType: string }> =>
     new Promise((resolve, reject) => {
-      const p = spawn(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-f', 'wav', '-i', 'pipe:0', '-c:a', 'aac', '-b:a', '64k', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'])
+      let filter: string[] = []
+      try {
+        // loudnorm resamples internally; -ar keeps the line at its own rate.
+        filter = ['-af', guideFilter(wavDurationSec(wav)), '-ar', String(new DataView(wav.buffer, wav.byteOffset, wav.byteLength).getUint32(24, true))]
+      } catch {
+        filter = [] // not a WAV header we can read: encode it as it is
+      }
+      const p = spawn(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-f', 'wav', '-i', 'pipe:0', ...filter, '-c:a', 'aac', '-b:a', '64k', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'])
       const out: Buffer[] = []
       const err: Buffer[] = []
       p.stdout.on('data', (d: Buffer) => out.push(d))
@@ -63,7 +82,26 @@ export function ffmpegAacEncoder(ffmpegPath = 'ffmpeg') {
         if (code === 0) resolve({ audio: new Uint8Array(Buffer.concat(out)), mimeType: 'audio/mp4' })
         else reject(new Error(`ffmpeg failed: ${Buffer.concat(err).toString().slice(0, 300)}`))
       })
+      p.stdin.on('error', () => {})
       p.stdin.end(Buffer.from(wav))
+    })
+}
+
+/**
+ * Measures an episode's integrated loudness (LUFS) with ffmpeg's ebur128 filter, streaming the
+ * bytes through so nothing is kept (PC-1017-F16). Undefined if it can't be measured.
+ */
+export function ffmpegLoudness(ffmpegPath = 'ffmpeg') {
+  return (audio: Uint8Array): Promise<number | undefined> =>
+    new Promise((resolve) => {
+      const p = spawn(ffmpegPath, ['-hide_banner', '-nostats', '-i', 'pipe:0', '-vn', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'])
+      const err: Buffer[] = []
+      p.stdout.on('data', () => {})
+      p.stderr.on('data', (d: Buffer) => err.push(d))
+      p.on('error', () => resolve(undefined))
+      p.on('close', (code) => resolve(code === 0 ? parseIntegratedLoudness(Buffer.concat(err).toString()) : undefined))
+      p.stdin.on('error', () => {})
+      p.stdin.end(Buffer.from(audio.buffer, audio.byteOffset, audio.byteLength))
     })
 }
 

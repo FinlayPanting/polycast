@@ -3,7 +3,7 @@
  * Configuration comes from environment variables; see .env.example.
  */
 import { serve } from '@hono/node-server'
-import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint } from './audio'
+import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint, ffmpegLoudness } from './audio'
 import { createApi, supabaseVerifier } from './api'
 import { connect, forgetOldRemovalRequests, releaseJob } from './db'
 import { ELEVEN_TTS_MODEL, elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
@@ -134,6 +134,7 @@ async function main() {
       storage: supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY')),
       downloadAudio: downloadEpisode(),
       fingerprint: ffmpegFingerprint(),
+      loudness: ffmpegLoudness(),
       alert,
       notifyReady: expoPush(async (id) => (await sql`select push_token from profiles where id = ${id}`)[0]?.push_token ?? undefined),
       // Learners' own keys (PC-1017-K1): their ElevenLabs key for Scribe and the guide's voice, their

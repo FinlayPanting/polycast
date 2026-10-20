@@ -200,6 +200,23 @@ describe('fingerprinting the copy we transcribe', () => {
     expect(heard).toBe(bytes)
     expect(d.storage.files.get('sync/ep1.fp')).toEqual(new Uint8Array([18, 16, 14]))
     expect(r.plan.syncUrl).toBe('https://storage.test/sync/ep1.fp')
+    expect(r.plan.loudnessLufs).toBeUndefined()
+  })
+
+  it("measures the loudness of the same copy and keeps it with the lesson (PC-1017-F16)", async () => {
+    const d = deps()
+    const bytes = new Uint8Array([9, 8, 7])
+    let measured: Uint8Array | undefined
+    const r = await prepareEpisode(input(d.ep), { ...d, downloadAudio: async () => bytes, fingerprint: async (a) => a, loudness: async (a) => ((measured = a), -24.5) })
+    expect(measured).toBe(bytes)
+    expect(r.plan.loudnessLufs).toBe(-24.5)
+  })
+
+  it('still prepares the episode when the loudness cannot be measured', async () => {
+    const d = deps()
+    const r = await prepareEpisode(input(d.ep), { ...d, downloadAudio: async () => new Uint8Array([1]), fingerprint: async (a) => a, loudness: async () => { throw new Error('ffmpeg missing') } })
+    expect(r.plan.loudnessLufs).toBeUndefined()
+    expect(r.plan.moments.length).toBeGreaterThan(0)
   })
 
   it('keeps the fingerprint when a retry resumes from the saved transcript', async () => {
