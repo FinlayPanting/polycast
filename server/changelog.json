@@ -416,6 +416,14 @@
    "title": "Searching no longer uses up translations",
    "description": "Search translates result titles once you stop typing (or press Search), so the show you open next still gets its English lines.",
    "tryIt": "Search for a show, refine it a few times, then open one"
+  },
+  {
+   "id": "PC-1019-09",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "Discover says hello",
+   "description": "Discover now greets you in the language you're learning, by time of day, with the odd local wink. Tap it for the English.",
+   "tryIt": "Open Discover, then tap the greeting under your language"
   }
  ]
 }

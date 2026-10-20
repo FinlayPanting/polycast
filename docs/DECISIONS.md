@@ -315,3 +315,7 @@ Board item PC-1018-10. After a jump from the episode map, the player shows "Back
 ## Search translations wait until you stop typing (20 Oct 2026)
 
 Board item PC-1019-06. Search asks for result-title translations only once the results have stayed the same for 1.5 seconds, or at once when the search key is pressed; leaving the screen cancels a pending request. New titles shimmer while they wait. No server change: the per-minute translation limit stays as it is.
+
+## Discover says hello (20 Oct 2026)
+
+Board item PC-1019-09. Under the language name on Discover, a greeting in the language being learned by the phone's local time ("God morgon", "Buenas tardes", "Bonsoir"; the evening one carries on past midnight), with the learner's first name when their account has one (from Sign in with Apple; an email or private relay address is never used). Tap it for the English. On every other day, in the right hours, a local wink sits underneath ("Dags för fika?" at 3 pm, "On prend l'apéro ?" early evening, Friday-night lines on Fridays). Hand-written in `app/src/lib/greeting.ts` for the six launch languages: no AI, works offline. Simplest options picked: the meaning on tap is always English (every launch learner reads English), and the greeting is worked out when Discover opens, not ticking live.
