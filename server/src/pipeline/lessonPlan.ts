@@ -38,6 +38,8 @@ export interface PlanDraft {
   wrapUp: { script: string; questions: Question[] }
   /** Optional so drafts from older prompts (and test fixtures) still assemble. */
   primer?: { gist: string; gistNative: string; words: DraftTerm[]; themes: { title: string; segmentId: string }[] }
+  /** One shareable culture line for the lesson recap card (PC-1019-F01). Optional for older drafts. */
+  recap?: { didYouKnow: string }
 }
 
 interface DraftTerm {
@@ -100,8 +102,9 @@ export const PLAN_SCHEMA = {
       },
       required: ['gist', 'gistNative', 'words', 'themes'],
     },
+    recap: { type: 'object', properties: { didYouKnow: { type: 'string' } }, required: ['didYouKnow'] },
   },
-  required: ['hosts', 'summary', 'warmup', 'chapters', 'wordMoments', 'cultureNotes', 'quickQuestions', 'wrapUp', 'primer'],
+  required: ['hosts', 'summary', 'warmup', 'chapters', 'wordMoments', 'cultureNotes', 'quickQuestions', 'wrapUp', 'primer', 'recap'],
 }
 
 function clock(sec: number): string {
@@ -130,6 +133,7 @@ Write a lesson plan:
 - quickQuestions: about one every 3 minutes, checking the gist of what was just said, after the given line. The prompt starts with a few words of context (e.g. "Erik was just talking about his old camera."), then asks. Three short options, one correct.
 - Placing moments: the guide only ever steps in once a speaker has finished their answer or their bit, or straight after someone asks a question; never mid-sentence or mid-exchange. For culture notes and quick questions, give the id of the line where that happens. Spread everything out through the episode rather than bunching it.
 - wrapUp: script (under 70 words) recapping the episode warmly and honestly, and 3 questions on its content.
+- recap: didYouKnow is one surprising, friendly fact about the culture, place or topic of this episode, in ${native}, under 20 words, that a learner would enjoy sharing (e.g. "Swedes have a word, fika, for a proper coffee break with friends."). No [[ ]] marks.
 - primer: a short warm-up the learner reads before pressing play. No [[ ]] marks anywhere in the primer. gist: two or three short sentences on what the episode is about, in simple ${target} a learner at A2 could follow. gistNative: the same in ${native}. words: the 5 to 8 most useful words or short phrases to listen for (they may repeat warm-up or word-moment terms), copied exactly as spoken in the line given by segmentId, with dictionary form and meaning in ${native}. themes: the 2 to 4 main themes, a few words each in ${native}, with the id of the line where each first comes up.
 
 Transcript:
@@ -295,6 +299,7 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
     clips: [],
   })
 
+  const didYouKnow = recapLine(draft)
   const primer = draft.primer ? assemblePrimer(draft.primer, transcript, dropped, draft.chapters) : undefined
 
   // Drop whatever still breaks the rules, and keep word-moment pairs together.
@@ -315,9 +320,18 @@ export function assemblePlan(draft: PlanDraft, transcript: Transcript, opts: { e
       moments: kept.sort((a, b) => a.at - b.at),
       wrapUpQuestions: wrapUpQuestions(draft),
       ...(primer ? { primer } : {}),
+      ...(didYouKnow ? { recap: { didYouKnow } } : {}),
     },
     dropped,
   }
+}
+
+/** The recap card's culture line (PC-1019-F01): trimmed, without guide marks, at most 30 words. */
+export function recapLine(draft: PlanDraft): string | undefined {
+  const t = draft.recap?.didYouKnow?.replace(/\[\[|\]\]/g, '').replace(/\s+/g, ' ').trim()
+  if (!t) return undefined
+  const words = t.split(' ')
+  return words.length <= 30 ? t : `${words.slice(0, 30).join(' ').replace(/[,;:.]+$/, '')}…`
 }
 
 /** Most words a primer lists, and the fewest that make it worth showing (PC-1017-P1). */

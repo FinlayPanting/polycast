@@ -134,6 +134,8 @@ export interface LessonPlan {
    * (PC-1017-F16), so the guide plays at a matching level. Missing on older plans.
    */
   loudnessLufs?: number
+  /** For the shareable lesson recap (PC-1019-F01): one short culture line. Missing on older plans. */
+  recap?: { didYouKnow?: string }
 }
 
 /**

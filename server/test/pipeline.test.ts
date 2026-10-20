@@ -324,3 +324,17 @@ describe('voicing target-language words', () => {
     expect(out.moments[0]!.audio!.parts.map((p) => p.kind)).toEqual(['speech', 'clip', 'speech', 'speech'])
   })
 })
+
+describe('the lesson recap line (PC-1019-F01)', () => {
+  it('keeps one short culture line in the plan for the share card, without guide marks', async () => {
+    const { assemblePlan, recapLine } = await import('../src/pipeline/lessonPlan')
+    const ep = syntheticEpisode()
+    const transcript = { language: 'sv', source: 'scribe' as const, words: ep.words, segments: [] }
+    const withLine = assemblePlan({ ...draftFor(), recap: { didYouKnow: '  Swedes stop for [[fika]], a proper coffee break.  ' } }, transcript, { episodeId: 'e', nativeLanguage: 'en', durationSec: ep.durationSec })
+    expect(withLine.plan.recap).toEqual({ didYouKnow: 'Swedes stop for fika, a proper coffee break.' })
+    const without = assemblePlan(draftFor(), transcript, { episodeId: 'e', nativeLanguage: 'en', durationSec: ep.durationSec })
+    expect(without.plan.recap).toBeUndefined()
+    const long = recapLine({ ...draftFor(), recap: { didYouKnow: Array.from({ length: 40 }, () => 'word').join(' ') } })!
+    expect(long.split(' ')).toHaveLength(30)
+  })
+})

@@ -384,6 +384,14 @@
    "title": "What's new",
    "description": "This page: what each overnight build changed, and where to try it.",
    "tryIt": "You, then What's new"
+  },
+  {
+   "id": "PC-1019-F01",
+   "date": "2026-10-20",
+   "kind": "Growth",
+   "title": "Share your lesson recap",
+   "description": "The wrap-up offers a story-sized recap card (words you picked up, a 'Did you know?' line, minutes, quiz score and podcasts completed) or a 'Word of the episode' card.",
+   "tryIt": "Finish any episode and tap Share"
   }
  ]
 }

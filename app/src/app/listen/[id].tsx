@@ -7,6 +7,8 @@ import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
 import { ShareCard, type ShareCardHandle } from '../../components/ShareCard'
+import { RecapCard, type RecapCardHandle } from '../../components/RecapCard'
+import { didYouKnow, recapLayout, recapMessage, recapWords, wordCardLayout, wordOfTheEpisode, type RecapStats } from '../../lib/recap'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
@@ -19,10 +21,10 @@ import { playerMenu } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
-import { guideName, guidanceLevelOr, voicedGuideId } from '../../lib/languages'
+import { guideName, guidanceLevelOr, languageName, voicedGuideId } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
 import { useSession } from '../../lib/session'
-import { resumePosition, savePosition } from '../../lib/data'
+import { countFinished, resumePosition, savePosition } from '../../lib/data'
 import { listWords, SAVE_WORD_FAILED } from '../../lib/words'
 import { plog } from '../../lib/playbackLog'
 import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
@@ -88,7 +90,7 @@ function ShareLines({ lines, data }: { lines: ShareableLine[]; data: ListenPaylo
   const line = lines[Math.min(i, lines.length - 1)]!
   return (
     <View style={{ gap: space.sm }}>
-      <Txt variant="heading">Share a line you caught</Txt>
+      <Txt variant="bodyStrong">Or share a line you caught</Txt>
       <View style={{ backgroundColor: p.raised, borderRadius: 18, padding: space.md, gap: space.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Artwork uri={data.episode.image} size={44} radius={10} />
@@ -114,6 +116,41 @@ function ShareLines({ lines, data }: { lines: ShareableLine[]; data: ListenPaylo
   )
 }
 
+/**
+ * Share your lesson recap (PC-1019-F01): a story-sized card of what was learned, or the simpler
+ * "Word of the episode"; the learner flips between them before sharing.
+ */
+function ShareRecap({ data, savedThisListen, stats }: { data: ListenPayload; savedThisListen: string[]; stats: RecapStats }) {
+  const { profile } = useSession()
+  const card = useRef<RecapCardHandle>(null)
+  const [choice, setChoice] = useState<'recap' | 'word'>('recap')
+  const words = useMemo(() => recapWords(data.plan, savedThisListen, data.transcript.glossary), [data, savedThisListen])
+  const word = useMemo(() => wordOfTheEpisode(words, data.transcript.segments), [words, data])
+  const layout = useMemo(
+    () =>
+      choice === 'word' && word
+        ? wordCardLayout(word, data.episode.podcastTitle, profile?.flag_id)
+        : recapLayout({ languageName: languageName(data.transcript.language), flagId: profile?.flag_id, showTitle: data.episode.podcastTitle, episodeTitle: data.episode.title, words, didYouKnow: didYouKnow(data.plan), stats }),
+    [choice, word, words, data, profile?.flag_id, stats],
+  )
+  const label = choice === 'word' && word ? `Word of the episode: ${word.word}, ${word.meaning}` : `Lesson recap: ${data.episode.title}. ${words.map((w) => `${w.word}, ${w.meaning}`).join('; ')}`
+  return (
+    <View style={{ gap: space.sm }}>
+      <Txt variant="heading">Share your lesson recap</Txt>
+      {word ? (
+        <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
+          <Button kind={choice === 'recap' ? 'secondary' : 'quiet'} label="Lesson recap" onPress={() => setChoice('recap')} />
+          <Button kind={choice === 'word' ? 'secondary' : 'quiet'} label="Word of the episode" onPress={() => setChoice('word')} />
+        </View>
+      ) : null}
+      <View style={{ alignItems: 'center' }}>
+        <RecapCard ref={card} layout={layout} name={`${choice}-${data.episode.id.slice(0, 8)}`} previewWidth={220} label={label} />
+      </View>
+      <Button label="Share" onPress={() => void card.current?.share(recapMessage(data.episode.podcastTitle, data.episode.title))} />
+    </View>
+  )
+}
+
 /** After the episode: the wrap-up questions and the words gathered on the way. */
 function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data: ListenPayload; savedThisListen: string[]; caughtAt: number[]; listenedSec: number; onDone: () => void }) {
   const p = usePalette()
@@ -123,6 +160,13 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
   const all = questions.length > 0 && Object.keys(answers).length === questions.length
   const invite = plusInvite(data.freeEpisode, listenedSec, savedThisListen.length)
   const lines = useMemo(() => shareableLines(data.transcript.segments, caughtAt), [data, caughtAt])
+  // Podcasts finished overall, this one included once it's saved as finished (PC-1019-F01).
+  const [completed, setCompleted] = useState<number>()
+  useEffect(() => {
+    void countFinished().then(setCompleted, () => {})
+  }, [])
+  const answered = Object.keys(answers).length
+  const stats = useMemo<RecapStats>(() => ({ minutes: listenedSec / 60, quiz: answered ? { right, of: questions.length } : undefined, completed }), [listenedSec, answered, right, questions.length, completed])
   return (
     <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
       <Mark height={44} />
@@ -150,6 +194,7 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
           </Txt>
         </View>
       ) : null}
+      <ShareRecap data={data} savedThisListen={savedThisListen} stats={stats} />
       {lines.length ? <ShareLines lines={lines} data={data} /> : null}
       {invite ? (
         <View style={{ backgroundColor: p.raised, borderRadius: 18, padding: space.md, gap: space.sm }}>

@@ -53,6 +53,13 @@ export async function listListens(): Promise<ListenRow[]> {
   return (data ?? []) as unknown as ListenRow[]
 }
 
+/** Podcasts the learner has finished overall, for the lesson recap (PC-1019-F01). Undefined offline. */
+export async function countFinished(): Promise<number | undefined> {
+  if (config.demo) return 3
+  const { count, error } = await supabase.from('listens').select('episode_id', { count: 'exact', head: true }).not('finished_at', 'is', null)
+  return error ? undefined : (count ?? 0)
+}
+
 /** Where the learner left off, if they started this episode before and didn't finish. */
 export async function resumePosition(episodeId: string): Promise<number> {
   if (config.demo) return 0
