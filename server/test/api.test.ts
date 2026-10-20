@@ -572,6 +572,41 @@ run('API and worker', () => {
     expect(await (await call(ben, 'GET', '/v1/episodes/not-an-id/own-keys-cost')).json()).toEqual({ usedUSD: null })
   })
 
+  it('estimates an episode on own keys without transcription when the transcript is already there (PC-1020-09)', async () => {
+    const { ownKeysEstimate } = await import('@polycast/core')
+    const TX_FEED = 'https://feeds.example.com/tx.xml'
+    const txFeed = `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel><title>T</title><language>sv</language>
+      <item><title>With</title><guid>tx-with</guid><enclosure url="https://cdn.example.com/w.mp3" type="audio/mpeg"/><podcast:transcript url="https://cdn.example.com/w.json" type="application/json" language="sv"/></item>
+      <item><title>Without</title><guid>tx-without</guid><enclosure url="https://cdn.example.com/o.mp3" type="audio/mpeg"/></item>
+    </channel></rss>`
+    const fetchTx: typeof fetch = async (input, init) => (String(input) === TX_FEED ? new Response(txFeed) : fakeFetch(input, init))
+    const est = createApi({ sql, verify: async (t) => t, fetch: fetchTx, lookupHost: publicHost })
+    const get = async (user: string, id: string) => est.request(`/v1/episodes/${id}/own-keys-estimate`, { headers: { Authorization: `Bearer ${user}` } })
+    const [show] = await sql`insert into podcasts (feed_url, title, language) values (${TX_FEED}, 'T', 'sv') returning id`
+    const ep = async (guid: string, durationSec: number) =>
+      (await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language) values (${show!.id}, ${guid}, ${guid}, ${durationSec}, 'https://cdn.example.com/x.mp3', 'sv') returning id`)[0]!.id as string
+    const cleo = await learner()
+
+    const plain = await ep('tx-without', 1800)
+    expect(await (await get(cleo, plain)).json()).toEqual({ ...ownKeysEstimate(1800), perHour: false, transcript: null })
+
+    const withFeed = await ep('tx-with', 1800)
+    const fromFeed = await (await get(cleo, withFeed)).json()
+    expect(fromFeed).toEqual({ ...ownKeysEstimate(1800, { feedTranscript: true }), perHour: false, transcript: 'feed' })
+    expect(fromFeed.totalUSD).toBeLessThan(ownKeysEstimate(1800).totalUSD)
+
+    // Already transcribed by Polycast, in the learner's language: no transcription either.
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments) values (${plain}, 'sv', 'en', 'scribe', ${sql.json([{ text: 'Hej', start: 0, end: 0.4 }] as any)}, '[]')`
+    expect((await (await get(cleo, plain)).json()).transcript).toBe('polycast')
+
+    // No length from the feed: the price of an hour, said as such.
+    const noLength = await ep('tx-none', 0)
+    expect(await (await get(cleo, noLength)).json()).toEqual({ ...ownKeysEstimate(3600), perHour: true, transcript: null })
+
+    expect((await get(cleo, randomUUID())).status).toBe(404)
+    expect((await get(cleo, 'not-an-id')).status).toBe(404)
+  })
+
   it('prepares an episode on a learner’s own keys: no allowance, their providers, keys gone afterwards (PC-1017-K1)', async () => {
     const SECRET = Buffer.alloc(32, 3).toString('base64')
     const keys = { elevenlabs: 'sk_eleven_abcdefghijklmnopqrstuvwx', gemini: 'AIzaSy-abcdefghijklmnopqrstuvwxyz0123' }

@@ -16,6 +16,7 @@ import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
+import { feedTranscriptLink } from './worker'
 import { clientAddress, rateLimiter } from './rateLimit'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -404,6 +405,31 @@ export function createApi(deps: ApiDeps) {
     const durationSec = Number(c.req.query('durationSec'))
     if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > 6 * 3600) return c.json({ error: 'durationSec must be a length in seconds' }, 400)
     return c.json(ownKeysEstimate(durationSec, { calibration: deps.ownKeysCalibration }))
+  })
+
+  // The estimate for one episode (PC-1020-09): transcription is left out when the transcript is
+  // already there (one Polycast made in the learner's language, or the feed's own word-timed one),
+  // as preparing skips it then too. Without a length from the feed, the price of an hour is given.
+  const estimateLimit = rateLimiter(LEARNER_LIMITS.openPerMinute, 60_000)
+  app.get('/v1/episodes/:id/own-keys-estimate', async (c) => {
+    const id = c.req.param('id')
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return c.json({ error: 'Not found' }, 404)
+    const userId = c.get('userId')
+    if (!estimateLimit.hit(userId)) return c.json({ error: SLOW_DOWN }, 429)
+    const [ep] = await sql`
+      select e.duration_sec, e.guid, e.language, p.feed_url,
+        exists (select 1 from transcripts t where t.episode_id = e.id and jsonb_array_length(t.words) > 0
+                and t.native_language = coalesce((select native_language from profiles where id = ${userId}), 'en')) as has_transcript
+      from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${id} and not p.removed`
+    if (!ep) return c.json({ error: 'Not found' }, 404)
+    const transcript: 'polycast' | 'feed' | undefined = ep.has_transcript
+      ? 'polycast'
+      : (await withDeadline(feedTranscriptLink({ fetch: deps.fetch, lookupHost: deps.lookupHost }, ep.feed_url, ep.guid, ep.language), 8_000, undefined))
+        ? 'feed'
+        : undefined
+    const lengthKnown = Number(ep.duration_sec) > 0
+    const estimate = ownKeysEstimate(lengthKnown ? Number(ep.duration_sec) : 3600, { calibration: deps.ownKeysCalibration, feedTranscript: Boolean(transcript) })
+    return c.json({ ...estimate, perHour: !lengthKnown, transcript: transcript ?? null })
   })
 
   // What preparing this episode on the learner's own keys actually used, at list prices (PC-1017-K4).

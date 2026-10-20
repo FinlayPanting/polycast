@@ -1,3 +1,4 @@
+import type { EpisodeEstimate } from './ownKeysCore'
 import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
 import { demoCall } from '../demo/api'
@@ -110,6 +111,8 @@ export const api = {
   reportLine: (episodeId: string, segmentId: string) => call<{ ok: true }>('POST', `/v1/episodes/${episodeId}/report-line`, { segmentId }),
   testKey: (provider: 'elevenlabs' | 'gemini', key: string) => call<{ ok: true } | { ok: false; message: string }>('POST', '/v1/keys/test', { provider, key }),
   /** Own-keys cost estimate from an episode's length, worked out on the server (PC-1017-K4). */
+  /** One episode's own-keys estimate, leaving out transcription when it isn't needed (PC-1020-09). */
+  ownKeysEpisodeEstimate: (episodeId: string) => call<EpisodeEstimate>('GET', `/v1/episodes/${episodeId}/own-keys-estimate`),
   ownKeysEstimate: (durationSec: number) => call<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>('GET', `/v1/keys/estimate?durationSec=${Math.round(durationSec)}`),
   /** What preparing this episode on the learner's own keys actually used, if they did. */
   ownKeysCost: (episodeId: string) => call<{ usedUSD: number | null }>('GET', `/v1/episodes/${episodeId}/own-keys-cost`),

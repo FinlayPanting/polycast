@@ -424,6 +424,14 @@
    "title": "Discover says hello",
    "description": "Discover now greets you in the language you're learning, by time of day, with the odd local wink. Tap it for the English.",
    "tryIt": "Open Discover, then tap the greeting under your language"
+  },
+  {
+   "id": "PC-1020-09",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Fairer own-key estimates",
+   "description": "On your own keys, the cost estimate now leaves out transcription when the show publishes its own transcript or Polycast already has one, and gives a price per hour when the feed doesn't say how long an episode is.",
+   "tryIt": "With your own keys on, open an episode that isn't ready yet and tap the estimate"
   }
  ]
 }

@@ -137,8 +137,8 @@ export function estimatePrepCostUSD(durationSec: number, opts: { feedTranscript?
  * whose account pays: ElevenLabs (Scribe, the name-spelling edit and the guide's voice) and Google
  * (Gemini's writing). From the same estimate the spending cap uses, at list prices.
  */
-export function ownKeysCostUSD(durationSec: number, at: Date = new Date()): { elevenlabs: number; google: number } {
-  const u = estimatePrepUsage(durationSec)
+export function ownKeysCostUSD(durationSec: number, at: Date = new Date(), opts: { feedTranscript?: boolean } = {}): { elevenlabs: number; google: number } {
+  const u = estimatePrepUsage(durationSec, { feedTranscript: opts.feedTranscript })
   const elevenlabs = costUSD({ ...ZERO_USAGE, transcriptionSec: u.transcriptionSec, transcriptEditSec: u.transcriptEditSec, elevenTtsChars: u.elevenTtsChars }, at)
   const google = costUSD({ ...ZERO_USAGE, textInTokens: u.textInTokens, textOutTokens: u.textOutTokens }, at)
   return { elevenlabs, google }
@@ -155,8 +155,12 @@ export function toFiveCents(usd: number): number {
  * (known from the feed before anything is downloaded). Worked out on the server, so prices and the
  * calibration factors (from real logged preparations) change without an app update.
  */
-export function ownKeysEstimate(durationSec: number, opts: { at?: Date; calibration?: { elevenlabs?: number; google?: number } } = {}): { elevenlabsUSD: number; googleUSD: number; totalUSD: number } {
-  const raw = ownKeysCostUSD(Math.max(0, durationSec), opts.at)
+export function ownKeysEstimate(
+  durationSec: number,
+  opts: { at?: Date; calibration?: { elevenlabs?: number; google?: number }; feedTranscript?: boolean } = {},
+): { elevenlabsUSD: number; googleUSD: number; totalUSD: number } {
+  // With a transcript already there (the feed's own, or one Polycast made), nothing is transcribed (PC-1020-09).
+  const raw = ownKeysCostUSD(Math.max(0, durationSec), opts.at, { feedTranscript: opts.feedTranscript })
   const e = raw.elevenlabs * (opts.calibration?.elevenlabs ?? 1)
   const g = raw.google * (opts.calibration?.google ?? 1)
   return { elevenlabsUSD: toFiveCents(e), googleUSD: toFiveCents(g), totalUSD: toFiveCents(e + g) }

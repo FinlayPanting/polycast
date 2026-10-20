@@ -24,6 +24,29 @@ export function estimateLine(totalUSD: number): string {
   return `About ${dollars(totalUSD)} on your keys`
 }
 
+/** An episode's estimate from the server (PC-1020-09). */
+export interface EpisodeEstimate {
+  elevenlabsUSD: number
+  googleUSD: number
+  totalUSD: number
+  /** The feed gave no length, so this is the price of an hour. */
+  perHour?: boolean
+  /** Already there, so nothing is transcribed: Polycast's own, or the show's. */
+  transcript?: 'polycast' | 'feed' | null
+}
+
+/** The estimate line for one episode; per hour when the feed gives no length. */
+export function episodeEstimateLine(e: EpisodeEstimate): string {
+  return e.perHour ? `About ${dollars(e.totalUSD)} an hour of episode on your keys` : estimateLine(e.totalUSD)
+}
+
+/** Why this one costs less, shown with the split. */
+export function transcriptNote(e: EpisodeEstimate): string | undefined {
+  if (e.transcript === 'feed') return 'No transcribing needed: the show publishes its own transcript'
+  if (e.transcript === 'polycast') return 'No transcribing needed: Polycast already has the transcript'
+  return undefined
+}
+
 /** The split, shown on tap: whose account pays for what. */
 export function estimateSplit(e: { elevenlabsUSD: number; googleUSD: number }): string[] {
   return [`ElevenLabs, for the subtitles and voices: about ${dollars(e.elevenlabsUSD)}`, `Google, for the lessons: about ${dollars(e.googleUSD)}`]
