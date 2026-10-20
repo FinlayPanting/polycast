@@ -521,6 +521,14 @@ run('API and worker', () => {
     expect((await off.request('/v1/translate', { method: 'POST', headers: { Authorization: `Bearer ${someone}`, 'Content-Type': 'application/json' }, body: '{}' })).status).toBe(503)
   })
 
+  it("serves the change log to anyone, newest builds included (PC-1019-F02)", async () => {
+    const res = await api().request('/changelog')
+    expect(res.status).toBe(200)
+    const { entries } = await res.json()
+    expect(entries.length).toBeGreaterThan(10)
+    expect(entries.some((e: { id: string }) => e.id === 'PC-1019-F02')).toBe(true)
+  })
+
   it('estimates the cost on own keys from the length, and later says what it used (PC-1017-K4)', async () => {
     const { ownKeysEstimate } = await import('@polycast/core')
     const ben = await learner()

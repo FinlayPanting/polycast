@@ -16,6 +16,7 @@ import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 import Constants from 'expo-constants'
 import { playbackLog } from '../../lib/playbackLog'
+import { useWhatsNewDot } from '../../lib/whatsNew'
 
 function Choice<T extends string>({ options, value, onChange, accent }: { options: { id: T; label: string }[]; value: T | undefined; onChange: (v: T) => void; accent: string }) {
   const p = usePalette()
@@ -53,10 +54,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function You() {
   const p = usePalette()
   const { profile, updatePrefs, signOut } = useSession()
+  // What's new (PC-1019-F02): an orange dot until the latest build's changes have been seen.
+  const whatsNew = useWhatsNewDot()
   // Whether this iPhone has both own keys (PC-1017-K2); checked again whenever You comes into view.
   const [ownKeys, setOwnKeys] = useState(false)
   useFocusEffect(
     useCallback(() => {
+      whatsNew.refresh()
       void savedKeyNames().then((k) => setOwnKeys(k.elevenlabs && k.gemini))
     }, []),
   )
@@ -216,6 +220,19 @@ export default function You() {
             }
           />
         </Section>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`What’s new${whatsNew.dot ? ', new changes' : ''}. Version ${Constants.expoConfig?.version ?? ''}`}
+          onPress={() => router.push('/whats-new')}
+          style={({ pressed }) => ({ minHeight: MIN_TAP, flexDirection: 'row', alignItems: 'center', gap: space.sm, opacity: pressed ? 0.7 : 1 })}
+        >
+          <Txt variant="small">What’s new</Txt>
+          {whatsNew.dot ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.play }} /> : null}
+          <Txt variant="small" tone="faint" style={{ marginLeft: 'auto' }}>
+            Version {Constants.expoConfig?.version ?? ''}
+          </Txt>
+        </Pressable>
       </ScrollView>
     </Screen>
   )

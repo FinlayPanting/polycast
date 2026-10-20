@@ -111,6 +111,8 @@ export const api = {
   ownKeysEstimate: (durationSec: number) => call<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>('GET', `/v1/keys/estimate?durationSec=${Math.round(durationSec)}`),
   /** What preparing this episode on the learner's own keys actually used, if they did. */
   ownKeysCost: (episodeId: string) => call<{ usedUSD: number | null }>('GET', `/v1/episodes/${episodeId}/own-keys-cost`),
+  /** What's new (PC-1019-F02): the change log, public. */
+  changelog: () => call<{ entries: unknown[] }>('GET', '/changelog'),
   forgetKeys: () => call<{ ok: true }>('DELETE', '/v1/keys'),
   /** `level` is the guide intensity chosen for this episode; left out, the server uses the learner's default. */
   listen: (episodeId: string, guide: boolean, level?: 'light' | 'standard' | 'handsOn') =>

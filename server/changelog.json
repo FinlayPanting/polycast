@@ -1,0 +1,389 @@
+{
+ "entries": [
+  {
+   "id": "PC-1013-02",
+   "date": "2026-10-14",
+   "kind": "Refinement",
+   "title": "Hosts' names spelt right",
+   "description": "Subtitles and the tap-a-word glossary now spell the show's title, hosts and recurring names correctly on newly prepared episodes.",
+   "tryIt": "Prepare a new episode and look for the hosts' names in the subtitles"
+  },
+  {
+   "id": "PC-1013-01",
+   "date": "2026-10-15",
+   "kind": "Feature",
+   "title": "Hear Mia before you sign in",
+   "description": "After picking a language, Mia says hello, explains what Polycast does and teaches a first word in your language.",
+   "tryIt": "Sign out, then go through the welcome screens"
+  },
+  {
+   "id": "PC-1013-06",
+   "date": "2026-10-16",
+   "kind": "Content",
+   "title": "Real host, real show",
+   "description": "The welcome screen says plainly that the host is real and Mia and Leo only step in when the host pauses.",
+   "tryIt": "Look at the welcome screen"
+  },
+  {
+   "id": "PC-1013-09",
+   "date": "2026-10-16",
+   "kind": "Growth",
+   "title": "A gentle Plus card after the free episode",
+   "description": "At the end of your free episode the wrap-up shows minutes listened and words kept, then a calm card about Plus.",
+   "tryIt": "Finish your free episode"
+  },
+  {
+   "id": "PC-1014-02",
+   "date": "2026-10-16",
+   "kind": "Bug",
+   "title": "Downloads stop piling up",
+   "description": "Downloaded episodes stay out of iCloud backup, are tidied after 30 days unless a saved word needs them, and You shows the space used with a Clear downloads button.",
+   "tryIt": "Open You and find Downloads"
+  },
+  {
+   "id": "PC-1014-04",
+   "date": "2026-10-16",
+   "kind": "UX",
+   "title": "Adverts on the scrubber",
+   "description": "Advert breaks show as a soft band on the scrubber, and Mia waits them out.",
+   "tryIt": "Play an episode with adverts and look at the scrubber"
+  },
+  {
+   "id": "PC-1014-07",
+   "date": "2026-10-16",
+   "kind": "Content",
+   "title": "Chart places on top shows",
+   "description": "Top-chart shows carried their place in the country's chart (since replaced by plain numbers)."
+  },
+  {
+   "id": "PC-1013-08",
+   "date": "2026-10-17",
+   "kind": "Feature",
+   "title": "A nudge when your show has a new episode",
+   "description": "Finish a show's episode and you'll get at most one nudge a week when it has a new one; tapping a notification opens that episode.",
+   "tryIt": "Tap any Polycast notification"
+  },
+  {
+   "id": "PC-1014-06",
+   "date": "2026-10-17",
+   "kind": "Growth",
+   "title": "Share a line you caught",
+   "description": "The wrap-up offers to share a line you caught, with its meaning and the show's credit.",
+   "tryIt": "Finish an episode and tap Share a line"
+  },
+  {
+   "id": "PC-1014-10",
+   "date": "2026-10-17",
+   "kind": "UX",
+   "title": "Good first listen",
+   "description": "A show's page tags one recent, easier episode as a good first listen.",
+   "tryIt": "Open any show page"
+  },
+  {
+   "id": "PC-1014-F1",
+   "date": "2026-10-17",
+   "kind": "UX",
+   "title": "The logo comes together",
+   "description": "On the welcome screen the coloured stems slide out from behind the orange pole into the logo.",
+   "tryIt": "Sign out and watch the welcome screen"
+  },
+  {
+   "id": "PC-1015-09",
+   "date": "2026-10-17",
+   "kind": "UX",
+   "title": "Mia signs off in your language",
+   "description": "After the wrap-up, your guide says goodbye in the language you're learning, with the words on screen.",
+   "tryIt": "Finish a guided episode"
+  },
+  {
+   "id": "PC-1017-09",
+   "date": "2026-10-17",
+   "kind": "Refinement",
+   "title": "A new voice for Mia and Leo",
+   "description": "Newly prepared episodes use ElevenLabs voices, with target-language words said natively.",
+   "tryIt": "Prepare a new episode and listen to the guide"
+  },
+  {
+   "id": "PC-1015-01",
+   "date": "2026-10-17",
+   "kind": "Bug",
+   "title": "Restore Purchases on a new account",
+   "description": "Restoring on a new phone or account moves Plus across, keeping the month's used hours.",
+   "tryIt": "Tap Restore on the Plus screen"
+  },
+  {
+   "id": "PC-1015-03",
+   "date": "2026-10-17",
+   "kind": "Bug",
+   "title": "Saved episodes survive an app update",
+   "description": "Episodes saved for offline are still there after an update."
+  },
+  {
+   "id": "PC-1015-04",
+   "date": "2026-10-17",
+   "kind": "Bug",
+   "title": "Pause works while Mia is talking",
+   "description": "Pause stops the guide mid-moment and play picks up the same moment; a phone call pauses the guide.",
+   "tryIt": "Pause while the guide is speaking"
+  },
+  {
+   "id": "PC-1015-05",
+   "date": "2026-10-17",
+   "kind": "Bug",
+   "title": "Your place is saved after jumping back",
+   "description": "Your place is saved straight after jumping backwards, and the wrap-up still plays after skipping the last moment."
+  },
+  {
+   "id": "PC-1016-02",
+   "date": "2026-10-17",
+   "kind": "Bug",
+   "title": "No false 'Your episode is ready'",
+   "description": "Only the learner who asked for an episode hears that it's ready."
+  },
+  {
+   "id": "PC-1017-01",
+   "date": "2026-10-17",
+   "kind": "Bug",
+   "title": "Plus shows the moment you've paid",
+   "description": "Plus switches on as soon as the App Store confirms, and Restore says clearly when it couldn't reach the App Store."
+  },
+  {
+   "id": "PC-1016-07",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "Tell Mia what you're in the mood for",
+   "description": "Tell Mia what you fancy on Discover and get three shows in your language, each with a line on why it fits.",
+   "tryIt": "On Discover, tap a mood chip"
+  },
+  {
+   "id": "PC-1017-F13",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "Hands-on, Standard or Light",
+   "description": "Before listening, pick how often the guide steps in for that episode; your last choice becomes the default.",
+   "tryIt": "Open a ready episode"
+  },
+  {
+   "id": "PC-1017-F14",
+   "date": "2026-10-18",
+   "kind": "Refinement",
+   "title": "Mia waits for natural pauses",
+   "description": "The guide only steps in once someone has finished speaking, and her moments are spread out."
+  },
+  {
+   "id": "PC-1017-T1",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "Show descriptions, translated",
+   "description": "Show and episode pages have descriptions, with titles and descriptions in your language too.",
+   "tryIt": "Open any show page"
+  },
+  {
+   "id": "PC-1017-K1",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "Prepare episodes on your own keys",
+   "description": "Episodes can be prepared on your own ElevenLabs and Google keys instead of an allowance.",
+   "tryIt": "You, then Use your own API keys"
+  },
+  {
+   "id": "PC-1017-K2",
+   "date": "2026-10-18",
+   "kind": "UX",
+   "title": "A set-up guide for your own keys",
+   "description": "Step-by-step help for getting each key, with roughly what an hour costs.",
+   "tryIt": "You, then Use your own API keys"
+  },
+  {
+   "id": "PC-1017-P1",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "A primer for every episode",
+   "description": "Every newly prepared episode comes with a short gist, words to listen for and its main themes.",
+   "tryIt": "Open a newly prepared episode"
+  },
+  {
+   "id": "PC-1017-P2",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "Words to listen for, in the host's voice",
+   "description": "Each primer word has its meaning, when it comes up and a play button for the host saying it.",
+   "tryIt": "Open a ready episode and tap a word's play button"
+  },
+  {
+   "id": "PC-1017-P3",
+   "date": "2026-10-18",
+   "kind": "UX",
+   "title": "The primer builds while Mia prepares",
+   "description": "While an episode prepares, the gist, words and themes appear as soon as they're written.",
+   "tryIt": "Prepare an episode and stay on its screen"
+  },
+  {
+   "id": "PC-1017-P4",
+   "date": "2026-10-18",
+   "kind": "UX",
+   "title": "The primer before you press play",
+   "description": "A ready episode opens on its primer, with Skip and play to start straight away.",
+   "tryIt": "Open a ready episode"
+  },
+  {
+   "id": "PC-1017-P5",
+   "date": "2026-10-18",
+   "kind": "Feature",
+   "title": "An episode map",
+   "description": "The primer shows the episode's sections and where each theme comes up; tap one to start from there.",
+   "tryIt": "Open a ready episode and tap a theme"
+  },
+  {
+   "id": "PC-1017-04",
+   "date": "2026-10-19",
+   "kind": "Growth",
+   "title": "The yearly plan, made clear",
+   "description": "The Plus screen marks the yearly plan as best value and says what it works out at each month.",
+   "tryIt": "Open the Plus screen"
+  },
+  {
+   "id": "PC-1017-08",
+   "date": "2026-10-19",
+   "kind": "Growth",
+   "title": "Share a line as a picture",
+   "description": "Sharing a line now sends a picture card with the line, its meaning, the show and your flag.",
+   "tryIt": "Finish an episode and share a line"
+  },
+  {
+   "id": "PC-1017-K3",
+   "date": "2026-10-19",
+   "kind": "Feature",
+   "title": "Support Polycast",
+   "description": "Leave a one-off tip from You or the own-keys screen. It unlocks nothing.",
+   "tryIt": "You, then Leave a tip"
+  },
+  {
+   "id": "PC-1017-F01",
+   "date": "2026-10-19",
+   "kind": "Bug",
+   "title": "The guide's name matches the voice",
+   "description": "An episode recorded with Mia says Mia everywhere, even after switching to Leo."
+  },
+  {
+   "id": "PC-1017-F02",
+   "date": "2026-10-19",
+   "kind": "Bug",
+   "title": "Pick up where you left off",
+   "description": "Reopen the app and your last episode waits in the mini-player, paused where you left it.",
+   "tryIt": "Close the app mid-episode and open it again"
+  },
+  {
+   "id": "PC-1017-F03",
+   "date": "2026-10-19",
+   "kind": "Refinement",
+   "title": "Faster loading",
+   "description": "Shows open much faster, and Discover and show pages appear at once from last time.",
+   "tryIt": "Open a show you've opened before"
+  },
+  {
+   "id": "PC-1017-F04",
+   "date": "2026-10-19",
+   "kind": "UX",
+   "title": "Tabs everywhere, with a mini-player",
+   "description": "The tabs stay on every screen with a mini-player above them; closing the player keeps the episode playing.",
+   "tryIt": "Swipe the player down while listening"
+  },
+  {
+   "id": "PC-1017-F05",
+   "date": "2026-10-19",
+   "kind": "UX",
+   "title": "Skip ad",
+   "description": "During an advert a Skip ad pill sits above the scrubber.",
+   "tryIt": "Play an episode with adverts"
+  },
+  {
+   "id": "PC-1017-F06",
+   "date": "2026-10-19",
+   "kind": "UX",
+   "title": "A More menu in the player",
+   "description": "'Listen to the intro again' moved into the player's More (…) menu.",
+   "tryIt": "Tap … at the top right of the player"
+  },
+  {
+   "id": "PC-1017-F07",
+   "date": "2026-10-19",
+   "kind": "UX",
+   "title": "One search bar, with an AI button",
+   "description": "Discover has one bar: search podcasts with the keyboard's search key, or tap the sparkle to ask Mia.",
+   "tryIt": "Type in the bar on Discover"
+  },
+  {
+   "id": "PC-1017-F08",
+   "date": "2026-10-20",
+   "kind": "UX",
+   "title": "Top charts: plain numbers and genres",
+   "description": "Top charts show 1, 2, 3 beside each show, with a small genre tag.",
+   "tryIt": "Discover, then Top charts"
+  },
+  {
+   "id": "PC-1017-F10",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "Listen later",
+   "description": "Keep any episode for later from its page, or with Later on a show's episode list.",
+   "tryIt": "Open an episode and tap Listen later"
+  },
+  {
+   "id": "PC-1017-F11",
+   "date": "2026-10-20",
+   "kind": "UX",
+   "title": "A Library built for keeping up",
+   "description": "The Library opens with Recently listened shows, then Carry on listening, New episodes, Listen later and Downloads.",
+   "tryIt": "Open the Library tab"
+  },
+  {
+   "id": "PC-1017-F09",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "Follow a show",
+   "description": "Follow any show from its page; its new episodes show in your Library.",
+   "tryIt": "Open a show and tap Follow"
+  },
+  {
+   "id": "PC-1017-F16",
+   "date": "2026-10-20",
+   "kind": "Refinement",
+   "title": "Mia matches the show's volume",
+   "description": "On newly prepared episodes, the guide plays at a level matched to the show, so she never booms over a quiet one.",
+   "tryIt": "Prepare a quietly recorded show and listen"
+  },
+  {
+   "id": "PC-1017-K4",
+   "date": "2026-10-20",
+   "kind": "UX",
+   "title": "A cost estimate on your own keys",
+   "description": "On your own keys, episodes show roughly what preparing will cost; tap it for the split by provider.",
+   "tryIt": "With your own keys added, open an episode that isn't ready"
+  },
+  {
+   "id": "PC-1018-02",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Saving a word never shows a false error",
+   "description": "Tapping save twice no longer shows an error, and a word only shows as saved once it really is.",
+   "tryIt": "Tap a word in the subtitles and save it twice quickly"
+  },
+  {
+   "id": "PC-1018-07",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "Line by line",
+   "description": "The player can pause after each subtitle line; tap play for the next.",
+   "tryIt": "In the player, tap … then Line by line"
+  },
+  {
+   "id": "PC-1019-F02",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "What's new",
+   "description": "This page: what each overnight build changed, and where to try it.",
+   "tryIt": "You, then What's new"
+  }
+ ]
+}

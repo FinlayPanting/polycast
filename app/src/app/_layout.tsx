@@ -90,6 +90,7 @@ function Routes() {
         <Stack.Screen name="plus" options={{ presentation: 'modal' }} />
         <Stack.Screen name="tip" options={{ presentation: 'modal' }} />
         <Stack.Screen name="keys" />
+        <Stack.Screen name="whats-new" />
       </Stack.Protected>
     </Stack>
     {signedIn && onboarded ? <BottomBar /> : null}

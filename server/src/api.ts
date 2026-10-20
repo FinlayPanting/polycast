@@ -1,7 +1,8 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
-import { cohortAlert, isTipProduct, normaliseMood, ownKeysEstimate, REFUSAL_MESSAGES } from '@polycast/core'
+import { readFileSync } from 'node:fs'
+import { cohortAlert, isTipProduct, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import type { LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -58,6 +59,19 @@ export interface ApiDeps {
 
 type Env = { Variables: { userId: string } }
 
+let changelogCache: ChangelogEntry[] | undefined
+/** server/changelog.json, read once; a missing or broken file is an empty log, never a crash. */
+function changelogEntries(): ChangelogEntry[] {
+  if (!changelogCache) {
+    try {
+      changelogCache = parseChangelog(JSON.parse(readFileSync(new URL('../changelog.json', import.meta.url), 'utf8')))
+    } catch {
+      changelogCache = []
+    }
+  }
+  return changelogCache
+}
+
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
 
@@ -94,6 +108,11 @@ export function createApi(deps: ApiDeps) {
   })
 
   app.get('/health', (c) => c.json({ ok: true }))
+  // What's new (PC-1019-F02): the change log, public and cacheable, so it updates with every push.
+  app.get('/changelog', (c) => {
+    c.header('Cache-Control', 'public, max-age=300')
+    return c.json({ entries: changelogEntries() })
+  })
 
   // Creators can ask for removal without an account (spec: Creators and rights).
   // It's public and every request pings Finlay's phone, so fields are capped and each address
