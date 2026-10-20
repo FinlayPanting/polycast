@@ -263,3 +263,7 @@ Finlay raised the yearly Plus price from €39 to €49 on 19 Oct (the spec stil
 ## Creators' removal requests are deleted after 12 months (19 Oct 2026)
 
 Board item PC-1017-10. A removal request (show, contact details, message) is deleted 12 months after it's marked handled (`handled_at`), by a daily clean-up in the worker (`forgetOldRemovalRequests`); requests not yet handled are kept until they are. The privacy page says so. Simplest option picked: the 12 months count from when the request was handled, not when it was sent, so a slow reply never loses the request.
+
+## Top charts: plain numbers and genre tags (20 Oct 2026)
+
+Board item PC-1017-F08, replacing PC-1014-07's country tags. The Top charts shelf already says which chart it is, so each show now has just its place (1, 2, 3…) beside its title and a small genre tag (its first Apple genre other than the catch-all "Podcasts") above it. `chartTag` returns the plain number; `chartGenre` picks the genre. Simplest option picked: no genre tag when Apple gives none, and genre tags only on chart shows.

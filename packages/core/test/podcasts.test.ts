@@ -4,6 +4,7 @@ import {
   itunesSearchUrl,
   largerArtwork,
   parseAppleChart,
+  chartGenre,
   chartTag,
   parseDuration,
   parseFeed,
@@ -77,13 +78,23 @@ describe('Apple search and charts', () => {
     expect(largerArtwork('https://x/y/100x100.png', 300)).toBe('https://x/y/300x300bb.png')
   })
 
-  it("keeps each show's place in its country's chart, for a 'No. 1 in Germany' tag", () => {
-    const chart = parseAppleChart({ feed: { results: [{ id: '1', name: 'Gemischtes Hack' }, { id: '2', name: 'Kaulitz Hills' }] } }, 'de')
+  it("keeps each show's place in its country's chart, shown as a plain number", () => {
+    const chart = parseAppleChart({ feed: { results: [{ id: '1', name: 'Gemischtes Hack', genres: [{ name: 'Comedy' }, { name: 'Podcasts' }] }, { id: '2', name: 'Kaulitz Hills' }] } }, 'de')
     expect(chart.map((s) => s.chart)).toEqual([{ rank: 1, country: 'de' }, { rank: 2, country: 'de' }])
-    expect(chartTag(chart[0]!.chart)).toBe('No. 1 in Germany')
-    expect(chartTag({ rank: 3, country: 'gb' })).toBe('No. 3 in the UK')
+    expect(chartTag(chart[0]!.chart)).toBe('1')
+    expect(chartTag({ rank: 3, country: 'gb' })).toBe('3')
+    expect(chartTag({ rank: 4, country: 'zz' })).toBe('4')
     expect(chartTag(undefined)).toBeUndefined()
-    expect(chartTag({ rank: 1, country: 'zz' })).toBeUndefined()
+    expect(chartTag({ rank: 0, country: 'de' })).toBeUndefined()
+    expect(chartGenre(chart[0]!.genres)).toBe('Comedy')
+  })
+
+  it('tags a chart show with its first real genre, never the catch-all "Podcasts"', () => {
+    expect(chartGenre(['Podcasts', 'News'])).toBe('News')
+    expect(chartGenre(['Sport'])).toBe('Sport')
+    expect(chartGenre(['Podcasts'])).toBeUndefined()
+    expect(chartGenre([])).toBeUndefined()
+    expect(chartGenre(undefined)).toBeUndefined()
   })
 })
 

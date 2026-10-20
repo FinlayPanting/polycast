@@ -249,10 +249,21 @@ export const CHART_COUNTRY_NAMES: Record<string, string> = {
   gb: 'the UK',
 }
 
-/** "No. 1 in Germany", for a show's place in its country's chart. */
+/**
+ * A show's place in the Top charts shelf, as a plain number ("1", "2"), since the shelf is already
+ * called Charts (PC-1017-F08, replacing the "No. 1 in Germany" tags). Undefined without a place.
+ */
 export function chartTag(chart: { rank: number; country: string } | undefined): string | undefined {
-  const where = chart && CHART_COUNTRY_NAMES[chart.country]
-  return where && chart.rank >= 1 ? `No. ${chart.rank} in ${where}` : undefined
+  return chart && Number.isInteger(chart.rank) && chart.rank >= 1 ? String(chart.rank) : undefined
+}
+
+/** Apple's catch-all genre, which says nothing about a show. */
+const UNHELPFUL_GENRES = new Set(['podcasts', 'podcast'])
+
+/** The genre shown as a small tag on a chart show (Comedy, News, Sport…): its first meaningful genre. */
+export function chartGenre(genres: readonly string[] | undefined): string | undefined {
+  const g = (genres ?? []).map((x) => x.trim()).find((x) => x && !UNHELPFUL_GENRES.has(x.toLowerCase()))
+  return g || undefined
 }
 
 // ---- Podcast Index trending (category charts) ----
