@@ -323,3 +323,7 @@ Board item PC-1019-09. Under the language name on Discover, a greeting in the la
 ## Own-key estimates without transcription when it isn't needed (20 Oct 2026)
 
 Board item PC-1020-09. The episode screen now asks `GET /v1/episodes/:id/own-keys-estimate`, which leaves ElevenLabs transcription out of the estimate when preparing would skip it: Polycast already has a transcript of the episode in the learner's language, or the feed links a word-timed JSON transcript (the same check the worker makes; the feed is read with an 8-second limit, and on a timeout the full estimate shows). Tapping the estimate adds a line saying why it's lower. When the feed gives no length, the estimate is for an hour and says "an hour of episode". `GET /v1/keys/estimate` stays for older builds.
+
+## The line you're hearing, on the lock screen (20 Oct 2026)
+
+Board item PC-1020-08. While an episode plays (or is paused mid-listen), the lock screen and Control Centre show the current subtitle line as the title and its English as the subtitle, through the track player's now-playing details (artwork and length kept). It changes only when the line changes. Simplest options picked: it follows the learner's saved subtitle setting (target only shows the show's name underneath; subtitles off keeps the episode title and show), and before the first line the episode title shows as before.

@@ -432,6 +432,14 @@
    "title": "Fairer own-key estimates",
    "description": "On your own keys, the cost estimate now leaves out transcription when the show publishes its own transcript or Polycast already has one, and gives a price per hour when the feed doesn't say how long an episode is.",
    "tryIt": "With your own keys on, open an episode that isn't ready yet and tap the estimate"
+  },
+  {
+   "id": "PC-1020-08",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "The line you're hearing, on the lock screen",
+   "description": "With your phone locked, the lock screen and Control Centre now show the line the host is saying, with its English underneath, changing once per line.",
+   "tryIt": "Start an episode, lock your phone and glance at the lock screen"
   }
  ]
 }

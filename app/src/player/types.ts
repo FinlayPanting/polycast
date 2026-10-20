@@ -11,6 +11,8 @@ export interface EpisodeAudio {
   onProgress(listener: (seconds: number) => void): () => void
   onEnded(listener: () => void): () => void
   unload(): Promise<void>
+  /** What the lock screen and Control Centre show, without touching playback (PC-1020-08). */
+  setNowPlaying?(info: { title: string; artist: string }): Promise<void>
 }
 
 /** The guide's voice: short clips played over a paused episode. */
