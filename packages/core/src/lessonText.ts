@@ -17,6 +17,29 @@ export interface LessonSource {
   guideId?: string
   plan: LessonPlan
   transcript: { segments: Segment[]; words: Word[] }
+  /** Lines learners marked 'That looks wrong' (PC-1018-04), shown first so they get fixed soonest. */
+  reports?: LineReport[]
+}
+
+/** One subtitle line learners reported, with how many times and when last. */
+export interface LineReport {
+  segmentId: string
+  count: number
+  lastAt: string
+}
+
+/** The 'Reported lines' section: each reported line with its time, text and translation, most reported first. */
+export function reportedLinesText(reports: LineReport[], segments: Segment[]): string[] {
+  if (!reports.length) return []
+  const out = ['## Reported lines', '', 'Learners tapped “That looks wrong” on these. Check the subtitle and its translation.', '']
+  const sorted = [...reports].sort((a, b) => b.count - a.count || b.lastAt.localeCompare(a.lastAt))
+  for (const r of sorted) {
+    const s = segments.find((x) => x.id === r.segmentId)
+    const times = `${r.count} ${r.count === 1 ? 'report' : 'reports'}, last ${r.lastAt.slice(0, 10)}`
+    out.push(s ? `${quote(s)}
+> (${times})` : `> line ${r.segmentId} is no longer in the transcript (${times})`, '')
+  }
+  return out
 }
 
 function stamp(sec: number): string {
@@ -79,6 +102,7 @@ export function lessonText(src: LessonSource): string {
   const head = [
     `# ${src.podcastTitle}: ${src.title}`,
     '',
+    ...reportedLinesText(src.reports ?? [], src.transcript.segments),
     `Lesson plan v${plan.version}, ${plan.targetLanguage} for ${plan.nativeLanguage} speakers${src.guideId ? `, guide ${src.guideId}` : ''}.`,
     `Hosts: ${plan.hosts.map((h) => `${h.name} (${h.description})`).join('; ') || 'not named'}.`,
     `Moments: ${moments.length} (${Object.entries(counts).map(([k, v]) => `${v} ${MOMENT_NAMES[k as MomentKind] ?? k}`).join(', ')}).`,

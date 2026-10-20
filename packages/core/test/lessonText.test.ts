@@ -53,3 +53,23 @@ describe('a lesson as a readable page', () => {
     expect(page).toContain('1. What was late?\n   -   The bus\n   - ✓ The train')
   })
 })
+
+describe('reported lines on the lesson page (PC-1018-04)', () => {
+  const reports = [
+    { segmentId: 's1', count: 1, lastAt: '2026-10-20T09:00:00Z' },
+    { segmentId: 's2', count: 3, lastAt: '2026-10-19T09:00:00Z' },
+    { segmentId: 'gone', count: 1, lastAt: '2026-10-18T09:00:00Z' },
+  ]
+  const page = lessonText({ title: 'Tåget', podcastTitle: 'Svenska Samtal', plan, transcript: { segments, words }, reports })
+
+  it('come first, before the lesson plan, most reported first', () => {
+    const at = page.indexOf('## Reported lines')
+    expect(at).toBeGreaterThan(page.indexOf('# Svenska Samtal: Tåget'))
+    expect(at).toBeLessThan(page.indexOf('Lesson plan v2'))
+    expect(page.indexOf('> 1:03 Erik: Typiskt.\n>   _Typical._\n> (3 reports, last 2026-10-19)')).toBeLessThan(page.indexOf('> 1:00 Anna: Tåget är försenat igen.\n>   _The train is late again._\n> (1 report, last 2026-10-20)'))
+    expect(page).toContain('> line gone is no longer in the transcript (1 report, last 2026-10-18)')
+  })
+  it('are left out when nobody has reported anything', () => {
+    expect(lessonText({ title: 'Tåget', podcastTitle: 'Svenska Samtal', plan, transcript: { segments, words } })).not.toContain('Reported lines')
+  })
+})

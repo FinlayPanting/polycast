@@ -16,6 +16,7 @@ export function Subtitles({
   mode,
   oldFriends,
   onWord,
+  onLineMenu,
 }: {
   segments: Segment[]
   words: Word[]
@@ -24,6 +25,8 @@ export function Subtitles({
   /** Word indexes that are words learned in earlier episodes. */
   oldFriends: Set<number>
   onWord: (wordIndex: number) => void
+  /** Long press on the line: its menu, with 'That looks wrong' (PC-1018-04). */
+  onLineMenu?: (segment: Segment) => void
 }) {
   const p = usePalette()
   const [peek, setPeek] = useState(false)
@@ -41,13 +44,18 @@ export function Subtitles({
   }
 
   return (
-    <Pressable onPress={() => peek && setPeek(false)} accessible={false} style={{ gap: space.md, paddingHorizontal: space.lg }}>
+    <Pressable onPress={() => peek && setPeek(false)} onLongPress={seg && onLineMenu ? () => onLineMenu(seg) : undefined} accessible={false} style={{ gap: space.md, paddingHorizontal: space.lg }}>
       {prev ? (
         <Text style={[type.translation, { color: p.faint }]} numberOfLines={2}>
           {prev.text}
         </Text>
       ) : null}
-      <Text accessibilityRole="text" accessibilityLabel={seg?.text} style={[type.subtitle, { color: p.text }]}>
+      <Text
+        accessibilityRole="text"
+        accessibilityLabel={seg?.text}
+        accessibilityActions={seg && onLineMenu ? [{ name: 'report', label: 'That line looks wrong' }] : undefined}
+        onAccessibilityAction={(e) => e.nativeEvent.actionName === 'report' && seg && onLineMenu?.(seg)}
+        style={[type.subtitle, { color: p.text }]}>
         {lineWords.map(({ w, index }, k) => {
           const speaking = position >= w.start && position < w.end + 0.08
           const friend = oldFriends.has(index)

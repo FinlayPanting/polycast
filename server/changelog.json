@@ -392,6 +392,14 @@
    "title": "Share your lesson recap",
    "description": "The wrap-up offers a story-sized recap card (words you picked up, a 'Did you know?' line, minutes, quiz score and podcasts completed) or a 'Word of the episode' card.",
    "tryIt": "Finish any episode and tap Share"
+  },
+  {
+   "id": "PC-1018-04",
+   "date": "2026-10-20",
+   "kind": "Feature",
+   "title": "Tell us when a line looks wrong",
+   "description": "If a subtitle or its translation looks off, flag it from the player and we'll fix it before the next person hears it. Only the line is sent, nothing about you.",
+   "tryIt": "Press and hold a subtitle line in the player, or open More while a line is showing"
   }
  ]
 }

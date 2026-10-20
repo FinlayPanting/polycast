@@ -14,6 +14,7 @@ import type { TextModel } from './providers/types'
 import { SpendCapReached, type SpendGuard } from './budget'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
 import { lessonPage, recentLessons } from './lessons'
+import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { clientAddress, rateLimiter } from './rateLimit'
 
@@ -243,6 +244,18 @@ export function createApi(deps: ApiDeps) {
   app.delete('/v1/account', async (c) => {
     // Profiles, saved words and listens cascade from the auth user. Shared catalogue data stays.
     await sql`delete from auth.users where id = ${c.get('userId')}`
+    return c.json({ ok: true })
+  })
+
+  // 'That looks wrong' (PC-1018-04): a learner flags a subtitle line. Nothing about them is kept.
+  const reportLimit = rateLimiter(LINE_REPORT_LIMITS.perHour, 60 * 60_000)
+  app.post('/v1/episodes/:id/report-line', async (c) => {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const segmentId = typeof body?.segmentId === 'string' ? body.segmentId.slice(0, 64) : ''
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !segmentId) return c.json({ error: 'Not found' }, 404)
+    if (!reportLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
+    if (!(await reportLine(sql, id, segmentId))) return c.json({ error: 'Not found' }, 404)
     return c.json({ ok: true })
   })
 

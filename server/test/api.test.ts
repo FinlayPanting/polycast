@@ -300,6 +300,29 @@ run('API and worker', () => {
     expect((await admin.request('/admin/lessons/not-an-id?token=t0ken')).status).toBe(404)
   })
 
+  it('takes a “That looks wrong” report on a line, keeps no learner, and puts it at the top of the lesson page (PC-1018-04)', async () => {
+    const me = await learner()
+    const [row] = await sql`select t.episode_id, t.segments->0->>'id' as seg from transcripts t join episodes e on e.id = t.episode_id where e.title = 'Tåget' limit 1`
+    const before = await sql`select count(*)::int as n from alerts`
+    expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
+    expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
+    expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: 'nope' })).status).toBe(404)
+    expect((await call(me, 'POST', `/v1/episodes/not-an-id/report-line`, { segmentId: row!.seg })).status).toBe(404)
+    const stored = await sql`select kind, message from alerts where kind = 'line_report'`
+    expect(stored.length).toBe(2)
+    expect(stored[0]!.message).not.toContain(me)
+    expect(JSON.parse(stored[0]!.message)).toEqual({ episodeId: row!.episode_id, segmentId: row!.seg })
+    expect((await sql`select count(*)::int as n from alerts`)[0]!.n).toBe(before[0]!.n + 2)
+
+    const admin = createApi({ sql, verify: async () => undefined, fetch: fakeFetch, funnelToken: 't0ken' })
+    const { lessons } = await (await admin.request('/admin/lessons?token=t0ken')).json()
+    expect(lessons[0]).toMatchObject({ title: 'Tåget', reports: 2 })
+    const text = await (await admin.request(`/admin/lessons/${row!.episode_id}?token=t0ken`)).text()
+    expect(text).toContain('## Reported lines')
+    expect(text).toContain('(2 reports, last ')
+    expect(text.indexOf('## Reported lines')).toBeLessThan(text.indexOf('## Moments'))
+  })
+
   it('accepts a creator’s removal request without an account, and alerts Finlay', async () => {
     const res = await api().request('/removal-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastTitle: 'Svenska Samtal', contact: 'anna@example.com' }) })
     expect(res.status).toBe(200)

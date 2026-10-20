@@ -106,6 +106,8 @@ export const api = {
   prepare: (episodeId: string, ownKeys?: { elevenlabs: string; gemini: string }) =>
     call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, ownKeys ? { ownKeys } : undefined),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null; message?: string }>('GET', `/v1/jobs/${jobId}`),
+  /** 'That looks wrong' (PC-1018-04): flags one subtitle line. Only the episode and line are sent. */
+  reportLine: (episodeId: string, segmentId: string) => call<{ ok: true }>('POST', `/v1/episodes/${episodeId}/report-line`, { segmentId }),
   testKey: (provider: 'elevenlabs' | 'gemini', key: string) => call<{ ok: true } | { ok: false; message: string }>('POST', '/v1/keys/test', { provider, key }),
   /** Own-keys cost estimate from an episode's length, worked out on the server (PC-1017-K4). */
   ownKeysEstimate: (durationSec: number) => call<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>('GET', `/v1/keys/estimate?durationSec=${Math.round(durationSec)}`),

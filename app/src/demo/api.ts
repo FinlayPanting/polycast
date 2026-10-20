@@ -24,6 +24,7 @@ export async function demoCall<T>(method: string, path: string): Promise<T> {
       ],
     } as T
   if (path.startsWith('/v1/search')) return { results: [] } as T
+  if (path.endsWith('/report-line')) return { ok: true } as T
   if (path === '/v1/translate') return { to: 'en', titles: [], podcastDescription: null, episodeDescription: null } as T
   throw new Error(`Demo has no answer for ${method} ${path}`)
 }

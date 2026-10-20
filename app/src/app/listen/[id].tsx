@@ -17,7 +17,7 @@ import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
-import { playerMenu } from '../../lib/playerMenu'
+import { playerMenu, REPORT_FAILED, REPORT_THANKS } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
 import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
@@ -289,10 +289,23 @@ export default function Listen() {
   const advert = advertAt(data.adverts, state.position)
   const skipAd = skipAdTarget(data.adverts, state.position)
   // Quieter actions live in the More menu, not among the main controls (PC-1017-F06).
-  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn, lineByLine: Boolean(state.lineByLine) })
+  const lineNow = data.transcript.segments[segmentAt(data.transcript.segments, state.position)]
+  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn, lineByLine: Boolean(state.lineByLine), lineOnScreen: Boolean(lineNow) && mode !== 'none' })
+  // 'That looks wrong' (PC-1018-04): only the episode and the line go to the server.
+  const reportLine = (segmentId: string) =>
+    api.reportLine(data.episode.id, segmentId).then(
+      () => Alert.alert(REPORT_THANKS),
+      () => Alert.alert(REPORT_FAILED),
+    )
   const runMenu = (i: number) => {
     if (menu.actions[i] === 'replayIntro' && intro) void l?.replayMoment(intro)
     if (menu.actions[i] === 'lineByLine') l?.setLineByLine(!state.lineByLine)
+    if (menu.actions[i] === 'reportLine' && lineNow) void reportLine(lineNow.id)
+  }
+  const openLineMenu = (segmentId: string) => {
+    const options = ['That line looks wrong', 'Cancel']
+    if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options, cancelButtonIndex: 1 }, (i) => i === 0 && void reportLine(segmentId))
+    else Alert.alert('This line', undefined, [{ text: options[0]!, onPress: () => void reportLine(segmentId) }, { text: 'Cancel', style: 'cancel' }])
   }
   const openMenu = () => {
     if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: menu.options, cancelButtonIndex: menu.cancelIndex }, runMenu)
@@ -348,6 +361,7 @@ export default function Listen() {
           position={state.position}
           mode={mode}
           oldFriends={oldFriends}
+          onLineMenu={(seg) => openLineMenu(seg.id)}
           onWord={(index) => {
             const w = data.transcript.words[index]
             if (!w) return
