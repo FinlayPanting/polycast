@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { followLabel, hasKept, KEPT_LIST_MAX, laterId, laterLabel, parseKept, removeKept, toggleKept, type LaterEpisode } from './keptListCore'
+import { followId, followLabel, hasKept, KEPT_LIST_MAX, laterId, laterLabel, parseKept, removeKept, toggleKept, type FollowedShow, type LaterEpisode } from './keptListCore'
 
 const ep = (id: string): LaterEpisode => ({ episodeId: id, title: `Episode ${id}`, podcastTitle: 'Show', image: null, durationSec: 1800, addedAt: '2026-10-20T00:00:00Z' })
 
@@ -40,5 +40,15 @@ describe('Listen later list', () => {
     expect(laterLabel(true)).toBe('In Listen later')
     expect(followLabel(false)).toBe('Follow')
     expect(followLabel(true)).toBe('Following')
+  })
+})
+
+describe('Following a show (PC-1017-F09)', () => {
+  const show = (id: string): FollowedShow => ({ podcastId: id, title: `Show ${id}`, author: null, artwork: null, followedAt: '2026-10-20T00:00:00Z' })
+  it('follows with one tap and unfollows with the next', () => {
+    const on = toggleKept([show('a')], show('b'), followId)
+    expect(on.map(followId)).toEqual(['b', 'a'])
+    expect(toggleKept(on, show('b'), followId).map(followId)).toEqual(['a'])
+    expect(parseKept(JSON.stringify(on), followId).map(followId)).toEqual(['b', 'a'])
   })
 })

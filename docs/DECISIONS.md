@@ -287,3 +287,7 @@ Board item PC-1017-K4. For learners on their own keys, an episode that isn't rea
 ## Saving a word never shows a false error (20 Oct 2026)
 
 Board item PC-1018-02. `saveWord` now inserts first and only merges the new form if the word is already in the bank (Postgres's duplicate-key answer), checking every step's error and retrying the merge once; the same word and form saved twice at once share one save. The player only marks a word saved once it really is, and a real failure says "Couldn’t save that word. Check your connection and try again." Simplest option picked: no database function (which would need a migration); the insert-then-merge in the app covers the double tap.
+
+## Follow a show (20 Oct 2026)
+
+Board item PC-1017-F09. Every show page has a Follow button under the host's name (Following, once tapped; tap again to stop). Followed shows feed New episodes in the Library (PC-1017-F11). Simplest options picked: follows are kept on the phone alongside Listen later (no new table), and their new episodes sit in the Library, as Finlay's 17 Oct cards ask, rather than on Discover as the spec's older line says. "New episode of your show" nudges still follow the shows a learner has listened to, since the server can't see phone-kept follows; moving follows to the account would let both use them.

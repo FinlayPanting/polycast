@@ -4,8 +4,8 @@ import { useMemo } from 'react'
 import { FlatList, Pressable, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/ui'
 import { api, type EpisodeListing, type ShowPage } from '../lib/api'
-import { listenLater, useKept } from '../lib/keptList'
-import { laterId, laterLabel } from '../lib/keptListCore'
+import { followedShows, listenLater, useKept } from '../lib/keptList'
+import { followId, followLabel, laterId, laterLabel } from '../lib/keptListCore'
 import { useAsync } from '../lib/useAsync'
 import { useTranslations } from '../lib/translate'
 import { TranslatedDescription, TranslatedLine } from '../components/Translated'
@@ -14,6 +14,21 @@ import { Loading } from '../components/Loading'
 
 function published(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+}
+
+/** Follow a show (PC-1017-F09): its new episodes then show in the Library. */
+function FollowButton({ show }: { show: ShowPage['podcast'] }) {
+  const follows = useKept(followedShows)
+  const following = follows.some((f) => followId(f) === show.id)
+  return (
+    <Button
+      kind={following ? 'quiet' : 'secondary'}
+      label={followLabel(following)}
+      accessibilityHint={following ? 'Stops following this show' : 'Its new episodes will show in your Library'}
+      onPress={() => void followedShows.toggle({ podcastId: show.id, title: show.title, author: show.author, artwork: show.artwork, followedAt: new Date().toISOString() })}
+      style={{ alignSelf: 'flex-start', minWidth: 120 }}
+    />
+  )
 }
 
 /** Listen later from an episode row (PC-1017-F10): one tap keeps it, a second takes it out. */
@@ -88,6 +103,7 @@ export default function Show() {
                   <TranslatedLine text={tr.titles.get(data.podcast.title)} pending={tr.pending} variant="body" />
                 </View>
                 {data.podcast.author ? <Txt tone="quiet">{data.podcast.author}</Txt> : null}
+                <FollowButton show={data.podcast} />
                 {data.podcast.description ? <TranslatedDescription original={data.podcast.description} translation={tr.podcastDescription} pending={tr.pending} /> : null}
               </>
             ) : error ? (
