@@ -33,6 +33,10 @@ Build progress and milestones: `docs/BUILD_PLAN.md`.
   - `none`: server or docs only; nothing to push.
   - Builds only accept updates made for the same native code (`runtimeVersion` policy `fingerprint`), so a JavaScript update can never land on a build missing a native module it needs. If the update workflow's public settings change, change `eas.json`'s base env too (a test keeps them in step).
 
+## The Lab
+
+`/lab` on the live server (PC-1021-L1) is Finlay's and Claude's test bench for voices, sound settings, guide moments heard in place, script rewrites and lesson-plan model comparisons, each with its cost. Use it instead of building a temporary page or a phone build to compare how Mia and Leo sound or what they say. API: `POST /lab/api/{voice,moment,scripts,plans}` (add `"estimate": true` to price a run without running it), `GET /lab/api/episodes`, `/episodes/:id`, `/runs`; send `Authorization: Bearer $LAB_TOKEN` and `X-Lab-By: claude`. Moment previews come back as a `renderId` for `GET /lab/api/render/:id` (MP3, half an hour); download one and inspect it with ffmpeg to check gaps and levels yourself. See `docs/DECISIONS.md` (The Lab).
+
 ## Rules
 
 - British English in all user-facing text. Warm, plain, adult tone ("You followed most of that", never "Amazing job!!").

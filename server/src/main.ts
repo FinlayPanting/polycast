@@ -99,7 +99,20 @@ async function main() {
   // Optional calibration of the own-keys cost estimate (PC-1017-K4), from logged preparations. Default 1.
   const factor = (v: string | undefined) => (v && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 1)
   const ownKeysCalibration = { elevenlabs: factor(process.env.OWN_KEYS_ELEVEN_FACTOR), google: factor(process.env.OWN_KEYS_GOOGLE_FACTOR) }
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), translateText, ownKeysSecret, ownKeysCalibration, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN })
+  const storage = supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY'))
+  // The Lab (PC-1021-L1): Finlay's test page on /lab, on only when LAB_TOKEN is set.
+  const lab = process.env.LAB_TOKEN
+    ? {
+        sql,
+        token: process.env.LAB_TOKEN,
+        keys: { elevenlabs: process.env.ELEVENLABS_API_KEY, googleTts: process.env.GOOGLE_TTS_API_KEY, gemini, anthropic: process.env.ANTHROPIC_API_KEY },
+        storage,
+        download: downloadEpisode(),
+        fingerprint: ffmpegFingerprint(),
+        elevenModel: process.env.ELEVENLABS_TTS_MODEL || undefined,
+      }
+    : undefined
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), translateText, ownKeysSecret, ownKeysCalibration, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN, lab })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
@@ -134,7 +147,7 @@ async function main() {
       // Re-plans after a guide update go through Gemini's batch service at half price (PC-1015-07).
       batchText: process.env.GEMINI_BATCH === 'false' ? undefined : (maxWaitMs) => geminiBatchText(gemini, undefined, fetch, { maxWaitMs }),
       speech,
-      storage: supabaseStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY')),
+      storage,
       downloadAudio: downloadEpisode(),
       fingerprint: ffmpegFingerprint(),
       loudness: ffmpegLoudness(),

@@ -18,6 +18,7 @@ import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { feedTranscriptLink } from './worker'
 import { clientAddress, rateLimiter } from './rateLimit'
+import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
 
@@ -57,6 +58,8 @@ export interface ApiDeps {
   ownKeysSecret?: string
   /** Scales the own-keys cost estimate per provider, calibrated from logged preparations (PC-1017-K4). */
   ownKeysCalibration?: { elevenlabs?: number; google?: number }
+  /** The Lab test page (PC-1021-L1), on /lab. Unset (no LAB_TOKEN): not served. */
+  lab?: LabDeps
 }
 
 type Env = { Variables: { userId: string } }
@@ -115,6 +118,11 @@ export function createApi(deps: ApiDeps) {
     console.error(err)
     return c.json({ error: 'Something went wrong. Please try again.' }, 500)
   })
+
+  if (deps.lab) {
+    app.get('/lab/', (c) => c.redirect('/lab'))
+    app.route('/lab', createLab(deps.lab))
+  }
 
   app.get('/health', (c) => c.json({ ok: true }))
   // What's new (PC-1019-F02): the change log, public and cacheable, so it updates with every push.
