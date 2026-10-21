@@ -427,9 +427,12 @@ export function createApi(deps: ApiDeps) {
       if (!deps.ownKeysSecret) return c.json({ error: OWN_KEYS_MESSAGES.off }, 503)
       const keys = { elevenlabs: body.ownKeys.elevenlabs, gemini: body.ownKeys.gemini }
       if (!plausibleKey(keys.elevenlabs) || !plausibleKey(keys.gemini)) return c.json({ error: OWN_KEYS_MESSAGES.missing }, 400)
-      const r = await requestOwnKeysPreparation(sql, userId, c.req.param('id'), guideId, OWN_KEYS_LIMITS.preparationsPerDay)
+      const secret = deps.ownKeysSecret
+      // The keys are saved in the same step as the job is queued (PC-1019-01).
+      const r = await requestOwnKeysPreparation(sql, userId, c.req.param('id'), guideId, OWN_KEYS_LIMITS.preparationsPerDay, (tx, jobId) =>
+        storeJobKeys(tx, jobId, userId, keys, secret),
+      )
       if (r.status === 'fairUse') return c.json({ error: OWN_KEYS_MESSAGES.fairUse }, 429)
-      if (r.status === 'queued' && r.charge === 'ownKeys') await storeJobKeys(sql, r.jobId, userId, keys, deps.ownKeysSecret)
       return c.json(r)
     }
     const claimedBefore = await freeEpisodesClaimed(sql)

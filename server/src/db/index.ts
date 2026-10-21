@@ -119,6 +119,11 @@ export async function requestOwnKeysPreparation(
   episodeId: string,
   guideId: string,
   perDay: number,
+  /**
+   * Keeps the learner's sealed keys for a newly queued job, inside the same transaction, so the
+   * worker can never claim the job before its keys are there (PC-1019-01).
+   */
+  storeKeys?: (tx: postgres.TransactionSql, jobId: string) => Promise<void>,
 ): Promise<PrepRequestResult | { status: 'fairUse' }> {
   return sql.begin(async (tx) => {
     const [episode] = await tx`select id, status from episodes where id = ${episodeId} for update`
@@ -129,7 +134,9 @@ export async function requestOwnKeysPreparation(
     const [{ n }] = await tx`select count(*)::int as n from prep_jobs where requested_by = ${userId} and charge = 'ownKeys' and created_at > now() - interval '1 day'` as any
     if (n >= perDay) return { status: 'fairUse' } as const
     await tx`update episodes set status = 'preparing' where id = ${episodeId}`
-    return queueJob(tx, episodeId, userId, 'prepare', guideId, 'ownKeys', 0)
+    const queued = await queueJob(tx, episodeId, userId, 'prepare', guideId, 'ownKeys', 0)
+    if (queued.status === 'queued' && queued.charge === 'ownKeys') await storeKeys?.(tx, queued.jobId)
+    return queued
   })
 }
 

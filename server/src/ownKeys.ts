@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { ProviderError } from './providers/types'
 import type { Sql } from './db'
+import type postgres from 'postgres'
 
 /**
  * "Use your own API keys" (PC-1017-K1). A learner's ElevenLabs key (transcription and the guide's
@@ -52,7 +53,7 @@ export function openKey(sealed: string, secret: string): string {
   return Buffer.concat([d.update(body!), d.final()]).toString('utf8')
 }
 
-export async function storeJobKeys(sql: Sql, jobId: string, userId: string, keys: OwnKeys, secret: string): Promise<void> {
+export async function storeJobKeys(sql: Sql | postgres.TransactionSql, jobId: string, userId: string, keys: OwnKeys, secret: string): Promise<void> {
   await sql`insert into job_keys (job_id, user_id, elevenlabs, gemini) values (${jobId}, ${userId}, ${sealKey(keys.elevenlabs, secret)}, ${sealKey(keys.gemini, secret)})
             on conflict (job_id) do update set elevenlabs = excluded.elevenlabs, gemini = excluded.gemini`
 }
