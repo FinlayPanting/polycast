@@ -51,3 +51,26 @@ Reviewers can't receive an emailed code, so `review@polycast.app` signs in with 
 1. Supabase → Authentication → Users → Add user → Create new user: `review@polycast.app`, a strong generated password, "Auto Confirm User" ticked.
 2. Sign in once on your iPhone with it and finish onboarding (Swedish, guide on), so the reviewer lands on a working Discover.
 3. App Store Connect → the version → App Review Information → Sign-in required: user name `review@polycast.app`, the password. Keep the password only there and in your password manager.
+
+## Notes for App Review: every feature, and how Mia is kept safe (PC-1018-05, 21 Oct 2026)
+
+Apple's 16 Oct 2026 guideline update added 2.5.19 (no hidden, dormant or undocumented features) and named missing safeguards under 1.2. Paste this into App Review Information → Notes, below the own-keys note above. Keep it in step with the app: if a card adds something a reviewer could stumble on, add a line here in the same commit.
+
+"Polycast puts subtitles and a spoken guide on real, public podcasts. Everything in the app is reachable from its four tabs; there are no hidden screens, test switches or features that turn on later.
+
+What you might come across:
+• Sign-in: use the demo account in Sign-in Information (password sign-in for that address only; everyone else gets an emailed code).
+• Discover → 'Tell Mia what you're in the mood for': type a mood and Mia suggests three shows or episodes from Polycast's catalogue, each with a one-line reason. Free accounts get three a day.
+• Listening: subtitles in the language being learned with English underneath. The guide (Mia or Leo) speaks only while the host is paused, from a lesson written once when the episode was prepared; nothing is generated while you listen. Free accounts hear the guide on one episode a week; subtitles are always free.
+• Tap any word for its meaning in that sentence and save it to Words, with the clip it came from.
+• An episode's page → 'Download for offline'. The copy stays on the phone and can be removed there or under You → Downloads; Polycast's servers never store or re-host episode audio, which always comes from the show's own feed.
+• You → your own API keys (optional, see the note above; also offered on the Plus screen), 'Leave a tip' (consumable, unlocks nothing), Plus (in-app purchase only), 'For podcast creators', and Delete account.
+
+How Mia is kept safe:
+• Every line the learner hears from a show is the host's own audio from that show's public feed. Mia and Leo never imitate or speak as the host, and their voices are clearly a separate guide.
+• The guide explains, translates and recaps what was actually said. It never invents things the host said; recaps and word notes are written from the episode's transcript.
+• The guide's lines are written once per episode, when it is prepared; nothing is generated live during a listen, and there is no open chat with the guide.
+• Creators can ask for their show to be removed at polycast.app/creators (also linked in the app under You → For podcast creators); a removed show can no longer be opened or played in Polycast.
+• Every AI request goes through Polycast's server, counts against the learner's allowance and a daily spending cap, and no AI keys are built into the app."
+
+Before each submission, `app/src/lib/releaseBuild.test.ts` confirms the store build can't reach demo mode or test-only tools: the production build profile and the update workflow never set `EXPO_PUBLIC_DEMO`, and the playback-log button only appears in the personal-team test build.
