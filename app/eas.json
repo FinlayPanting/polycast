@@ -17,11 +17,13 @@
       "env": {
         "EXPO_PUBLIC_DEMO": "0"
       },
-      "extends": "base"
+      "extends": "base",
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
-      "extends": "base"
+      "extends": "base",
+      "channel": "production"
     },
     "base": {
       "env": {

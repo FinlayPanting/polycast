@@ -351,3 +351,10 @@ Board item PC-1020-R1. Finlay asked to reverse PC-1019-09: Discover opens with t
 ## Lock screen shows the episode and show again (21 Oct 2026)
 
 Board item PC-1020-R2. Finlay asked to reverse PC-1020-08: now-playing is set once, when the episode loads, from `app/src/player/nowPlaying.ts` (episode title as the title, show name as the artist, the episode's artwork), and nothing changes it during the listen. The What's new entry for PC-1020-08 is removed.
+
+## Over-the-air updates for JavaScript-only changes (21 Oct 2026)
+
+Board item PC-1020-U1. `expo-updates` with EAS Update: `app.json` points at the project's update URL with `runtimeVersion` policy `fingerprint`, and the `production` and `preview` build profiles listen on channels of the same names. `app/.eas/workflows/update.yml` publishes to `production` (iOS) whenever the `update` branch moves, on Expo's servers, so no new secret is needed; it carries the same public `EXPO_PUBLIC_*` values as the build profile, because an update is bundled outside EAS Build and would otherwise have no server address. Updates download when the app opens and apply on the next open (`checkAutomatically: ON_LOAD`, no launch wait), so a listen is never interrupted.
+
+The native-vs-JavaScript rule lives in `scripts/release-target.mjs` (tested in `server/test/releaseTarget.test.ts`): anything in the app config, `eas.json`, `.eas/` workflows, native modules or plugins, icons and splash, or a change to the app's `dependencies` (which covers the Expo SDK) needs a TestFlight build; any other change under `app/` or `packages/core/` is an update; nothing else ships to phones. Simplest options picked: fingerprint over a hand-bumped runtime version (it can't be forgotten), changes to `devDependencies` and scripts don't count as native, and when in doubt the rule says TestFlight. The build that adds `expo-updates` is itself a TestFlight build; from then on most nights cost no build.
+
