@@ -20,8 +20,7 @@ import { GuidedListen, type ListenState } from './GuidedListen'
 import { setRemoteHandler } from './remote'
 import { LAST_PLAYED_KEY, miniPlayerView, openDecision, parseLastPlayed, sessionKey, type LastPlayed, type ListenParams, type MiniPlayerView } from './session'
 import { trackPlayerAudio } from './trackPlayerAudio'
-import { lockScreenLine } from './lockScreenLine'
-import type { EpisodeAudio } from './types'
+import { nowPlayingTrack } from './nowPlaying'
 
 /**
  * The listen in progress, held above the screens (PC-1017-F04): swiping the full player away
@@ -79,8 +78,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state)
   stateRef.current = state
   const listen = useRef<GuidedListen | undefined>(undefined)
-  const audioRef = useRef<EpisodeAudio | undefined>(undefined)
-  const lockLine = useMemo(() => lockScreenLine((info) => void audioRef.current?.setNowPlaying?.(info).catch(() => undefined)), [])
   const goodbye = useRef<Goodbye | undefined>(undefined)
   const run = useRef<{ key: string; abort: AbortController; disposed: boolean } | undefined>(undefined)
   const profileRef = useRef(profile)
@@ -171,11 +168,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, voicedGuideId(d.guideId, profileRef.current?.guide_id))).then((g) => (goodbye.current = g))
           }
 
-          const audio = config.demo ? demoAudio(d.episode.durationSec) : trackPlayerAudio()
-          audioRef.current = audio
-          lockLine.reset()
           const l = new GuidedListen({
-            audio,
+            audio: config.demo ? demoAudio(d.episode.durationSec) : trackPlayerAudio(),
             voice: config.demo ? demoVoice() : expoGuideVoice({ volume: guideVolume(d.plan?.loudnessLufs) }),
             moments,
             segments: d.transcript.segments,
@@ -192,7 +186,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           plog(`listen: ${d.episode.title} (${synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
           if (!config.demo) await prepareGuideAudio()
           if (r.disposed) return
-          await l.start({ url: d.episode.audioUrl, title: d.episode.title, artist: d.episode.podcastTitle, artwork: d.episode.image ?? undefined, durationSec: d.episode.durationSec }, startAt)
+          await l.start(nowPlayingTrack(d.episode), startAt)
           if (!r.disposed && from !== undefined) setHopBack(hopBackOffer(resumeAt, from, Date.now()))
           const known = await listWords(d.transcript.language).catch(() => [])
           if (!r.disposed) setOldFriends(new Set(findOldFriends(d.transcript.words, known, d.episode.id, d.transcript.language).map((f) => f.wordIndex)))
@@ -261,12 +255,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     [data],
   )
-
-  // The line being heard, on the lock screen and in Control Centre (PC-1020-08): once per line.
-  useEffect(() => {
-    if (!data || !(state.phase === 'playing' || state.phase === 'guide' || state.phase === 'question' || state.phase === 'paused')) return
-    lockLine.at(data.transcript.segments, state.position, data.episode, profile?.subtitle_mode ?? 'both')
-  }, [data, state.phase, state.position, profile?.subtitle_mode, lockLine])
 
   // Hands-free saving: a word the guide teaches goes into the word bank when it's spotlighted,
   // whether or not the full player is on screen.

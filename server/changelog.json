@@ -426,14 +426,6 @@
    "tryIt": "With your own keys on, open an episode that isn't ready yet and tap the estimate"
   },
   {
-   "id": "PC-1020-08",
-   "date": "2026-10-20",
-   "kind": "Feature",
-   "title": "The line you're hearing, on the lock screen",
-   "description": "With your phone locked, the lock screen and Control Centre now show the line the host is saying, with its English underneath, changing once per line.",
-   "tryIt": "Start an episode, lock your phone and glance at the lock screen"
-  },
-  {
    "id": "PC-1020-02",
    "date": "2026-10-20",
    "kind": "Bug",

@@ -31,10 +31,8 @@ function ensureSetup(): Promise<void> {
 
 /** The episode stream, through react-native-track-player: reliable background play and remote controls. */
 export function trackPlayerAudio(): EpisodeAudio {
-  let loaded: { artwork?: string; durationSec: number } | undefined
   return {
     async load(track, startAt = 0) {
-      loaded = { artwork: track.artwork, durationSec: track.durationSec }
       await ensureSetup()
       await TrackPlayer.reset()
       await TrackPlayer.add({ url: track.url, title: track.title, artist: track.artist, artwork: track.artwork, duration: track.durationSec })
@@ -58,7 +56,5 @@ export function trackPlayerAudio(): EpisodeAudio {
       return () => sub.remove()
     },
     unload: () => TrackPlayer.reset(),
-    // The current subtitle line on the lock screen (PC-1020-08); artwork and length kept as loaded.
-    setNowPlaying: (info) => TrackPlayer.updateNowPlayingMetadata({ title: info.title, artist: info.artist, artwork: loaded?.artwork, duration: loaded?.durationSec }),
   }
 }

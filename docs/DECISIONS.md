@@ -326,7 +326,9 @@ Board item PC-1019-09. Under the language name on Discover, a greeting in the la
 
 Board item PC-1020-09. The episode screen now asks `GET /v1/episodes/:id/own-keys-estimate`, which leaves ElevenLabs transcription out of the estimate when preparing would skip it: Polycast already has a transcript of the episode in the learner's language, or the feed links a word-timed JSON transcript (the same check the worker makes; the feed is read with an 8-second limit, and on a timeout the full estimate shows). Tapping the estimate adds a line saying why it's lower. When the feed gives no length, the estimate is for an hour and says "an hour of episode". `GET /v1/keys/estimate` stays for older builds.
 
-## The line you're hearing, on the lock screen (20 Oct 2026)
+## The line you're hearing, on the lock screen (20 Oct 2026) — reversed 21 Oct 2026
+
+**Reversed (PC-1020-R2):** Finlay's decision, 20 Oct. The lock screen and Control Centre show the episode's title and the show's name for the whole listen again; `lockScreenLine.ts` and the `setNowPlaying` hook are gone. A running transcript on the lock screen is being tried as a Live Activity instead (PC-1020-L1). Kept below for the record.
 
 Board item PC-1020-08. While an episode plays (or is paused mid-listen), the lock screen and Control Centre show the current subtitle line as the title and its English as the subtitle, through the track player's now-playing details (artwork and length kept). It changes only when the line changes. Simplest options picked: it follows the learner's saved subtitle setting (target only shows the show's name underneath; subtitles off keeps the episode title and show), and before the first line the episode title shows as before.
 
@@ -345,3 +347,7 @@ Board item PC-1020-03. Once a line's end is within 0.6 seconds of real time (wor
 ## Discover greeting taken out (21 Oct 2026)
 
 Board item PC-1020-R1. Finlay asked to reverse PC-1019-09: Discover opens with the language name and the mood picks, with no greeting. The What's new entry for PC-1019-09 is removed too, so nobody is told to try something that isn't there.
+
+## Lock screen shows the episode and show again (21 Oct 2026)
+
+Board item PC-1020-R2. Finlay asked to reverse PC-1020-08: now-playing is set once, when the episode loads, from `app/src/player/nowPlaying.ts` (episode title as the title, show name as the artist, the episode's artwork), and nothing changes it during the listen. The What's new entry for PC-1020-08 is removed.
