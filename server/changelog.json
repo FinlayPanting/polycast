@@ -448,6 +448,14 @@
    "title": "New episodes download on their own",
    "description": "Turn on 'Download new episodes' for a show you follow and its new episodes download when you open your Library, on Wi-Fi unless you allow mobile data. On Plus, ones that aren't ready yet are prepared from your Plus hours.",
    "tryIt": "Follow a show, then turn on 'Download new episodes' under the Follow button"
+  },
+  {
+   "id": "PC-1018-06",
+   "date": "2026-10-21",
+   "kind": "UX",
+   "title": "Your first saved word blooms",
+   "description": "The first time you save a word, Polycast's coral, magenta and violet stems open out under the button, with a line naming the language. It only happens once.",
+   "tryIt": "While listening, tap a word and save it (if it's your first)"
   }
  ]
 }
