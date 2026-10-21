@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { claimNextJob, requestOwnKeysPreparation, type Sql } from '../src/db'
+import { claimNextJob, failJob, MAX_ATTEMPTS, reclaimStaleJobs, requestOwnKeysPreparation, type Sql } from '../src/db'
 import { loadJobKeys, storeJobKeys } from '../src/ownKeys'
 import { freshDatabase, PG_TEST_URL } from './pg'
 
@@ -63,5 +63,28 @@ run('own-key jobs and their keys', () => {
     const again = await requestOwnKeysPreparation(sql, dan, ep, 'mia', 10, async () => void (stored = true))
     expect(again).toMatchObject({ status: 'queued', charge: 'none' })
     expect(stored).toBe(false)
+  })
+
+  it('deletes a job’s keys when the stale-job sweep fails it on its last try (PC-1019-02)', async () => {
+    const eve = await learner()
+    const ep = await episode()
+    const r = (await requestOwnKeysPreparation(sql, eve, ep, 'mia', 10, (tx, jobId) => storeJobKeys(tx, jobId, eve, KEYS, SECRET))) as { jobId: string }
+    // The server died mid-job on its last attempt.
+    await sql`update prep_jobs set status = 'running', attempts = ${MAX_ATTEMPTS}, started_at = now() - interval '2 hours' where id = ${r.jobId}`
+    expect(await reclaimStaleJobs(sql)).toBe(1)
+    expect((await sql`select status from prep_jobs where id = ${r.jobId}`)[0]!.status).toBe('failed')
+    expect((await sql`select count(*)::int as n from job_keys where job_id = ${r.jobId}`)[0]!.n).toBe(0)
+  })
+
+  it('keeps the keys while a job will still be retried, and deletes them when it finally fails', async () => {
+    const finn = await learner()
+    const ep = await episode()
+    const r = (await requestOwnKeysPreparation(sql, finn, ep, 'mia', 10, (tx, jobId) => storeJobKeys(tx, jobId, finn, KEYS, SECRET))) as { jobId: string }
+    await sql`update prep_jobs set status = 'running', attempts = 1 where id = ${r.jobId}`
+    expect(await failJob(sql, r.jobId, 'blip', true)).toBe('retrying')
+    expect(await loadJobKeys(sql, r.jobId, SECRET)).toEqual(KEYS)
+    await sql`update prep_jobs set status = 'running' where id = ${r.jobId}`
+    expect(await failJob(sql, r.jobId, 'turned down', false)).toBe('failed')
+    expect(await loadJobKeys(sql, r.jobId, SECRET)).toBeUndefined()
   })
 })

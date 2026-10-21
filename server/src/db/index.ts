@@ -238,6 +238,8 @@ export async function failJob(sql: Sql, jobId: string, error: string, retryable:
       return 'retrying'
     }
     await tx`update prep_jobs set status = 'failed', error = ${error}, finished_at = now() where id = ${jobId}`
+    // A learner's own keys go as soon as the job has finally failed, however it failed (PC-1019-02).
+    await tx`delete from job_keys where job_id = ${jobId}`
     if (job.kind === 'prepare') {
       await tx`update episodes set status = 'none' where id = ${job.episode_id} and status = 'preparing'`
       if (job.charge === 'freeEpisode') await tx`update profiles set free_episode_used = false where id = ${job.requested_by}`
