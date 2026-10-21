@@ -6,6 +6,10 @@ import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/u
 import { api, type EpisodeListing, type ShowPage } from '../lib/api'
 import { followedShows, listenLater, useKept } from '../lib/keptList'
 import { followId, followLabel, laterId, laterLabel } from '../lib/keptListCore'
+import { autoDownloadShows, toggleAutoDownload, useAllowsMobileData } from '../lib/autoDownload'
+import { AUTO_DOWNLOAD_LABEL, autoDownloadHint, autoShowId } from '../lib/autoDownloadCore'
+import { useSession } from '../lib/session'
+import { SwitchRow } from '../components/SwitchRow'
 import { useAsync } from '../lib/useAsync'
 import { useTranslations } from '../lib/translate'
 import { TranslatedDescription, TranslatedLine } from '../components/Translated'
@@ -16,18 +20,33 @@ function published(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 }
 
-/** Follow a show (PC-1017-F09): its new episodes then show in the Library. */
+/**
+ * Follow a show (PC-1017-F09): its new episodes then show in the Library. Once followed, new
+ * episodes can download on their own (PC-1017-F12), off until the learner turns it on.
+ */
 function FollowButton({ show }: { show: ShowPage['podcast'] }) {
   const follows = useKept(followedShows)
+  const auto = useKept(autoDownloadShows)
+  const mobileData = useAllowsMobileData()
+  const { profile } = useSession()
   const following = follows.some((f) => followId(f) === show.id)
+  const autoOn = auto.some((a) => autoShowId(a) === show.id)
   return (
-    <Button
-      kind={following ? 'quiet' : 'secondary'}
-      label={followLabel(following)}
-      accessibilityHint={following ? 'Stops following this show' : 'Its new episodes will show in your Library'}
-      onPress={() => void followedShows.toggle({ podcastId: show.id, title: show.title, author: show.author, artwork: show.artwork, followedAt: new Date().toISOString() })}
-      style={{ alignSelf: 'flex-start', minWidth: 120 }}
-    />
+    <View style={{ gap: space.md }}>
+      <Button
+        kind={following ? 'quiet' : 'secondary'}
+        label={followLabel(following)}
+        accessibilityHint={following ? 'Stops following this show' : 'Its new episodes will show in your Library'}
+        onPress={() => {
+          void followedShows.toggle({ podcastId: show.id, title: show.title, author: show.author, artwork: show.artwork, followedAt: new Date().toISOString() })
+          if (following && autoOn) void autoDownloadShows.remove(show.id)
+        }}
+        style={{ alignSelf: 'flex-start', minWidth: 120 }}
+      />
+      {following ? (
+        <SwitchRow label={AUTO_DOWNLOAD_LABEL} hint={autoDownloadHint(profile?.plan, mobileData)} value={autoOn} onChange={() => void toggleAutoDownload(show.id)} />
+      ) : null}
+    </View>
   )
 }
 

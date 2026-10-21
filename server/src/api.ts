@@ -436,7 +436,7 @@ export function createApi(deps: ApiDeps) {
       return c.json(r)
     }
     const claimedBefore = await freeEpisodesClaimed(sql)
-    const result = await requestPreparation(sql, userId, c.req.param('id'), guideId)
+    const result = await requestPreparation(sql, userId, c.req.param('id'), guideId, { plusOnly: body?.auto === true })
     if (result.status === 'refused') return c.json({ ...result, message: REFUSAL_MESSAGES[result.reason] }, 402)
     if (result.status === 'queued' && result.charge === 'freeEpisode') {
       const threshold = cohortAlert(claimedBefore, await freeEpisodesClaimed(sql))

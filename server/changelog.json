@@ -440,6 +440,14 @@
    "title": "Line by line stops cleanly",
    "description": "Line by line now pauses exactly at the end of each line, even when sped up, so you no longer hear a clipped first syllable of the next one.",
    "tryIt": "In the player, More, then Line by line"
+  },
+  {
+   "id": "PC-1017-F12",
+   "date": "2026-10-21",
+   "kind": "Feature",
+   "title": "New episodes download on their own",
+   "description": "Turn on 'Download new episodes' for a show you follow and its new episodes download when you open your Library, on Wi-Fi unless you allow mobile data. On Plus, ones that aren't ready yet are prepared from your Plus hours.",
+   "tryIt": "Follow a show, then turn on 'Download new episodes' under the Follow button"
   }
  ]
 }

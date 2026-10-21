@@ -167,6 +167,17 @@ run('database', () => {
       expect(await requestPreparation(sql, a, await episode(7201), 'mia')).toEqual({ status: 'refused', reason: 'too-long' })
     })
 
+    it('never spends the free episode on an auto-download, but does use Plus hours (PC-1017-F12)', async () => {
+      const a = await learner()
+      const ep = await episode(600)
+      expect(await requestPreparation(sql, a, ep, 'mia', { plusOnly: true })).toEqual({ status: 'refused', reason: 'free-used' })
+      expect((await sql`select free_episode_used from profiles where id = ${a}`)[0]!.free_episode_used).toBe(false)
+      expect((await sql`select status from episodes where id = ${ep}`)[0]!.status).not.toBe('preparing')
+      await sql`update profiles set plan = 'plus', plus_period_start = now(), plus_used_sec = 0 where id = ${a}`
+      expect(await requestPreparation(sql, a, ep, 'mia', { plusOnly: true })).toMatchObject({ status: 'queued', charge: 'plus' })
+      expect((await sql`select plus_used_sec from profiles where id = ${a}`)[0]!.plus_used_sec).toBe(600)
+    })
+
     it('counts Plus hours and pauses everyone at the daily cap', async () => {
       const a = await learner()
       await sql`update profiles set plan = 'plus', plus_period_start = now(), plus_used_sec = ${4.5 * 3600} where id = ${a}`

@@ -109,6 +109,8 @@ export const api = {
   /** With `ownKeys`, the episode is prepared on the learner's own API keys (PC-1017-K1). */
   prepare: (episodeId: string, ownKeys?: { elevenlabs: string; gemini: string }) =>
     call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, ownKeys ? { ownKeys } : undefined),
+  /** Auto-download's preparation (PC-1017-F12): Plus hours only, never the free episode. */
+  prepareAuto: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, { auto: true }),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null; message?: string }>('GET', `/v1/jobs/${jobId}`),
   /** 'That looks wrong' (PC-1018-04): flags one subtitle line. Only the episode and line are sent. */
   reportLine: (episodeId: string, segmentId: string) => call<{ ok: true }>('POST', `/v1/episodes/${episodeId}/report-line`, { segmentId }),

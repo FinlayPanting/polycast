@@ -65,7 +65,14 @@ const PLUS_PERIOD = "interval '1 month'"
  * once, can't spend the free episode twice or start the same episode twice. The rules themselves live
  * in @polycast/core so the app can explain them in the same words.
  */
-export async function requestPreparation(sql: Sql, userId: string, episodeId: string, guideId: string): Promise<PrepRequestResult> {
+export async function requestPreparation(
+  sql: Sql,
+  userId: string,
+  episodeId: string,
+  guideId: string,
+  /** Auto-download (PC-1017-F12) prepares on Plus hours only: it never spends the free episode. */
+  opts: { plusOnly?: boolean } = {},
+): Promise<PrepRequestResult> {
   return sql.begin(async (tx) => {
     const [profile] = await tx`
       update profiles set
@@ -99,6 +106,7 @@ export async function requestPreparation(sql: Sql, userId: string, episodeId: st
       { freeCohortSize: Number(await getSetting(tx, 'free_cohort_size', 100)), spendCapReached: await spendCapReached(tx) },
     )
     if (!decision.allowed) return { status: 'refused', reason: decision.reason }
+    if (opts.plusOnly && decision.charge === 'freeEpisode') return { status: 'refused', reason: 'free-used' }
 
     if (decision.charge === 'freeEpisode') await tx`update profiles set free_episode_used = true where id = ${userId}`
     if (decision.charge === 'plus') await tx`update profiles set plus_used_sec = plus_used_sec + ${episode.duration_sec} where id = ${userId}`

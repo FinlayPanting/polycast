@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt, minutes } from '../../components/ui'
 import { listListens, type ListenRow } from '../../lib/data'
@@ -10,6 +10,8 @@ import { isSavedForOffline, listSavedLessons } from '../../lib/offline'
 import { LaterList } from '../../components/LaterList'
 import { api } from '../../lib/api'
 import { followedShows, useKept } from '../../lib/keptList'
+import { runAutoDownload } from '../../lib/autoDownload'
+import { useSession } from '../../lib/session'
 import { carryOn, LIBRARY_SECTIONS, newEpisodes, recentShows, type NewEpisode, type RecentShow } from '../../lib/libraryCore'
 
 const SECTION = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.id, s])) as Record<(typeof LIBRARY_SECTIONS)[number]['id'], (typeof LIBRARY_SECTIONS)[number]>
@@ -47,6 +49,15 @@ export default function Library() {
   const carry = useMemo(() => carryOn(data ?? []), [data])
   const started = useMemo(() => new Set((data ?? []).map((l) => l.episode_id)), [data])
   const fresher = useMemo(() => newEpisodes(fresh.data ?? [], Date.now(), started), [fresh.data, started])
+  // New episodes of shows set to download on their own (PC-1017-F12), once the check is back.
+  const { profile } = useSession()
+  const plan = profile?.plan
+  const plusUsedSec = profile?.plus_used_sec ?? 0
+  useEffect(() => {
+    if (!fresh.data?.length) return
+    const all = newEpisodes(fresh.data, Date.now(), new Set(), { max: 50 })
+    void runAutoDownload(all, plan ? { plan, plusUsedSec } : null).then(() => setDownloads(listSavedLessons()))
+  }, [fresh.data, plan, plusUsedSec])
 
   return (
     <Screen>
