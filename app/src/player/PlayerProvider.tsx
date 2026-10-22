@@ -12,6 +12,8 @@ import { voicedGuideId } from '../lib/languages'
 import { isOfflineError } from '../lib/net'
 import { loadLesson, localPosition, readyPayload, saveLesson } from '../lib/offline'
 import { plog } from '../lib/playbackLog'
+import { endLiveLine, liveActivityAvailable, sendLiveLine } from '../lib/liveActivity'
+import { LiveLineFeed } from '../lib/liveLine'
 import { HOP_BACK_MS, hopBackOffer, type HopBack } from '../lib/hopBack'
 import { useSession } from '../lib/session'
 import { listWords, saveWord } from '../lib/words'
@@ -110,6 +112,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const l = listen.current
     listen.current = undefined
     void l?.dispose()
+    endLiveLine()
   }, [])
 
   const start = useCallback(
@@ -265,6 +268,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       void keepWord(m.term.lemma, m.term.text, m.term.meaning, m.clips[0], sentence)
     }
   }, [state.phase, state.moment, data, keepWord])
+
+  // The lock-screen line test (PC-1020-L1): one Live Activity update per line while the episode plays.
+  const liveFeed = useMemo(() => (data && liveActivityAvailable() ? new LiveLineFeed((l) => sendLiveLine(data.episode.podcastTitle, l)) : undefined), [data])
+  useEffect(() => {
+    if (!liveFeed || !data) return
+    if (state.phase === 'finished') return endLiveLine()
+    if (state.phase === 'playing') liveFeed.onPosition(data.transcript.segments, state.position, Date.now(), state.rate)
+  }, [liveFeed, data, state.phase, state.position, state.rate])
 
   // Finished: mark the listen done, and stop offering it in the mini-player next time.
   useEffect(() => {
