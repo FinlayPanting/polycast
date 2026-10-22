@@ -472,6 +472,14 @@
    "title": "Episodes you delete stay deleted",
    "description": "Once you remove a downloaded episode, or once one has downloaded on its own, auto-download leaves it alone, so freeing up space sticks.",
    "tryIt": "Remove an auto-downloaded episode, then open your Library again"
+  },
+  {
+   "id": "PC-1021-08",
+   "date": "2026-10-22",
+   "kind": "Content",
+   "title": "An All Saints’ weekend pick on Discover",
+   "description": "From 28 October to 2 November, Discover adds a mood pick for the holiday weekend in your language, with a short note on how it’s celebrated.",
+   "tryIt": "Open Discover between 28 October and 2 November and tap the first mood"
   }
  ]
 }
