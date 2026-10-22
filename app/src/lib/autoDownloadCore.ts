@@ -29,6 +29,11 @@ export interface AutoDownloadInput {
   shows: readonly AutoShow[]
   /** Episodes already on the phone. */
   saved: ReadonlySet<string>
+  /**
+   * Episodes auto-download has already saved once, or the learner removed (PC-1021-02): never
+   * downloaded again on their own, so a learner freeing space doesn't see them come back.
+   */
+  handled?: ReadonlySet<string>
   /** Episodes this phone has already asked to prepare. */
   askedToPrepare: ReadonlySet<string>
   connection: Connection
@@ -56,7 +61,7 @@ export function autoDownloadPlan(input: AutoDownloadInput): AutoDownloadPlan {
   const candidates = [...input.episodes]
     .filter((e) => {
       const from = since.get(e.podcastId)
-      return from !== undefined && Number.isFinite(from) && Date.parse(e.published) >= from && !input.saved.has(e.episodeId)
+      return from !== undefined && Number.isFinite(from) && Date.parse(e.published) >= from && !input.saved.has(e.episodeId) && !input.handled?.has(e.episodeId)
     })
     .sort((a, b) => a.published.localeCompare(b.published))
   for (const e of candidates) {

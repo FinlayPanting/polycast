@@ -7,6 +7,7 @@ import { api, refusalOf } from '../../lib/api'
 import { GUIDANCE, guideName, guidanceLevelOr, languageName, voicedGuideId, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
 import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '../../lib/offline'
+import { rememberHandled } from '../../lib/autoDownload'
 import { earlyPrimerUrl, jumpStart, loadEarlyPrimer, primerSource } from '../../lib/primer'
 import { config } from '../../lib/config'
 import { Primer, PrimerBuilding } from '../../components/Primer'
@@ -173,6 +174,8 @@ export default function Episode() {
         style: 'destructive',
         onPress: () => {
           removeSaved(ep.id, ep.audio_url)
+          // Auto-download won't bring it back (PC-1021-02).
+          void rememberHandled(ep.id)
           setSaved(false)
         },
       },

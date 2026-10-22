@@ -14,6 +14,28 @@ export const autoDownloadShows = new KeptList<AutoShow>('polycast.autoDownload.v
 const MOBILE_DATA_KEY = 'polycast.autoDownload.mobileData.v1'
 const ASKED_KEY = 'polycast.autoDownload.asked.v1'
 const ASKED_MAX = 200
+const HANDLED_KEY = 'polycast.autoDownload.handled.v1'
+const HANDLED_MAX = 300
+
+async function readList(key: string): Promise<string[]> {
+  try {
+    const v: unknown = JSON.parse((await AsyncStorage.getItem(key)) ?? '[]')
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Remembers an episode auto-download must leave alone from now on: one it saved, or one the
+ * learner removed (PC-1021-02). Newest first, the oldest dropped after 300; auto-download only
+ * looks back two weeks, so that's plenty.
+ */
+export async function rememberHandled(episodeId: string): Promise<void> {
+  const list = (await readList(HANDLED_KEY)).filter((id) => id !== episodeId)
+  list.unshift(episodeId)
+  await AsyncStorage.setItem(HANDLED_KEY, JSON.stringify(list.slice(0, HANDLED_MAX))).catch(() => {})
+}
 
 let mobileData: boolean | undefined
 const mobileDataListeners = new Set<(v: boolean) => void>()
@@ -70,10 +92,12 @@ export async function runAutoDownload(episodes: readonly NewEpisode[], account: 
     const shows = autoDownloadShows.current()
     if (!shows.length || !episodes.length) return
     const asked: string[] = JSON.parse((await AsyncStorage.getItem(ASKED_KEY).catch(() => null)) ?? '[]')
+    const handled = new Set(await readList(HANDLED_KEY))
     const plan = autoDownloadPlan({
       episodes,
       shows,
       saved: new Set(episodes.filter((e) => isSavedForOffline(e.episodeId)).map((e) => e.episodeId)),
+      handled,
       askedToPrepare: new Set(Array.isArray(asked) ? asked : []),
       connection: await connection(),
       allowMobileData: await allowsMobileData(),
@@ -87,7 +111,10 @@ export async function runAutoDownload(episodes: readonly NewEpisode[], account: 
     if (plan.prepare.length) await AsyncStorage.setItem(ASKED_KEY, JSON.stringify(asked.slice(0, ASKED_MAX))).catch(() => {})
     for (const e of plan.download) {
       await downloadForOffline(e.episodeId).then(
-        () => plog(`auto-download: saved ${e.title}`),
+        async () => {
+          await rememberHandled(e.episodeId)
+          plog(`auto-download: saved ${e.title}`)
+        },
         () => plog(`auto-download: couldn’t save ${e.title}; trying again next time`),
       )
     }

@@ -29,6 +29,14 @@ describe('auto-download for followed shows (PC-1017-F12)', () => {
     expect(ids(autoDownloadPlan({ ...base, episodes, saved: new Set(['a1']) }).download)).toEqual(['a2'])
   })
 
+  it('never brings back an episode it already downloaded or the learner removed (PC-1021-02)', () => {
+    const episodes = [ep('a1', 'A', '2026-10-20T08:00:00Z'), ep('a2', 'A', '2026-10-21T08:00:00Z'), ep('a3', 'A', '2026-10-21T09:00:00Z', false)]
+    const plus = { plan: 'plus' as const, plusUsedSec: 0 }
+    const plan = autoDownloadPlan({ ...base, episodes, account: plus, handled: new Set(['a1', 'a3']) })
+    expect(ids(plan.download)).toEqual(['a2'])
+    expect(plan.prepare).toEqual([])
+  })
+
   it('is Wi-Fi only unless mobile data is allowed, and does nothing offline', () => {
     expect(autoDownloadPlan({ ...base, connection: 'cellular' }).download).toEqual([])
     expect(ids(autoDownloadPlan({ ...base, connection: 'cellular', allowMobileData: true }).download)).toEqual(['a1'])
