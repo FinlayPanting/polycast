@@ -308,10 +308,14 @@ run('API and worker', () => {
     expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
     expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: 'nope' })).status).toBe(404)
     expect((await call(me, 'POST', `/v1/episodes/not-an-id/report-line`, { segmentId: row!.seg })).status).toBe(404)
+    // A second learner's report counts; the same learner's second press of that line doesn't (PC-1021-05).
+    expect((await call(await learner(), 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
     const stored = await sql`select kind, message from alerts where kind = 'line_report'`
     expect(stored.length).toBe(2)
     expect(stored[0]!.message).not.toContain(me)
-    expect(JSON.parse(stored[0]!.message)).toEqual({ episodeId: row!.episode_id, segmentId: row!.seg })
+    const { reportKey } = await import('../src/lineReports')
+    expect(JSON.parse(stored[0]!.message)).toEqual({ episodeId: row!.episode_id, segmentId: row!.seg, key: reportKey(me, row!.episode_id, row!.seg) })
+    expect(reportKey(me, row!.episode_id, row!.seg)).not.toContain(me)
     expect((await sql`select count(*)::int as n from alerts`)[0]!.n).toBe(before[0]!.n + 2)
 
     const admin = createApi({ sql, verify: async () => undefined, fetch: fakeFetch, funnelToken: 't0ken' })
@@ -321,6 +325,17 @@ run('API and worker', () => {
     expect(text).toContain('## Reported lines')
     expect(text).toContain('(2 reports, last ')
     expect(text.indexOf('## Reported lines')).toBeLessThan(text.indexOf('## Moments'))
+
+    // Reports older than 90 days don't count and are removed with the next report (PC-1021-05).
+    await sql`update alerts set created_at = now() - interval '91 days' where kind = 'line_report'`
+    expect((await (await admin.request('/admin/lessons?token=t0ken')).json()).lessons.find((l: any) => l.title === 'Tåget').reports).toBe(0)
+    expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
+    expect((await sql`select count(*)::int as n from alerts where kind = 'line_report'`)[0]!.n).toBe(1)
+
+    // Prepared again: its reports are cleared.
+    const { clearLineReports } = await import('../src/lineReports')
+    await clearLineReports(sql, row!.episode_id)
+    expect((await sql`select count(*)::int as n from alerts where kind = 'line_report'`)[0]!.n).toBe(0)
   })
 
   it('accepts a creator’s removal request without an account, and alerts Finlay', async () => {

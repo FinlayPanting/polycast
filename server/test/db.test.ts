@@ -224,6 +224,26 @@ run('database', () => {
       expect(pb!.free_episode_used).toBe(false)
     })
 
+    it('clears line reports when an episode is prepared again with new lines, not when another guide is voiced (PC-1021-05)', async () => {
+      const [a, b] = [await learner(), await learner()]
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      const first = fakeResult(ep)
+      await completePreparation(sql, (await claimNextJob(sql))!.id, first)
+      const report = () => sql`insert into alerts (kind, message) values ('line_report', ${JSON.stringify({ episodeId: ep, segmentId: 's1', key: 'k' })})`
+      const reports = async () => (await sql`select count(*)::int as n from alerts where kind = 'line_report' and message::jsonb->>'episodeId' = ${ep}`)[0]!.n
+      await report()
+      await requestPreparation(sql, b, ep, 'leo')
+      await completePreparation(sql, (await claimNextJob(sql))!.id, { ...fakeResult(ep), guideId: 'leo' })
+      expect(await reports()).toBe(1)
+      await sql`update episodes set status = 'none' where id = ${ep}`
+      await requestPreparation(sql, b, ep, 'mia')
+      const job = await claimNextJob(sql)
+      const r = fakeResult(ep)
+      await completePreparation(sql, job!.id, { ...r, transcript: { ...r.transcript, segments: [{ id: 's1', start: 0, end: 0.4, text: 'Hej', wordStart: 0, wordEnd: 1 }] as never[] } })
+      expect(await reports()).toBe(0)
+    })
+
     it('retries a failed job, then gives the learner their free episode back', async () => {
       const a = await learner()
       const ep = await episode()

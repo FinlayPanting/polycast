@@ -294,7 +294,7 @@ export function createApi(deps: ApiDeps) {
     const segmentId = typeof body?.segmentId === 'string' ? body.segmentId.slice(0, 64) : ''
     if (!/^[0-9a-f-]{36}$/i.test(id) || !segmentId) return c.json({ error: 'Not found' }, 404)
     if (!reportLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
-    if (!(await reportLine(sql, id, segmentId))) return c.json({ error: 'Not found' }, 404)
+    if (!(await reportLine(sql, id, segmentId, c.get('userId')))) return c.json({ error: 'Not found' }, 404)
     return c.json({ ok: true })
   })
 

@@ -13,6 +13,7 @@ import {
   LESSON_PLAN_VERSION,
 } from '@polycast/core'
 import type { SpendLedger } from '../budget'
+import { clearLineReports } from '../lineReports'
 
 export type Sql = postgres.Sql
 
@@ -212,7 +213,10 @@ export async function completePreparation(
   await sql.begin(async (tx) => {
     const [job] = await tx`select episode_id from prep_jobs where id = ${jobId} for update`
     const episodeId = job!.episode_id as string
+    let linesChanged = false
     if (result.transcript.words.length > 0) {
+      const [before] = await tx`select segments = ${tx.json(result.transcript.segments as any)}::jsonb as same from transcripts where episode_id = ${episodeId}`
+      linesChanged = Boolean(before && !before.same)
       await tx`
         insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
         values (${episodeId}, ${result.transcript.language}, ${result.plan.nativeLanguage}, ${result.transcript.source},
@@ -228,6 +232,9 @@ export async function completePreparation(
     // ready_at stays the first time it was ready, so a quiet re-prep doesn't jump it up 'recently ready'.
     await tx`update episodes set status = 'ready', ready_at = coalesce(ready_at, now()), difficulty = ${tx.json(result.difficulty as any)} where id = ${episodeId}`
     await tx`update prep_jobs set status = 'done', stage = 'done', finished_at = now(), cost_usd = ${costUSD(result.usage)} where id = ${jobId}`
+    // Prepared again with new lines: reports on the old ones go (PC-1021-05). Voicing it for
+    // another guide keeps the same lines, so their reports stay.
+    if (linesChanged) await clearLineReports(tx as unknown as Sql, episodeId)
   })
 }
 
