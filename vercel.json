@@ -2,7 +2,10 @@
   "git": {
     "deploymentEnabled": {
       "rebuild-ios": false,
-      "build/*": false
+      "testflight": false,
+      "update": false,
+      "build/*": false,
+      "claude/*": false
     }
   }
 }
