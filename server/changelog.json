@@ -488,6 +488,14 @@
    "title": "Mia signs your recap card",
    "description": "The lesson recap you share now carries a short line from your guide, like Mia: you caught “fika” like a local, with a small Mia or Leo mark.",
    "tryIt": "Finish an episode and look at the recap card before you share it"
+  },
+  {
+   "id": "PC-1021-09",
+   "date": "2026-10-22",
+   "kind": "Feature",
+   "title": "Hey Siri, carry on listening",
+   "description": "Say “Carry on listening in Polycast” to pick up your last lesson, or “Play the newest episode in Polycast” for a show you follow. They also work from Spotlight and the Action button.",
+   "tryIt": "Ask Siri, or search Polycast in Spotlight"
   }
  ]
 }

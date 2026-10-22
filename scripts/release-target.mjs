@@ -24,7 +24,7 @@ const NATIVE_PATHS = [
   /^app\/app\.json$/,
   /^app\/app\.config\.[cm]?[jt]s$/,
   /^app\/eas\.json$/,
-  /^app\/(ios|android|modules|plugins|targets)\//,
+  /^app\/(ios|android|modules|plugins|targets|native)\//,
   /^app\/assets\/icons\//,
   /^app\/assets\/(icon|splash-icon|android-icon[^/]*|adaptive-icon)\.png$/,
   /^app\/\.eas\//,

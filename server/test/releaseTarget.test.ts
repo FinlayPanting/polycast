@@ -18,7 +18,7 @@ describe('which way a night of app changes reaches phones (PC-1020-U1)', () => {
   })
 
   it('needs a TestFlight build when anything native changes', () => {
-    for (const p of ['app/app.json', 'app/app.config.js', 'app/eas.json', 'app/modules/polycast-fingerprint/ios/Fingerprint.swift', 'app/plugins/withLiveActivity.js', 'app/targets/live-line/LiveLineWidget.swift', 'app/assets/icons/flag-se.png', 'app/assets/icon.png', 'app/.eas/workflows/testflight.yml']) {
+    for (const p of ['app/app.json', 'app/app.config.js', 'app/eas.json', 'app/modules/polycast-fingerprint/ios/Fingerprint.swift', 'app/plugins/withLiveActivity.js', 'app/targets/live-line/LiveLineWidget.swift', 'app/native/PolycastShortcuts.swift', 'app/assets/icons/flag-se.png', 'app/assets/icon.png', 'app/.eas/workflows/testflight.yml']) {
       expect(releaseTarget(['app/src/lib/words.ts', p]), p).toBe('testflight')
     }
   })

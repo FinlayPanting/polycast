@@ -18,6 +18,7 @@ import { config } from '../lib/config'
 import { observeConfig } from '../lib/observe'
 import { reportFirstOpen } from '../lib/firstOpen'
 import { routeForNotification } from '../lib/notificationRoute'
+import { useShortcuts } from '../lib/shortcuts'
 import { tidyDownloads } from '../lib/episodeAudio'
 import { savedWordEpisodes } from '../lib/words'
 import { configurePurchases } from '../lib/purchases'
@@ -58,6 +59,8 @@ function Routes() {
     const route = routeForNotification(lastResponse.notification.request.content.data)
     if (route) router.push(route as any)
   }, [ready, signedIn, onboarded, lastResponse])
+  // "Hey Siri, carry on listening in Polycast" and friends (PC-1021-09).
+  useShortcuts(ready && signedIn && onboarded && !config.demo)
   // Once a launch: tidy downloads untouched for 30 days, keeping any a saved word comes from.
   // If the saved words can't be read (offline), nothing is removed.
   useEffect(() => {
