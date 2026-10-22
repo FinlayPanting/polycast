@@ -58,6 +58,8 @@ export interface ApiDeps {
   ownKeysSecret?: string
   /** Scales the own-keys cost estimate per provider, calibrated from logged preparations (PC-1017-K4). */
   ownKeysCalibration?: { elevenlabs?: number; google?: number }
+  /** Which failed feeds the Library's background refresh is waiting on (PC-1021-04); tests pass their own. */
+  feedRetry?: FeedRetry
   /** The Lab test page (PC-1021-L1), on /lab. Unset (no LAB_TOKEN): not served. */
   lab?: LabDeps
 }
@@ -93,6 +95,27 @@ export const LEARNER_LIMITS = { searchPerMinute: 30, openPerMinute: 30, prepareP
  * time, so new episodes turn up without anyone opening the show.
  */
 export const NEW_EPISODES_LIMITS = { perMinute: 20, shows: 200, days: 14, perShow: 10, refreshPerCall: 3 }
+
+/**
+ * Feeds that failed to load wait before the background refresh tries them again (PC-1021-04): an
+ * hour after the first failure, doubling each time up to a day, so a dead feed can't keep its
+ * place at the front of the queue and hold up the learner's other shows. Kept in memory: a restart
+ * simply gives every feed another go.
+ */
+export class FeedRetry {
+  private waits = new Map<string, { until: number; failures: number }>()
+  constructor(private firstWaitMs = 60 * 60_000, private maxWaitMs = 24 * 60 * 60_000) {}
+  waiting(id: string, nowMs: number): boolean {
+    return (this.waits.get(id)?.until ?? 0) > nowMs
+  }
+  failed(id: string, nowMs: number): void {
+    const failures = (this.waits.get(id)?.failures ?? 0) + 1
+    this.waits.set(id, { failures, until: nowMs + Math.min(this.maxWaitMs, this.firstWaitMs * 2 ** (failures - 1)) })
+  }
+  ok(id: string): void {
+    this.waits.delete(id)
+  }
+}
 export const SLOW_DOWN = 'Give it a moment, then try again.'
 
 /**
@@ -379,6 +402,7 @@ export function createApi(deps: ApiDeps) {
   })
 
   const newEpisodesLimit = rateLimiter(NEW_EPISODES_LIMITS.perMinute, 60_000)
+  const feedRetry = deps.feedRetry ?? new FeedRetry()
   app.post('/v1/library/new-episodes', async (c) => {
     if (!newEpisodesLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
     const body = await c.req.json().catch(() => ({}))
@@ -400,10 +424,15 @@ export function createApi(deps: ApiDeps) {
       : []
     const now = new Date()
     const stale = podcasts
-      .filter((p) => !showIsFresh(p.updated_at, now))
+      .filter((p) => !showIsFresh(p.updated_at, now) && !feedRetry.waiting(p.id, now.getTime()))
       .sort((a, b) => new Date(a.updated_at ?? 0).getTime() - new Date(b.updated_at ?? 0).getTime())
       .slice(0, NEW_EPISODES_LIMITS.refreshPerCall)
-    for (const p of stale) syncFeed(sql, deps.fetch, p.feed_url, undefined, { lookupHost: deps.lookupHost }).catch(() => {})
+    for (const p of stale) {
+      syncFeed(sql, deps.fetch, p.feed_url, undefined, { lookupHost: deps.lookupHost }).then(
+        () => feedRetry.ok(p.id),
+        () => feedRetry.failed(p.id, Date.now()),
+      )
+    }
     return c.json({
       shows: podcasts.map((p) => ({
         podcast: { id: p.id, title: p.title, artwork: p.artwork },

@@ -604,6 +604,51 @@ run('API and worker', () => {
     expect((await post({ podcastIds: [shows[0]] })).status).toBe(429)
   })
 
+  it("doesn't let dead feeds hold up the Library's refresh of the other shows (PC-1021-04)", async () => {
+    const { FeedRetry } = await import('../src/api')
+    const dana = await learner()
+    const reads: string[] = []
+    const flaky: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.startsWith('https://feeds.example.com/dead-') || url.startsWith('https://feeds.example.com/alive-')) reads.push(url.slice(26, -4))
+      if (url.startsWith('https://feeds.example.com/dead-')) return new Response('gone', { status: 500 })
+      return fakeFetch(input, init)
+    }
+    const retry = new FeedRetry()
+    const lib = createApi({ sql, verify: async (t) => t, fetch: flaky, lookupHost: publicHost, feedRetry: retry })
+    const post = (podcastIds: string[]) => lib.request('/v1/library/new-episodes', { method: 'POST', headers: { Authorization: `Bearer ${dana}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastIds }) })
+    const ids: string[] = []
+    // Three dead feeds, staler than the live one, so they'd always be first in the queue.
+    for (const [name, days] of [['dead-1', 5], ['dead-2', 4], ['dead-3', 3], ['alive-1', 2]] as const) {
+      const [p] = await sql`insert into podcasts (feed_url, title, language, updated_at) values (${`https://feeds.example.com/${name}.xml`}, ${name}, 'sv', now() - make_interval(days => ${days})) returning id`
+      ids.push(p!.id)
+    }
+    await post(ids)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(reads).toEqual(['dead-1', 'dead-2', 'dead-3'])
+    await post(ids)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(reads.slice(3)).toEqual(['alive-1'])
+    expect(retry.waiting(ids[0]!, Date.now())).toBe(true)
+  })
+
+  it('waits longer each time a feed keeps failing, up to a day, and forgets once it loads (PC-1021-04)', async () => {
+    const { FeedRetry } = await import('../src/api')
+    const r = new FeedRetry()
+    const h = 60 * 60_000
+    r.failed('a', 0)
+    expect(r.waiting('a', h - 1)).toBe(true)
+    expect(r.waiting('a', h)).toBe(false)
+    r.failed('a', h)
+    expect(r.waiting('a', 3 * h - 1)).toBe(true)
+    for (let i = 0; i < 10; i++) r.failed('a', 0)
+    expect(r.waiting('a', 24 * h - 1)).toBe(true)
+    expect(r.waiting('a', 24 * h)).toBe(false)
+    r.ok('a')
+    expect(r.waiting('a', 1)).toBe(false)
+    expect(r.waiting('never-failed', 0)).toBe(false)
+  })
+
   it('estimates an episode on own keys without transcription when the transcript is already there (PC-1020-09)', async () => {
     const { ownKeysEstimate } = await import('@polycast/core')
     const TX_FEED = 'https://feeds.example.com/tx.xml'
