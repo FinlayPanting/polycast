@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain JavaScript script, no type declarations
-import { dependenciesChanged, releaseTarget } from '../../scripts/release-target.mjs'
+import { dependenciesChanged, releaseTarget, rootPackageChanged } from '../../scripts/release-target.mjs'
 
 const pkg = (deps: Record<string, string>, extra: Record<string, unknown> = {}) => JSON.stringify({ name: 'app', dependencies: deps, ...extra })
 
@@ -18,7 +18,7 @@ describe('which way a night of app changes reaches phones (PC-1020-U1)', () => {
   })
 
   it('needs a TestFlight build when anything native changes', () => {
-    for (const p of ['app/app.json', 'app/app.config.js', 'app/eas.json', 'app/modules/polycast-fingerprint/ios/Fingerprint.swift', 'app/plugins/withLiveActivity.js', 'app/assets/icons/flag-se.png', 'app/assets/icon.png', 'app/.eas/workflows/testflight.yml']) {
+    for (const p of ['app/app.json', 'app/app.config.js', 'app/eas.json', 'app/modules/polycast-fingerprint/ios/Fingerprint.swift', 'app/plugins/withLiveActivity.js', 'app/targets/live-line/LiveLineWidget.swift', 'app/assets/icons/flag-se.png', 'app/assets/icon.png', 'app/.eas/workflows/testflight.yml']) {
       expect(releaseTarget(['app/src/lib/words.ts', p]), p).toBe('testflight')
     }
   })
@@ -34,6 +34,20 @@ describe('which way a night of app changes reaches phones (PC-1020-U1)', () => {
     const before = pkg({ expo: '~57.0.28' }, { devDependencies: { vitest: '^3.2.4' } })
     const after = pkg({ expo: '~57.0.28' }, { devDependencies: { vitest: '^3.3.0' }, scripts: { test: 'vitest run' } })
     expect(releaseTarget(['app/package.json', 'app/src/lib/words.ts'], { before, after })).toBe('update')
+  })
+
+  it('needs a build when the shared lock file changes, alone or with a screen (PC-1021-01)', () => {
+    expect(releaseTarget(['pnpm-lock.yaml'])).toBe('testflight')
+    expect(releaseTarget(['pnpm-lock.yaml', 'app/src/app/(tabs)/index.tsx'])).toBe('testflight')
+    expect(releaseTarget(['pnpm-workspace.yaml'])).toBe('testflight')
+  })
+
+  it('needs a build when the root package.json changes beyond its scripts (PC-1021-01)', () => {
+    const root = (extra: Record<string, unknown>) => JSON.stringify({ name: 'polycast', scripts: { check: 'pnpm test' }, ...extra })
+    expect(releaseTarget(['package.json'], {}, { before: root({}), after: root({ pnpm: { overrides: { 'react-native': '0.86.4' } } }) })).toBe('testflight')
+    expect(releaseTarget(['package.json', 'app/src/lib/words.ts'], {}, { before: root({}), after: root({ devDependencies: { typescript: '~5.9.0' } }) })).toBe('testflight')
+    expect(releaseTarget(['package.json'], {}, { before: root({}), after: JSON.stringify({ name: 'polycast', scripts: { check: 'pnpm typecheck && pnpm test' } }) })).toBe('none')
+    expect(rootPackageChanged(undefined, root({}))).toBe(true)
   })
 
   it('plays safe when package.json can not be read', () => {
