@@ -175,11 +175,11 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
   const all = questions.length > 0 && Object.keys(answers).length === questions.length
   const invite = plusInvite(data.freeEpisode, listenedSec, savedThisListen.length)
   const lines = useMemo(() => shareableLines(data.transcript.segments, caughtAt), [data, caughtAt])
-  // Podcasts finished overall, this one included once it's saved as finished (PC-1019-F01).
+  // Podcasts finished overall, this one included even before its finish is saved (PC-1020-04).
   const [completed, setCompleted] = useState<number>()
   useEffect(() => {
-    void countFinished().then(setCompleted, () => {})
-  }, [])
+    void countFinished(data.episode.id).then(setCompleted, () => {})
+  }, [data.episode.id])
   const answered = Object.keys(answers).length
   const stats = useMemo<RecapStats>(() => ({ minutes: listenedSec / 60, quiz: answered ? { right, of: questions.length } : undefined, completed }), [listenedSec, answered, right, questions.length, completed])
   return (

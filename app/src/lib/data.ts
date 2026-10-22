@@ -53,11 +53,17 @@ export async function listListens(): Promise<ListenRow[]> {
   return (data ?? []) as unknown as ListenRow[]
 }
 
-/** Podcasts the learner has finished overall, for the lesson recap (PC-1019-F01). Undefined offline. */
-export async function countFinished(): Promise<number | undefined> {
+/**
+ * Podcasts the learner has finished overall, for the lesson recap (PC-1019-F01). Undefined offline.
+ * Pass the episode just finished: it counts whether or not its finish has reached the database yet
+ * (the recap asks before the player saves it, PC-1020-04), and only once if it was finished before.
+ */
+export async function countFinished(justFinished?: string): Promise<number | undefined> {
   if (config.demo) return 3
-  const { count, error } = await supabase.from('listens').select('episode_id', { count: 'exact', head: true }).not('finished_at', 'is', null)
-  return error ? undefined : (count ?? 0)
+  let q = supabase.from('listens').select('episode_id', { count: 'exact', head: true }).not('finished_at', 'is', null)
+  if (justFinished) q = q.neq('episode_id', justFinished)
+  const { count, error } = await q
+  return error ? undefined : (count ?? 0) + (justFinished ? 1 : 0)
 }
 
 /** Where the learner left off, if they started this episode before and didn't finish. */

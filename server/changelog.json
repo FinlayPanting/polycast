@@ -456,6 +456,14 @@
    "title": "Your first saved word blooms",
    "description": "The first time you save a word, Polycast's coral, magenta and violet stems open out under the button, with a line naming the language. It only happens once.",
    "tryIt": "While listening, tap a word and save it (if it's your first)"
+  },
+  {
+   "id": "PC-1020-04",
+   "date": "2026-10-22",
+   "kind": "Bug",
+   "title": "The recap counts the episode you just finished",
+   "description": "The podcasts completed chip on the lesson recap now includes the episode you have just finished, so your first recap shows it too.",
+   "tryIt": "Finish an episode and look at the recap card"
   }
  ]
 }
