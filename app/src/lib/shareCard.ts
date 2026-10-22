@@ -29,6 +29,8 @@ export interface CardText {
   y: number
   colour: string
   weight: 'regular' | 'semibold'
+  /** Left edge, when not the card's padding. */
+  x?: number
 }
 
 export interface CardLayout {

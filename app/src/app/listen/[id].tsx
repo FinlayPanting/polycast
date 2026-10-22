@@ -139,14 +139,16 @@ function ShareRecap({ data, savedThisListen, stats }: { data: ListenPayload; sav
   const { profile } = useSession()
   const card = useRef<RecapCardHandle>(null)
   const [choice, setChoice] = useState<'recap' | 'word'>('recap')
+  // The guide the lesson was heard in signs the card (PC-1021-10).
+  const guide = voicedGuideId(data.guideId, profile?.guide_id)
   const words = useMemo(() => recapWords(data.plan, savedThisListen, data.transcript.glossary), [data, savedThisListen])
   const word = useMemo(() => wordOfTheEpisode(words, data.transcript.segments), [words, data])
   const layout = useMemo(
     () =>
       choice === 'word' && word
         ? wordCardLayout(word, data.episode.podcastTitle, profile?.flag_id)
-        : recapLayout({ languageName: languageName(data.transcript.language), flagId: profile?.flag_id, showTitle: data.episode.podcastTitle, episodeTitle: data.episode.title, words, didYouKnow: didYouKnow(data.plan), stats }),
-    [choice, word, words, data, profile?.flag_id, stats],
+        : recapLayout({ languageName: languageName(data.transcript.language), flagId: profile?.flag_id, showTitle: data.episode.podcastTitle, episodeTitle: data.episode.title, words, didYouKnow: didYouKnow(data.plan), stats, guide: { id: guide, name: guideName(guide) } }),
+    [choice, word, words, data, profile?.flag_id, stats, guide],
   )
   const label = choice === 'word' && word ? `Word of the episode: ${word.word}, ${word.meaning}` : `Lesson recap: ${data.episode.title}. ${words.map((w) => `${w.word}, ${w.meaning}`).join('; ')}`
   return (
