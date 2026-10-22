@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain JavaScript script, no type declarations
-import { dependenciesChanged, releaseTarget, rootPackageChanged } from '../../scripts/release-target.mjs'
+import { budget, buildsThisMonth, dependenciesChanged, releaseTarget, rootPackageChanged } from '../../scripts/release-target.mjs'
 
 const pkg = (deps: Record<string, string>, extra: Record<string, unknown> = {}) => JSON.stringify({ name: 'app', dependencies: deps, ...extra })
 
@@ -72,5 +72,23 @@ describe('the over-the-air update workflow', () => {
     expect(read('.eas/workflows/update.yml')).toMatch(/channel: production/)
     expect(app.runtimeVersion).toEqual({ policy: 'fingerprint' })
     expect(app.updates.url).toBe(`https://u.expo.dev/${app.extra.eas.projectId}`)
+  })
+})
+
+describe('TestFlight build budget: 15 a month, spread out', () => {
+  const log = '# notes\n2026-09-30 old\n2026-10-19 b1\n2026-10-19 b2\n2026-10-20 b3\n'
+  it('counts only this calendar month and ignores notes', () => {
+    expect(buildsThisMonth(log, '2026-10-22')).toBe(3)
+    expect(buildsThisMonth(log, '2026-11-01')).toBe(0)
+    expect(buildsThisMonth('', '2026-10-22')).toBe(0)
+  })
+  it('keeps to an even pace and one build in reserve', () => {
+    expect(budget(0, '2026-10-01').ok).toBe(true)
+    expect(budget(1, '2026-10-01').ok).toBe(false)
+    expect(budget(7, '2026-10-22')).toMatchObject({ allowedSoFar: 10, ok: true })
+    expect(budget(10, '2026-10-22').ok).toBe(false)
+    expect(budget(13, '2026-10-31').ok).toBe(true)
+    expect(budget(14, '2026-10-31').ok).toBe(false)
+    expect(budget(14, '2026-02-28').allowedSoFar).toBe(14)
   })
 })

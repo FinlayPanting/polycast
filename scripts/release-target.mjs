@@ -13,9 +13,16 @@
  * scripts (overrides and patches there change what the app installs) (PC-1021-01). When unsure, it says testflight; a needless build costs one of the
  * month's builds, a missed one leaves the update unable to reach anyone.
  *
+ * TestFlight budget: Expo's free plan gives 15 iOS builds a calendar month. Every build is logged in
+ * docs/testflight-builds.txt (one line: YYYY-MM-DD and a note). When a night needs `testflight` but the
+ * month's builds are ahead of an even pace (14 spread across the month, one kept back for emergencies),
+ * the script prints `testflight-held` instead: the native change waits for a later night.
+ *
  * Usage: node scripts/release-target.mjs <base commit> [head commit, default HEAD]
+ *        node scripts/release-target.mjs --budget   (prints this month's count and whether a build may go)
  */
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 const APP_PATHS = [/^app\//, /^packages\/core\//, /^pnpm-lock\.yaml$/, /^pnpm-workspace\.yaml$/, /^\.npmrc$/]
@@ -80,6 +87,29 @@ export function releaseTarget(changed, appPackage = {}, rootPackage = {}) {
   return 'update'
 }
 
+export const MONTHLY_BUILDS = 15
+export const RESERVE = 1
+export const BUDGET_LOG = 'docs/testflight-builds.txt'
+
+/** Builds logged in the same calendar month as `today` (YYYY-MM-DD). Lines starting with # are notes. */
+export function buildsThisMonth(logText, today) {
+  const month = today.slice(0, 7)
+  return (logText ?? '').split('\n').filter((l) => /^\d{4}-\d{2}-\d{2}/.test(l.trim()) && l.trim().startsWith(month)).length
+}
+
+/**
+ * Whether one more TestFlight build may go out today. Keeps builds to an even pace: by day d of a month
+ * of n days, at most ceil((15 - reserve) * d / n) builds; the reserve is only for Finlay asking by hand.
+ * @returns {{ used: number, allowedSoFar: number, limit: number, ok: boolean }}
+ */
+export function budget(used, today) {
+  const [y, m, d] = today.split('-').map(Number)
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const planned = MONTHLY_BUILDS - RESERVE
+  const allowedSoFar = Math.min(planned, Math.ceil((planned * d) / days))
+  return { used, allowedSoFar, limit: MONTHLY_BUILDS, ok: used < allowedSoFar }
+}
+
 function show(commit, path) {
   try {
     return execFileSync('git', ['show', `${commit}:${path}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
@@ -88,12 +118,35 @@ function show(commit, path) {
   }
 }
 
+function todayInVienna() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Vienna' }).format(new Date())
+}
+
+function readLog() {
+  try {
+    return readFileSync(BUDGET_LOG, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  if (process.argv[2] === '--budget') {
+    const today = todayInVienna()
+    const b = budget(buildsThisMonth(readLog(), today), today)
+    console.log(`${b.used} of ${b.limit} TestFlight builds used this month; pace allows ${b.allowedSoFar} by today: ${b.ok ? 'a build may go' : 'hold builds'}`)
+    process.exit(0)
+  }
   const [base, head = 'HEAD'] = process.argv.slice(2)
   if (!base) {
     console.error('Usage: node scripts/release-target.mjs <base commit> [head commit]')
     process.exit(2)
   }
   const changed = execFileSync('git', ['diff', '--name-only', base, head], { encoding: 'utf8' }).split('\n').filter(Boolean)
-  console.log(releaseTarget(changed, { before: show(base, 'app/package.json'), after: show(head, 'app/package.json') }, { before: show(base, 'package.json'), after: show(head, 'package.json') }))
+  let target = releaseTarget(changed, { before: show(base, 'app/package.json'), after: show(head, 'app/package.json') }, { before: show(base, 'package.json'), after: show(head, 'package.json') })
+  if (target === 'testflight') {
+    const today = todayInVienna()
+    if (!budget(buildsThisMonth(readLog(), today), today).ok) target = 'testflight-held'
+  }
+  console.log(target)
 }
