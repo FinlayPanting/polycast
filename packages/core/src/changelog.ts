@@ -79,3 +79,31 @@ export function hasUnread(entries: readonly ChangelogEntry[], lastSeenDate: stri
 export function newestDate(entries: readonly ChangelogEntry[]): string | undefined {
   return entries.reduce<string | undefined>((m, e) => (!m || e.date > m ? e.date : m), undefined)
 }
+
+/** App Store Connect's Notes for Review box holds at most 4,000 characters. */
+export const REVIEW_NOTES_MAX = 4000
+
+/**
+ * "Notes for Review" from the change log (PC-1022-06). Apple's 16 Oct 2026 guidelines (2.3.1(a),
+ * 2.5.19) ask for every new feature and change to be described with specificity, including what
+ * arrived by over-the-air update, so this lists every entry since the last approved version.
+ * Every entry is always named; when the full lines don't fit the box, fixes and then everything are
+ * cut to their titles rather than any being left out.
+ */
+export function reviewNotes(entries: readonly ChangelogEntry[], sinceDate?: string, max = REVIEW_NOTES_MAX): string {
+  const fresh = entries.filter((e) => !sinceDate || e.date > sinceDate)
+  if (!fresh.length) return 'No changes since the last approved version.'
+  const features = fresh.filter((e) => !FIX_KINDS.has(e.kind))
+  const fixes = fresh.filter((e) => FIX_KINDS.has(e.kind))
+  const full = (e: ChangelogEntry) => `- ${e.title}: ${e.description}${e.tryIt ? ` (Try it: ${e.tryIt}.)` : ''}`.replace(/\.\.\)$/, '.)')
+  const short = (e: ChangelogEntry) => `- ${e.title}`
+  const head = sinceDate
+    ? `Changes since the last approved version (${sinceDate}), including those delivered by over-the-air update:`
+    : 'Everything in this version, including what was delivered by over-the-air update:'
+  const render = (f: (e: ChangelogEntry) => string, g: (e: ChangelogEntry) => string) =>
+    [head, '', ...(features.length ? ['New and changed:', ...features.map(f), ''] : []), ...(fixes.length ? ['Fixes and refinements:', ...fixes.map(g)] : [])]
+      .join('\n')
+      .trim()
+  for (const text of [render(full, full), render(full, short), render(short, short)]) if (text.length <= max) return text
+  return render(short, short)
+}

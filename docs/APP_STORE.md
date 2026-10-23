@@ -74,3 +74,7 @@ How Mia is kept safe:
 • Every AI request goes through Polycast's server, counts against the learner's allowance and a daily spending cap, and no AI keys are built into the app."
 
 Before each submission, `app/src/lib/releaseBuild.test.ts` confirms the store build can't reach demo mode or test-only tools: the production build profile and the update workflow never set `EXPO_PUBLIC_DEMO`, and the playback-log button only appears in the personal-team test build.
+
+## Notes for Review from the change log (PC-1022-06, 23 Oct 2026)
+
+Apple's 16 Oct 2026 guidelines (2.3.1(a)) ask for every new feature and change to be described in Notes for Review, including anything delivered by over-the-air update since the last approved version (2.5.19 forbids undocumented features). Before each submission, run `node scripts/review-notes.mjs` and paste what it prints below the standing notes above. It lists every `server/changelog.json` entry since `lastApproved` in `docs/app-review.json` (all of them until the first approval), always within the box's 4,000 characters: if the full lines don't fit, fixes and then everything are cut to their titles, never left out. After Apple approves a version, set `lastApproved` to the newest changelog date that version included.

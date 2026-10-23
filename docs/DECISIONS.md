@@ -408,3 +408,7 @@ Board item PC-1022-04. The Lab's `0012_lab_runs.sql` (on rebuild-ios) and the Pl
 ## A slow feed is fetched once, not once per learner (23 Oct 2026)
 
 Board item PC-1022-05. The Library's background refresh marks a feed as being read before the read starts, and `FeedRetry.waiting` counts that as waiting, so learners opening the Library while a slow feed loads (up to 15 s) don't each start another fetch. The mark clears when the read succeeds or fails (then the usual back-off applies). Simplest option picked: kept in memory with the back-off; a read that somehow never settles stops counting after 30 s (twice the feed timeout).
+
+## App Review notes written from the change log (23 Oct 2026)
+
+Board item PC-1022-06. `node scripts/review-notes.mjs [since]` prints Notes for Review from `server/changelog.json` (`reviewNotes` in `packages/core/src/changelog.ts`), since `lastApproved` in `docs/app-review.json`. Simplest options picked: a script Finlay runs before submitting rather than anything automatic, since submissions are by hand in App Store Connect; the change log is already the record of what reached learners, over-the-air updates included, so nothing new is tracked; changes learners can't see (server-only, security, costs) stay out of the change log and so out of the notes, as they aren't app features.
