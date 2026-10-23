@@ -1,7 +1,7 @@
 import { goodFirstListen } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useMemo } from 'react'
-import { FlatList, Pressable, View } from 'react-native'
+import { FlatList, Linking, Pressable, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Tag, Txt, minutes } from '../components/ui'
 import { api, type EpisodeListing, type ShowPage } from '../lib/api'
 import { followedShows, listenLater, useKept } from '../lib/keptList'
@@ -9,6 +9,7 @@ import { followId, followLabel, laterId, laterLabel } from '../lib/keptListCore'
 import { autoDownloadShows, toggleAutoDownload, useAllowsMobileData } from '../lib/autoDownload'
 import { AUTO_DOWNLOAD_LABEL, autoDownloadHint, autoShowId } from '../lib/autoDownloadCore'
 import { useSession } from '../lib/session'
+import { SUPPORT_LABEL, supportLink } from '../lib/supportShow'
 import { SwitchRow } from '../components/SwitchRow'
 import { useAsync } from '../lib/useAsync'
 import { useTranslations } from '../lib/translate'
@@ -124,6 +125,7 @@ export default function Show() {
                 {data.podcast.author ? <Txt tone="quiet">{data.podcast.author}</Txt> : null}
                 <FollowButton show={data.podcast} />
                 {data.podcast.description ? <TranslatedDescription original={data.podcast.description} translation={tr.podcastDescription} pending={tr.pending} /> : null}
+                <SupportShow url={data.podcast.funding_url} />
               </>
             ) : error ? (
               <View style={{ gap: space.md }}>
@@ -150,5 +152,24 @@ export default function Show() {
         )}
       />
     </Screen>
+  )
+}
+
+/** A quiet link to the show's own support page, from its feed (PC-1018-09). Opens in Safari. */
+function SupportShow({ url }: { url?: string | null }) {
+  const link = supportLink(url)
+  if (!link) return null
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${SUPPORT_LABEL}, on ${link.site}`}
+      accessibilityHint="Opens in Safari"
+      onPress={() => void Linking.openURL(link.url)}
+      style={{ minHeight: MIN_TAP, justifyContent: 'center', alignSelf: 'flex-start' }}
+    >
+      <Txt variant="small" tone="quiet">
+        {SUPPORT_LABEL} · {link.site} ↗
+      </Txt>
+    </Pressable>
   )
 }

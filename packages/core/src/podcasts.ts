@@ -25,7 +25,26 @@ export interface Feed {
   language?: string
   image?: string
   description?: string
+  /** The show's own support page from <podcast:funding> (PC-1018-09): Patreon, Ko-fi, a membership. */
+  funding?: FeedFunding
   episodes: FeedEpisode[]
+}
+
+export interface FeedFunding {
+  url: string
+  /** The feed's own words for it, e.g. "Support us on Patreon". */
+  label?: string
+}
+
+/** A support link only if it's a plain https web address; anything else is left out. */
+export function safeFundingUrl(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  try {
+    const u = new URL(raw.trim())
+    return u.protocol === 'https:' && u.hostname.includes('.') && !u.username && !u.password ? u.href : undefined
+  } catch {
+    return undefined
+  }
 }
 
 const parser = new XMLParser({
@@ -33,7 +52,7 @@ const parser = new XMLParser({
   attributeNamePrefix: '@',
   textNodeName: '#text',
   removeNSPrefix: false,
-  isArray: (name) => ['item', 'entry', 'podcast:transcript', 'link'].includes(name),
+  isArray: (name) => ['item', 'entry', 'podcast:transcript', 'link', 'podcast:funding'].includes(name),
 })
 
 function text(v: unknown): string | undefined {
@@ -57,6 +76,18 @@ function isoDate(raw: string | undefined): string | undefined {
   if (!raw) return undefined
   const t = Date.parse(raw)
   return Number.isNaN(t) ? undefined : new Date(t).toISOString()
+}
+
+/** The first usable <podcast:funding url="…">label</podcast:funding> of a channel. */
+function firstFunding(tags: unknown): FeedFunding | undefined {
+  for (const t of Array.isArray(tags) ? tags : []) {
+    const url = safeFundingUrl(t?.['@url'])
+    if (url) {
+      const label = text(t)?.slice(0, 128)
+      return label ? { url, label } : { url }
+    }
+  }
+  return undefined
 }
 
 /** Parses an RSS or Atom podcast feed. Throws if the document is not a feed. */
@@ -97,6 +128,7 @@ export function parseFeed(xml: string): Feed {
     language: text(channel.language)?.toLowerCase().split('-')[0],
     image: channelImage,
     description: text(channel['itunes:summary']) ?? text(channel.description) ?? text(channel.subtitle),
+    funding: firstFunding(channel['podcast:funding']),
     episodes,
   }
 }

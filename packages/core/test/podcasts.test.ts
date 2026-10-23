@@ -162,3 +162,14 @@ describe('Top charts in the target language', () => {
     expect(feedLanguageFromHead('not a feed')).toBeUndefined()
   })
 })
+
+describe('the show’s support link (PC-1018-09)', () => {
+  const feed = (funding: string) => `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel><title>Show</title>${funding}<item><title>Ep</title><enclosure url="https://a.example/1.mp3"/></item></channel></rss>`
+
+  it('reads <podcast:funding>, keeping the first https link', () => {
+    expect(parseFeed(feed('<podcast:funding url="https://www.patreon.com/show">Support us on Patreon!</podcast:funding>')).funding).toEqual({ url: 'https://www.patreon.com/show', label: 'Support us on Patreon!' })
+    expect(parseFeed(feed('<podcast:funding url="http://insecure.example/x">No</podcast:funding><podcast:funding url="https://ko-fi.com/show"/>')).funding).toEqual({ url: 'https://ko-fi.com/show' })
+    expect(parseFeed(feed('<podcast:funding url="javascript:alert(1)">x</podcast:funding>')).funding).toBeUndefined()
+    expect(parseFeed(feed('')).funding).toBeUndefined()
+  })
+})

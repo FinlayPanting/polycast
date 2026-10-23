@@ -520,6 +520,14 @@
    "title": "You already know some words",
    "description": "Right after picking a language, Polycast shows a few words from one of the first shows you could hear that you already know, like Italian “importante”, and the host says each one.",
    "tryIt": "Pick a language when you first set up Polycast, then tap a word"
+  },
+  {
+   "id": "PC-1018-09",
+   "date": "2026-10-23",
+   "kind": "Growth",
+   "title": "Support the shows you love",
+   "description": "When a show offers a way to support it, like Patreon or Ko-fi, its page has a quiet ‘Support this show’ link that opens in Safari.",
+   "tryIt": "Open a show's page and look under its description"
   }
  ]
 }

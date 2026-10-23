@@ -48,7 +48,7 @@ export interface EpisodeListing {
 }
 
 export interface ShowPage {
-  podcast: { id: string; title: string; author: string | null; artwork: string | null; language: string | null; description?: string | null }
+  podcast: { id: string; title: string; author: string | null; artwork: string | null; language: string | null; description?: string | null; funding_url?: string | null; funding_label?: string | null }
   episodes: EpisodeListing[]
 }
 

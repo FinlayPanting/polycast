@@ -13,8 +13,9 @@ import { freshDatabase, PG_TEST_URL } from './pg'
 const run = PG_TEST_URL ? describe : describe.skip
 
 const FEED_URL = 'https://feeds.example.com/svenska.xml'
-const RSS = `<?xml version="1.0"?><rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel>
+const RSS = `<?xml version="1.0"?><rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel>
   <title>Svenska Samtal</title><language>sv</language><itunes:author>Anna</itunes:author><description><![CDATA[<p>Vardagssvenska, <b>lugnt</b> och roligt.</p>]]></description>
+  <podcast:funding url="https://www.patreon.com/svenskasamtal">Stöd oss på Patreon</podcast:funding>
   <item><title>Tåget</title><guid>ep-1</guid><pubDate>Mon, 05 Oct 2026 06:00:00 GMT</pubDate><itunes:duration>590</itunes:duration><enclosure url="https://cdn.example.com/1.mp3" type="audio/mpeg"/></item>
   <item><title>Fikan</title><guid>ep-2</guid><pubDate>Mon, 28 Sep 2026 06:00:00 GMT</pubDate><itunes:duration>590</itunes:duration><enclosure url="https://cdn.example.com/2.mp3" type="audio/mpeg"/></item>
 </channel></rss>`
@@ -85,6 +86,8 @@ run('API and worker', () => {
     const opened = await (await call(anna, 'POST', '/v1/podcasts/open', { appleId: '555' })).json()
     expect(opened.podcast.title).toBe('Svenska Samtal')
     expect(opened.podcast.description).toBe('Vardagssvenska, lugnt och roligt.') // for the show page (PC-1017-T1)
+    // The show's own support link, for 'Support this show' (PC-1018-09).
+    expect(opened.podcast).toMatchObject({ funding_url: 'https://www.patreon.com/svenskasamtal', funding_label: 'Stöd oss på Patreon' })
     expect(opened.episodes.map((e: any) => e.title)).toEqual(['Tåget', 'Fikan'])
     const episodeId = opened.episodes[0].id
 

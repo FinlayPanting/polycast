@@ -415,7 +415,7 @@ export function createApi(deps: ApiDeps) {
       }
       sync.catch(() => {})
     }
-    const [podcast] = await sql`select id, title, author, artwork, language, description from podcasts where id = ${podcastId}`
+    const [podcast] = await sql`select id, title, author, artwork, language, description, funding_url, funding_label from podcasts where id = ${podcastId}`
     const episodes = await sql`
       select id, title, published, duration_sec, image, status, difficulty, description from episodes
       where podcast_id = ${podcastId} order by published desc nulls last limit 50`

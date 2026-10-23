@@ -44,9 +44,10 @@ export async function syncFeed(
   const feed = parseFeed(new TextDecoder().decode(res.body))
   const language = feed.language ?? null
   const [p] = await sql`
-    insert into podcasts (apple_id, feed_url, title, author, artwork, language, description)
-    values (${apple?.appleId ?? null}, ${feedUrl}, ${feed.title}, ${feed.author ?? apple?.author ?? null}, ${apple?.artwork || feed.image || null}, ${language}, ${cleanDescription(feed.description) ?? null})
+    insert into podcasts (apple_id, feed_url, title, author, artwork, language, description, funding_url, funding_label)
+    values (${apple?.appleId ?? null}, ${feedUrl}, ${feed.title}, ${feed.author ?? apple?.author ?? null}, ${apple?.artwork || feed.image || null}, ${language}, ${cleanDescription(feed.description) ?? null}, ${feed.funding?.url ?? null}, ${feed.funding?.label ?? null})
     on conflict (feed_url) do update set
+      funding_url = excluded.funding_url, funding_label = excluded.funding_label,
       title = excluded.title, description = coalesce(excluded.description, podcasts.description), author = excluded.author, artwork = coalesce(excluded.artwork, podcasts.artwork),
       language = coalesce(excluded.language, podcasts.language), apple_id = coalesce(excluded.apple_id, podcasts.apple_id), updated_at = now()
     returning id, language`
