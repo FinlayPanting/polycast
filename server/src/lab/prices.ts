@@ -6,7 +6,14 @@ import { pricesOn } from '@polycast/core'
  * spending cap uses); models the app doesn't use yet are listed here.
  */
 
-export type VoiceProvider = 'elevenlabs' | 'chirp' | 'gemini'
+export type VoiceProvider = 'elevenlabs' | 'chirp' | 'gemini' | 'mistral'
+
+/**
+ * Mistral Voxtral 3 text to speech (PC-1022-09), released 20 Oct 2026: $13 per million characters,
+ * the same for batch and realtime (Mistral's launch pricing, checked 23 Oct 2026). Lab only.
+ */
+export const MISTRAL_TTS_MODEL = 'voxtral-mini-tts-3-0'
+export const MISTRAL_TTS_PER_CHAR = 13 / 1e6
 
 export interface TextModelInfo {
   id: string
@@ -69,11 +76,12 @@ export const GEMINI_TTS = {
   'gemini-3.8-flash-lite-tts': 'ttsLitePerAudioSec',
 } as const
 
-/** What one take costs: per character for ElevenLabs and Chirp, per audio second for Gemini. */
+/** What one take costs: per character for ElevenLabs, Chirp and Mistral, per audio second for Gemini. */
 export function voiceCostUSD(provider: VoiceProvider, model: string, chars: number, audioSec: number, at?: Date): number {
   const p = pricesOn(at)
   if (provider === 'elevenlabs') return chars * p.elevenTtsPerChar
   if (provider === 'chirp') return chars * p.ttsPerChar
+  if (provider === 'mistral') return chars * MISTRAL_TTS_PER_CHAR
   const key = GEMINI_TTS[model as keyof typeof GEMINI_TTS] ?? 'ttsPerAudioSec'
   return audioSec * p[key]
 }

@@ -7,7 +7,7 @@ import type { Storage } from '../providers/types'
 import { fetchEffectsCatalog, roomSettings } from '../roomAudition'
 import { GUIDES, guideById } from '../voices'
 import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, type MomentVariant } from './moment'
-import { estimateVoiceUSD, GEMINI_TTS, TEXT_MODELS, voicePerHourUSD } from './prices'
+import { estimateVoiceUSD, GEMINI_TTS, MISTRAL_TTS_MODEL, TEXT_MODELS, voicePerHourUSD } from './prices'
 import { getRun, labSpend, listRuns, pickRun, saveRun, type RunKind } from './runs'
 import { SOUND_PRESETS } from './sound'
 import { cleanTake, voiceAndStore, type LabKeys, type Take } from './voice'
@@ -31,6 +31,16 @@ export interface LabDeps {
   fetch?: typeof fetch
   /** The ElevenLabs model the guide uses now (resolved at start-up). */
   elevenModel?: string
+}
+
+/** Mistral's voice list, whichever shape it comes in (a list, or one under `items`, `data` or `voices`). */
+export function parseMistralVoices(body: unknown): { id: string; name: string }[] {
+  const b = body as any
+  const list: any[] = Array.isArray(b) ? b : Array.isArray(b?.items) ? b.items : Array.isArray(b?.data) ? b.data : Array.isArray(b?.voices) ? b.voices : []
+  return list
+    .map((v) => ({ id: v?.id ?? v?.voice_id, name: v?.name ?? v?.id ?? v?.voice_id, lang: v?.languages ?? v?.language }))
+    .filter((v) => typeof v.id === 'string' && /^[\w.-]{1,80}$/.test(v.id))
+    .map((v) => ({ id: v.id, name: String(v.name) + (v.lang ? ` · ${[v.lang].flat().join(', ')}` : '') }))
 }
 
 /** Gemini's and Chirp 3 HD's shared voice names. */
@@ -145,9 +155,22 @@ export function createLab(deps: LabDeps) {
     return voiceList
   }
 
+  /** Mistral's voices (PC-1022-09): presets and any voices cloned on the account. */
+  let mistralList: { at: number; voices: { id: string; name: string }[] } | undefined
+  async function mistralVoices() {
+    if (!deps.keys.mistral) return []
+    if (mistralList && Date.now() - mistralList.at < 10 * 60_000) return mistralList.voices
+    const body = await f('https://api.mistral.ai/v1/audio/voices', { headers: { Authorization: `Bearer ${deps.keys.mistral}` }, signal: AbortSignal.timeout(10_000) })
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => [])
+    mistralList = { at: Date.now(), voices: parseMistralVoices(body) }
+    return mistralList.voices
+  }
+
   app.get('/api/options', async (c) => {
-    const [eleven, catalog, spend, runs] = await Promise.all([
+    const [eleven, mistral, catalog, spend, runs] = await Promise.all([
       elevenVoices(),
+      mistralVoices(),
       deps.keys.elevenlabs ? fetchEffectsCatalog(deps.keys.elevenlabs, f) : Promise.resolve({ filters: [], environments: [] }),
       labSpend(deps.sql),
       listRuns(deps.sql, { limit: 1 }),
@@ -161,6 +184,7 @@ export function createLab(deps: LabDeps) {
         elevenlabs: { available: Boolean(deps.keys.elevenlabs), defaultModel: elevenModel, models: eleven.models.length ? eleven.models : [{ id: elevenModel, name: elevenModel }], voices: eleven.voices, perHourUSD: voicePerHourUSD('elevenlabs', elevenModel) },
         chirp: { available: Boolean(deps.keys.googleTts), voices: GOOGLE_VOICES, perHourUSD: voicePerHourUSD('chirp', '') },
         gemini: { available: Boolean(deps.keys.gemini), models: Object.keys(GEMINI_TTS), voices: GOOGLE_VOICES, perHourUSD: Object.fromEntries(Object.keys(GEMINI_TTS).map((m) => [m, voicePerHourUSD('gemini', m)])) },
+        mistral: { available: Boolean(deps.keys.mistral), defaultModel: MISTRAL_TTS_MODEL, voices: mistral, perHourUSD: voicePerHourUSD('mistral', MISTRAL_TTS_MODEL) },
       },
       textModels: TEXT_MODELS.map((m) => ({
         id: m.id,

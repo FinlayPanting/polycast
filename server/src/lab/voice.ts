@@ -7,7 +7,7 @@ import { googleChirpSpeech } from '../providers/googleTts'
 import { withRetry } from '../retry'
 import type { AudioEffects } from '../roomAudition'
 import { GUIDES } from '../voices'
-import { voiceCostUSD, type VoiceProvider } from './prices'
+import { MISTRAL_TTS_MODEL, voiceCostUSD, type VoiceProvider } from './prices'
 import { isSoundPreset, joinWavs, LAB_RATE, LINE_GAP_SEC, runFfmpeg, fixWavSizes, silence, tidyLine, toMp3, type SoundPreset } from './sound'
 import { wavDurationSec } from '../audio'
 
@@ -40,6 +40,8 @@ export interface LabKeys {
   googleTts?: string
   gemini?: string
   anthropic?: string
+  /** Mistral's Voxtral voices (PC-1022-09), from MISTRAL_API_KEY. */
+  mistral?: string
 }
 
 export interface VoicedTake {
@@ -53,7 +55,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 
 /** Checks a take from the page: unknown fields dropped, numbers kept in range. */
 export function cleanTake(t: any): Take {
-  const provider: VoiceProvider = t?.provider === 'chirp' || t?.provider === 'gemini' ? t.provider : 'elevenlabs'
+  const provider: VoiceProvider = t?.provider === 'chirp' || t?.provider === 'gemini' || t?.provider === 'mistral' ? t.provider : 'elevenlabs'
   const voice = typeof t?.voice === 'string' && /^[\w.-]{1,80}$/.test(t.voice) ? t.voice : provider === 'elevenlabs' ? GUIDES[0]!.elevenLabsVoiceId : GUIDES[0]!.voice
   const model = typeof t?.model === 'string' && /^[\w.-]{1,80}$/.test(t.model) ? t.model : undefined
   const speed = typeof t?.speed === 'number' && Number.isFinite(t.speed) ? clamp(t.speed, 0.7, 1.2) : undefined
@@ -95,16 +97,37 @@ async function elevenMp3(key: string, req: { text: string; voiceId: string; mode
   return audio
 }
 
+/**
+ * Mistral Voxtral text to speech (PC-1022-09) as MP3. Mistral answers with JSON carrying the audio
+ * as base64 (`audio_data`); a plain audio reply is accepted too. It has no speed or language
+ * setting: it reads the whole line, target words included, in one go.
+ */
+export async function mistralMp3(key: string, req: { text: string; voiceId: string; model?: string }, fetchImpl: typeof fetch): Promise<Uint8Array> {
+  const res = await fetchImpl('https://api.mistral.ai/v1/audio/speech', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: req.model ?? MISTRAL_TTS_MODEL, input: req.text, voice_id: req.voiceId, response_format: 'mp3' }),
+  })
+  if (!res.ok) throw errorFromResponse('Mistral TTS', res.status, await res.text())
+  let audio: Uint8Array
+  if ((res.headers.get('content-type') ?? '').includes('json')) {
+    const body = (await res.json()) as { audio_data?: string }
+    audio = new Uint8Array(Buffer.from(body.audio_data ?? '', 'base64'))
+  } else audio = new Uint8Array(await res.arrayBuffer())
+  if (audio.byteLength < 2) throw new ProviderError('Mistral TTS reply had no audio', true)
+  return audio
+}
+
 const asWav = async (wav: Uint8Array) => ({ audio: wav, mimeType: 'audio/wav' })
 
 /**
  * Voices a line with a take, the way the pipeline does (server/src/pipeline/voice.ts): words in
- * [[ ]] are said in the target language, more slowly; ElevenLabs reads a mixed line in one go.
+ * [[ ]] are said in the target language, more slowly; ElevenLabs and Mistral read a mixed line in one go.
  * Then the line gets the app's tidy-up and the take's sound setting.
  */
 export async function voiceLine(take: Take, line: LineRequest, keys: LabKeys, opts: { fetchImpl?: typeof fetch; elevenModel?: string; now?: Date } = {}): Promise<VoicedTake> {
   const fetchImpl = opts.fetchImpl ?? fetch
-  const mixed = take.provider === 'elevenlabs'
+  const mixed = take.provider === 'elevenlabs' || take.provider === 'mistral'
   const runs = voiceSegments(line.text, { mixed })
   if (runs.length === 0) throw new Error('Nothing to say')
   const raw: Uint8Array[] = []
@@ -129,6 +152,11 @@ export async function voiceLine(take: Take, line: LineRequest, keys: LabKeys, op
           }, fetchImpl),
         ),
       )
+      continue
+    }
+    if (take.provider === 'mistral') {
+      if (!keys.mistral) throw new Error('Mistral isn’t set up on the server (MISTRAL_API_KEY).')
+      raw.push(await withRetry(() => mistralMp3(keys.mistral!, { text: run.text, voiceId: take.voice, model: take.model }, fetchImpl)))
       continue
     }
     let speech: SpeechSynth

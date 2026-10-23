@@ -6,7 +6,7 @@ import { fadeWav, HANDOVER, joinWavs, LAB_RATE, lineChain, runFfmpeg, scaleWav, 
 import { cleanTake, takeHash, voiceAndStore, voiceLine } from '../src/lab/voice'
 import { episodeAudio, renderMoment, type EpisodeForLab } from '../src/lab/moment'
 import { compareScripts, firstMinutes, scriptPrompt } from '../src/lab/writing'
-import { createLab } from '../src/lab/routes'
+import { createLab, parseMistralVoices } from '../src/lab/routes'
 import { labSpend, listRuns, pickRun, saveRun } from '../src/lab/runs'
 import { wavDurationSec } from '../src/audio'
 import type { Storage } from '../src/providers/types'
@@ -135,6 +135,32 @@ describe('Voicing a line in the Lab', () => {
     expect(again).toMatchObject({ cached: true, costUSD: 0, url: first.url })
     expect(again.durationSec).toBeCloseTo(first.durationSec, 3)
     expect(calls.slice(before).some((c) => c.url.includes('text-to-speech'))).toBe(false)
+  })
+
+  it('voices a whole mixed line in one Mistral Voxtral call and prices it per character (PC-1022-09)', async () => {
+    const tone = await toneMp3(0.6)
+    const calls: { url: string; body?: any; auth?: string }[] = []
+    const f = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), body: JSON.parse(String(init?.body)), auth: (init?.headers as any)?.Authorization })
+      return Response.json({ audio_data: Buffer.from(tone).toString('base64') })
+    }) as unknown as typeof fetch
+    const take = cleanTake({ provider: 'mistral', voice: 'c1a2b3-voice', speed: 1.1 })
+    expect(take.provider).toBe('mistral')
+    const line = { text: 'In Spain, [[la sobremesa]] is the long chat after a meal.', nativeLanguage: 'en', targetLanguage: 'es' }
+    const v = await voiceLine(take, line, { mistral: 'mk' }, { fetchImpl: f })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ url: 'https://api.mistral.ai/v1/audio/speech', auth: 'Bearer mk' })
+    expect(calls[0]!.body).toEqual({ model: 'voxtral-mini-tts-3-0', input: 'In Spain, la sobremesa is the long chat after a meal.', voice_id: 'c1a2b3-voice', response_format: 'mp3' })
+    expect(v.durationSec).toBeGreaterThan(0.5)
+    expect(v.costUSD).toBeCloseTo(v.chars * 13e-6, 12)
+    expect(voiceCostUSD('mistral', 'voxtral-mini-tts-3-0', 1_000_000, 0)).toBeCloseTo(13, 9)
+    await expect(voiceLine(take, line, {})).rejects.toThrow(/MISTRAL_API_KEY/)
+  })
+
+  it('reads Mistral’s voice list in any of its shapes', () => {
+    expect(parseMistralVoices({ items: [{ id: 'v1', name: 'Marie', languages: ['fr', 'en'] }, { id: 'bad id!', name: 'x' }] })).toEqual([{ id: 'v1', name: 'Marie · fr, en' }])
+    expect(parseMistralVoices([{ voice_id: 'v2', name: 'Paul' }])).toEqual([{ id: 'v2', name: 'Paul' }])
+    expect(parseMistralVoices('nope')).toEqual([])
   })
 
   it('says which key is missing', async () => {
