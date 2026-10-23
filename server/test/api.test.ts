@@ -647,6 +647,47 @@ run('API and worker', () => {
     expect(retry.waiting(ids[0]!, Date.now())).toBe(true)
   })
 
+  it('reads a slow feed once while it loads, not once per learner (PC-1022-05)', async () => {
+    const { FeedRetry } = await import('../src/api')
+    let reads = 0
+    let release!: () => void
+    const held = new Promise<void>((r) => (release = r))
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).startsWith('https://feeds.example.com/slow-1')) {
+        reads++
+        await held
+      }
+      return fakeFetch(input, init)
+    }
+    const retry = new FeedRetry()
+    const lib = createApi({ sql, verify: async (t) => t, fetch: slow, lookupHost: publicHost, feedRetry: retry })
+    const [p] = await sql`insert into podcasts (feed_url, title, language, updated_at) values ('https://feeds.example.com/slow-1.xml', 'Slow', 'sv', now() - interval '3 days') returning id`
+    const post = (who: string) => lib.request('/v1/library/new-episodes', { method: 'POST', headers: { Authorization: `Bearer ${who}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastIds: [p!.id] }) })
+    for (const who of [await learner(), await learner(), await learner()]) expect((await post(who)).status).toBe(200)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(reads).toBe(1)
+    expect(retry.waiting(p!.id, Date.now())).toBe(true)
+    release()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(reads).toBe(1)
+  })
+
+  it('counts a feed as busy while it is read, for a while at most (PC-1022-05)', async () => {
+    const { FeedRetry } = await import('../src/api')
+    const r = new FeedRetry(60_000, 3_600_000, 30_000)
+    r.start('a', 0)
+    expect(r.waiting('a', 29_999)).toBe(true)
+    // A read that never settles can't hold the feed forever.
+    expect(r.waiting('a', 30_000)).toBe(false)
+    r.start('b', 0)
+    r.ok('b')
+    expect(r.waiting('b', 1)).toBe(false)
+    r.start('c', 0)
+    r.failed('c', 10)
+    expect(r.waiting('c', 59_999)).toBe(true)
+    expect(r.waiting('c', 60_010)).toBe(false)
+  })
+
   it('waits longer each time a feed keeps failing, up to a day, and forgets once it loads (PC-1021-04)', async () => {
     const { FeedRetry } = await import('../src/api')
     const r = new FeedRetry()

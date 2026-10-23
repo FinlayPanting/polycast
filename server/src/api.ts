@@ -4,7 +4,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
 import { cohortAlert, isTipProduct, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
-import type { LookupHost } from './safeFetch'
+import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
 import { forgetUserKeys, OWN_KEYS_LIMITS, OWN_KEYS_MESSAGES, plausibleKey, storeJobKeys, testElevenLabsKey, testGeminiKey } from './ownKeys'
 import { discoverShelves } from './discover'
@@ -100,19 +100,31 @@ export const NEW_EPISODES_LIMITS = { perMinute: 20, shows: 200, days: 14, perSho
  * Feeds that failed to load wait before the background refresh tries them again (PC-1021-04): an
  * hour after the first failure, doubling each time up to a day, so a dead feed can't keep its
  * place at the front of the queue and hold up the learner's other shows. Kept in memory: a restart
- * simply gives every feed another go.
+ * simply gives every feed another go. A feed being read counts as waiting too (PC-1022-05), so
+ * learners opening the Library while a slow feed loads don't each start another fetch of it.
  */
 export class FeedRetry {
   private waits = new Map<string, { until: number; failures: number }>()
-  constructor(private firstWaitMs = 60 * 60_000, private maxWaitMs = 24 * 60 * 60_000) {}
+  /** Feeds being read right now, by when the read started (PC-1022-05). */
+  private reading = new Map<string, number>()
+  constructor(private firstWaitMs = 60 * 60_000, private maxWaitMs = 24 * 60 * 60_000, private readingMs = 2 * FEED_TIMEOUT_MS) {}
+  /** True while a feed is being read, or while it waits after failing. */
   waiting(id: string, nowMs: number): boolean {
+    const started = this.reading.get(id)
+    if (started !== undefined && nowMs - started < this.readingMs) return true
     return (this.waits.get(id)?.until ?? 0) > nowMs
   }
+  /** Marks a feed as being read before the read starts, so a slow one is fetched once, not once per learner. */
+  start(id: string, nowMs: number): void {
+    this.reading.set(id, nowMs)
+  }
   failed(id: string, nowMs: number): void {
+    this.reading.delete(id)
     const failures = (this.waits.get(id)?.failures ?? 0) + 1
     this.waits.set(id, { failures, until: nowMs + Math.min(this.maxWaitMs, this.firstWaitMs * 2 ** (failures - 1)) })
   }
   ok(id: string): void {
+    this.reading.delete(id)
     this.waits.delete(id)
   }
 }
@@ -428,6 +440,7 @@ export function createApi(deps: ApiDeps) {
       .sort((a, b) => new Date(a.updated_at ?? 0).getTime() - new Date(b.updated_at ?? 0).getTime())
       .slice(0, NEW_EPISODES_LIMITS.refreshPerCall)
     for (const p of stale) {
+      feedRetry.start(p.id, now.getTime())
       syncFeed(sql, deps.fetch, p.feed_url, undefined, { lookupHost: deps.lookupHost }).then(
         () => feedRetry.ok(p.id),
         () => feedRetry.failed(p.id, Date.now()),

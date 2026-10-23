@@ -404,3 +404,7 @@ Board item PC-1022-03. The App Shortcuts use App Intents, which exist from iOS 1
 ## Two migrations called 0012 (23 Oct 2026)
 
 Board item PC-1022-04. The Lab's `0012_lab_runs.sql` (on rebuild-ios) and the Plus-screen counter's `0012_plus_screen_views.sql` (on branch build/PC-1018-08, not yet applied) shared a number. The unapplied one is now `0013_plus_screen_views.sql` on its branch and its to-do card says 0013. `server/test/tableGrants.test.ts` now fails when two migrations share a number, so a branch merged later has to renumber before it lands.
+
+## A slow feed is fetched once, not once per learner (23 Oct 2026)
+
+Board item PC-1022-05. The Library's background refresh marks a feed as being read before the read starts, and `FeedRetry.waiting` counts that as waiting, so learners opening the Library while a slow feed loads (up to 15 s) don't each start another fetch. The mark clears when the read succeeds or fails (then the usual back-off applies). Simplest option picked: kept in memory with the back-off; a read that somehow never settles stops counting after 30 s (twice the feed timeout).
