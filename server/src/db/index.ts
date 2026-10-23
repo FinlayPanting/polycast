@@ -46,7 +46,7 @@ export function pgSpendLedger(sql: Sql): SpendLedger {
   }
 }
 
-async function spendCapReached(tx: postgres.TransactionSql): Promise<boolean> {
+export async function spendCapReached(tx: Sql | postgres.TransactionSql): Promise<boolean> {
   const cap = Number(await getSetting(tx, 'daily_cap_usd', 10))
   const [row] = await tx`select coalesce(sum(usd), 0)::float as usd from spend_ledger where day = (now() at time zone 'utc')::date`
   return Number(row!.usd) >= cap

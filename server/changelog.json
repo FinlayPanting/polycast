@@ -496,6 +496,14 @@
    "title": "Hey Siri, carry on listening",
    "description": "Say “Carry on listening in Polycast” to pick up your last lesson, or “Play the newest episode in Polycast” for a show you follow. They also work from Spotlight and the Action button.",
    "tryIt": "Ask Siri, or search Polycast in Spotlight"
+  },
+  {
+   "id": "PC-1022-07",
+   "date": "2026-10-23",
+   "kind": "Refinement",
+   "title": "New-episode nudges from your guide",
+   "description": "When a show you finished has a new episode, Mia or Leo tells you, and only ever points you to something you can play right away.",
+   "tryIt": "Finish an episode, then wait for the show's next one"
   }
  ]
 }
