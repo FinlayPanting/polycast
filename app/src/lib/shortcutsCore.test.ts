@@ -50,4 +50,19 @@ describe('the shortcuts build (PC-1021-09)', () => {
     for (const phrase of shortcuts.match(/^\s+"[^"]*\\\(\.applicationName\)"?,?$/gm) ?? []) expect(phrase).toContain('applicationName')
     expect(shortcuts.match(/\\\(\.applicationName\)/g)!.length).toBe(5)
   })
+
+  it('compiles on the app’s iOS 15.1 minimum and tells Siri when followed shows change (PC-1022-03)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
+    const shortcuts = read('native/PolycastShortcuts.swift')
+    // Every App Intents type, and anything returning one, is marked iOS 16 and up.
+    const decls = shortcuts.match(/^(struct \w+: (AppEntity|EntityQuery|AppIntent|AppShortcutsProvider)|  static func shows\(\) -> \[ShowEntity\])/gm) ?? []
+    expect(decls).toHaveLength(6)
+    for (const d of decls) expect(shortcuts).toContain(`@available(iOS 16.0, *)\n${d}`)
+    expect(shortcuts).toContain('@objc(PolycastShortcutsRefresher)')
+    expect(shortcuts).toMatch(/if #available\(iOS 16\.0, \*\) \{\s+PolycastAppShortcuts\.updateAppShortcutParameters\(\)/)
+    const mod = read('modules/polycast-shortcuts/ios/PolycastShortcutsModule.swift')
+    expect(mod).toContain('NSClassFromString("PolycastShortcutsRefresher")')
+    expect(mod).toContain('NSSelectorFromString("refresh")')
+  })
 })

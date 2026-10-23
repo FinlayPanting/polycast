@@ -396,3 +396,7 @@ Board item PC-1022-07. The weekly nudge is now a line from the learner's guide (
 ## Payment and Lab passwords checked the careful way (23 Oct 2026)
 
 Board item PC-1022-02. RevenueCat's webhook secret is compared in constant time, like the Lab's and the funnel's. The Lab password is taken from the address (`?token=`) only for `GET /lab/api/render/:id`, because an `<audio>` tag can't send headers; every other Lab call needs the `Authorization` header. Each wrong password waits 0.75 s before its answer, and an address with more than 10 wrong passwords in 15 minutes is refused (429) until 15 minutes after that, right password or not. Simplest options picked: counted per address in memory (one server process; a restart forgets), as the other rate limits are.
+
+## Siri shortcuts build on every iPhone and learn new shows (23 Oct 2026)
+
+Board item PC-1022-03. The App Shortcuts use App Intents, which exist from iOS 16, while the app still supports iOS 15.1 (React Native 0.86's minimum). Simplest option picked: everything in `app/native/PolycastShortcuts.swift` is marked `@available(iOS 16.0, *)` rather than raising the app's minimum, so iOS 15 phones keep the app and simply have no shortcuts. When the followed shows change, the shortcuts module calls `PolycastAppShortcuts.updateAppShortcutParameters()` through a small `@objc` class in the app target (`PolycastShortcutsRefresher`, found by name, since the module's pod can't see the app's types), so "Play the newest <show>" learns shows followed after install.

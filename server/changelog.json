@@ -504,6 +504,14 @@
    "title": "New-episode nudges from your guide",
    "description": "When a show you finished has a new episode, Mia or Leo tells you, and only ever points you to something you can play right away.",
    "tryIt": "Finish an episode, then wait for the show's next one"
+  },
+  {
+   "id": "PC-1022-03",
+   "date": "2026-10-23",
+   "kind": "Bug",
+   "title": "Siri knows the shows you follow",
+   "description": "“Play the newest episode” now works for shows you follow after installing Polycast, and the shortcuts no longer stop the app building for older iPhones.",
+   "tryIt": "Follow a new show, then ask Siri to play its newest episode in Polycast"
   }
  ]
 }
