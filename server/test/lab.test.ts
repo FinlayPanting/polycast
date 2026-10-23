@@ -6,7 +6,7 @@ import { fadeWav, HANDOVER, joinWavs, LAB_RATE, lineChain, runFfmpeg, scaleWav, 
 import { cleanTake, takeHash, voiceAndStore, voiceLine } from '../src/lab/voice'
 import { episodeAudio, renderMoment, type EpisodeForLab } from '../src/lab/moment'
 import { compareScripts, firstMinutes, scriptPrompt } from '../src/lab/writing'
-import { createLab } from '../src/lab/routes'
+import { createLab, LAB_WRONG_TRIES } from '../src/lab/routes'
 import { labSpend, listRuns, pickRun, saveRun } from '../src/lab/runs'
 import { wavDurationSec } from '../src/audio'
 import type { Storage } from '../src/providers/types'
@@ -243,7 +243,7 @@ describe('Lab routes', () => {
   const sql = (() => {
     throw new Error('no database in this test')
   }) as unknown as Sql
-  const lab = (storage = memoryStorage(), f?: typeof fetch) => createLab({ sql, token: 'secret', keys: { elevenlabs: 'k' }, storage, download: async () => new Uint8Array(), fetch: f })
+  const lab = (storage = memoryStorage(), f?: typeof fetch) => createLab({ sql, token: 'secret', keys: { elevenlabs: 'k' }, storage, download: async () => new Uint8Array(), fetch: f, wrongPasswordDelayMs: 0 })
 
   it('serves the page to anyone, the API only with the password', async () => {
     const app = lab()
@@ -253,6 +253,17 @@ describe('Lab routes', () => {
     expect((await app.request('/api/runs')).status).toBe(401)
     expect((await app.request('/api/runs', { headers: { Authorization: 'Bearer wrong' } })).status).toBe(401)
     expect((await app.request('/api/render/x?token=secret')).status).toBe(404)
+  })
+
+  it('takes the password in the address only for audio previews, and turns away repeated wrong guesses (PC-1022-02)', async () => {
+    const app = lab()
+    expect((await app.request('/api/runs?token=secret')).status).toBe(401)
+    const from = (ip: string, token: string) => app.request('/api/render/x', { headers: { Authorization: `Bearer ${token}`, 'X-Real-IP': ip } })
+    for (let i = 0; i < LAB_WRONG_TRIES.perAddress; i++) expect((await from('203.0.113.9', `guess${i}`)).status).toBe(401)
+    expect((await from('203.0.113.9', 'guess-last')).status).toBe(401)
+    // Locked out now, even with the right password; other addresses are unaffected.
+    expect((await from('203.0.113.9', 'secret')).status).toBe(429)
+    expect((await from('198.51.100.7', 'secret')).status).toBe(404)
   })
 
   it('estimates a voice run before spending anything', async () => {

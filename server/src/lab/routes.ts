@@ -9,6 +9,7 @@ import { GUIDES, guideById } from '../voices'
 import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, type MomentVariant } from './moment'
 import { estimateVoiceUSD, GEMINI_TTS, TEXT_MODELS, voicePerHourUSD } from './prices'
 import { getRun, labSpend, listRuns, pickRun, saveRun, type RunKind } from './runs'
+import { clientAddress, rateLimiter } from '../rateLimit'
 import { SOUND_PRESETS } from './sound'
 import { cleanTake, voiceAndStore, type LabKeys, type Take } from './voice'
 import { comparePlans, compareScripts, estimatePlanUSD, estimateScriptUSD } from './writing'
@@ -31,7 +32,16 @@ export interface LabDeps {
   fetch?: typeof fetch
   /** The ElevenLabs model the guide uses now (resolved at start-up). */
   elevenModel?: string
+  /** How long a wrong password waits before its answer (PC-1022-02); tests set 0. */
+  wrongPasswordDelayMs?: number
 }
+
+/**
+ * Wrong Lab passwords (PC-1022-02): each waits a moment before its answer, and an address that
+ * gets it wrong this many times in 15 minutes is turned away until the window ends, right
+ * password or not. Lab runs have no spending cap, so the password is worth guarding.
+ */
+export const LAB_WRONG_TRIES = { perAddress: 10, windowMs: 15 * 60_000, delayMs: 750 }
 
 /** Gemini's and Chirp 3 HD's shared voice names. */
 export const GOOGLE_VOICES = [
@@ -113,8 +123,15 @@ export function createLab(deps: LabDeps) {
   const renders = new Map<string, Render>()
   let voiceList: { at: number; voices: { id: string; name: string; labels?: Record<string, string>; category?: string }[]; models: { id: string; name: string }[] } | undefined
 
+  const wrongTries = rateLimiter(LAB_WRONG_TRIES.perAddress, LAB_WRONG_TRIES.windowMs)
+  const lockedOut = new Map<string, number>()
+  /**
+   * The password goes in the Authorization header. Only audio previews (played by an <audio> tag,
+   * which can't send headers) take it in the address, so it doesn't end up in server logs otherwise.
+   */
   const authorised = (c: Context) => {
-    const given = c.req.header('Authorization')?.replace(/^Bearer /, '') ?? c.req.query('token')
+    const header = c.req.header('Authorization')?.replace(/^Bearer /, '')
+    const given = header ?? (c.req.method === 'GET' && /\/api\/render\/[^/]+$/.test(c.req.path) ? c.req.query('token') : undefined)
     return Boolean(given && safeEqual(given, deps.token))
   }
   const by = (c: Context): 'finlay' | 'claude' => (c.req.header('X-Lab-By') === 'claude' ? 'claude' : 'finlay')
@@ -122,7 +139,16 @@ export function createLab(deps: LabDeps) {
 
   app.get('/', (c) => c.html(page(), 200, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }))
   app.use('/api/*', async (c, next) => {
-    if (!authorised(c)) return c.json({ error: 'That password isn’t right.' }, 401)
+    const address = clientAddress((n) => c.req.header(n))
+    const until = lockedOut.get(address)
+    if (until && until > Date.now()) return c.json({ error: 'Too many wrong passwords. Try again in a few minutes.' }, 429)
+    if (until) lockedOut.delete(address)
+    if (!authorised(c)) {
+      if (!wrongTries.hit(address)) lockedOut.set(address, Date.now() + LAB_WRONG_TRIES.windowMs)
+      const delay = deps.wrongPasswordDelayMs ?? LAB_WRONG_TRIES.delayMs
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay))
+      return c.json({ error: 'That password isn’t right.' }, 401)
+    }
     await next()
   })
 

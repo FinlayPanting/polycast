@@ -218,7 +218,7 @@ export function createApi(deps: ApiDeps) {
       : sql`(plus_period_start is null or plus_period_start < now() - interval '27 days')`
 
   app.post('/webhooks/revenuecat', async (c) => {
-    if (!deps.revenueCatSecret || c.req.header('Authorization') !== `Bearer ${deps.revenueCatSecret}`) return c.json({ error: 'unauthorised' }, 401)
+    if (!deps.revenueCatSecret || !safeEqual(c.req.header('Authorization') ?? '', `Bearer ${deps.revenueCatSecret}`)) return c.json({ error: 'unauthorised' }, 401)
     const { event } = await c.req.json()
     // Restore purchases on a new phone or a fresh account: RevenueCat moves the subscription from
     // the old account to the one signed in now. Plus moves with it, along with the month's hours
