@@ -8,3 +8,4 @@
 2026-10-20 build 5
 2026-10-21 build 6
 2026-10-22 build 7
+2026-10-23 build 8: Siri shortcuts marked iOS 16+ and refresh followed shows (PC-1022-03); 'You already know' onboarding step (PC-1022-08)
