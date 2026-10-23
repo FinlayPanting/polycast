@@ -400,3 +400,7 @@ Board item PC-1022-02. RevenueCat's webhook secret is compared in constant time,
 ## Siri shortcuts build on every iPhone and learn new shows (23 Oct 2026)
 
 Board item PC-1022-03. The App Shortcuts use App Intents, which exist from iOS 16, while the app still supports iOS 15.1 (React Native 0.86's minimum). Simplest option picked: everything in `app/native/PolycastShortcuts.swift` is marked `@available(iOS 16.0, *)` rather than raising the app's minimum, so iOS 15 phones keep the app and simply have no shortcuts. When the followed shows change, the shortcuts module calls `PolycastAppShortcuts.updateAppShortcutParameters()` through a small `@objc` class in the app target (`PolycastShortcutsRefresher`, found by name, since the module's pod can't see the app's types), so "Play the newest <show>" learns shows followed after install.
+
+## Two migrations called 0012 (23 Oct 2026)
+
+Board item PC-1022-04. The Lab's `0012_lab_runs.sql` (on rebuild-ios) and the Plus-screen counter's `0012_plus_screen_views.sql` (on branch build/PC-1018-08, not yet applied) shared a number. The unapplied one is now `0013_plus_screen_views.sql` on its branch and its to-do card says 0013. `server/test/tableGrants.test.ts` now fails when two migrations share a number, so a branch merged later has to renumber before it lands.

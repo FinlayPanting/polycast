@@ -37,6 +37,13 @@ export function tablesWithoutAccess(migration: string): string[] {
 describe('every new table says who may use it (PC-1018-01)', () => {
   const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
 
+  it('gives every migration its own number (PC-1022-04)', () => {
+    const numbers = files.map((f) => f.match(/^(\d+)_/)?.[1])
+    expect(numbers.every(Boolean), 'name migrations NNNN_name.sql').toBe(true)
+    const repeated = numbers.filter((n, i) => numbers.indexOf(n) !== i)
+    expect(repeated, 'two migrations share a number; renumber the newer one (on its branch, before it is applied)').toEqual([])
+  })
+
   it('holds for every migration from 0012 on', () => {
     const missing = files
       .filter((f) => Number.parseInt(f, 10) >= FIRST_RULED_MIGRATION)
