@@ -39,10 +39,18 @@ describe('the CarPlay build', () => {
     const plugin = read('plugins/withCarPlay.js')
     expect(plugin).toContain('com.apple.developer.carplay-audio')
     const scene = read('modules/polycast-carplay/ios/PolycastCarPlaySceneDelegate.swift')
-    for (const name of ['PolycastCarPlaySceneDelegate', 'PolycastPhoneSceneDelegate']) {
-      expect(plugin, name).toContain(name)
-      expect(scene, name).toContain(`@objc(${name})`)
-    }
+    expect(plugin).toContain('PolycastCarPlaySceneDelegate')
+    expect(scene).toContain('@objc(PolycastCarPlaySceneDelegate)')
+    // Runs after expo-build-properties' scene support (mods run in reverse order), and keeps its phone scene.
+    const names = JSON.parse(read('app.json')).expo.plugins.map((p: unknown) => (Array.isArray(p) ? p[0] : p))
+    expect(names.indexOf('./plugins/withCarPlay')).toBeLessThan(names.indexOf('expo-build-properties'))
+    const { createRequire } = await import('node:module')
+    const { addCarPlayScene } = createRequire(import.meta.url)('../../plugins/withCarPlay.js')
+    const phone = { UIApplicationSupportsMultipleScenes: false, UISceneConfigurations: { UIWindowSceneSessionRoleApplication: [{ UISceneConfigurationName: 'Default Configuration', UISceneDelegateClassName: 'EXExpoAppSceneDelegate' }] } }
+    const merged = addCarPlayScene(phone)
+    expect(merged.UISceneConfigurations.UIWindowSceneSessionRoleApplication).toEqual(phone.UISceneConfigurations.UIWindowSceneSessionRoleApplication)
+    expect(merged.UISceneConfigurations.CPTemplateApplicationSceneSessionRoleApplication[0].UISceneDelegateClassName).toBe('PolycastCarPlaySceneDelegate')
+    expect(() => addCarPlayScene(undefined)).toThrow(/enableSceneSupport/)
     const mod = read('modules/polycast-carplay/ios/PolycastCarPlayModule.swift')
     // The car scene and the module share one pod, so they share these notifications.
     for (const key of ['carPlayItemsChanged', 'carPlaySelected', 'carPlayMessage']) {

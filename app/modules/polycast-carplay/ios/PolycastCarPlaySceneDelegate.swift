@@ -57,19 +57,3 @@ public class PolycastCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSce
     interfaceController?.pushTemplate(CPNowPlayingTemplate.shared, animated: true, completion: nil)
   }
 }
-
-/// With a scene manifest in Info.plist (needed for CarPlay), the phone also runs as a scene. This
-/// hands the window Expo's AppDelegate already built to the phone's scene, so the app looks and
-/// starts exactly as before.
-@objc(PolycastPhoneSceneDelegate)
-public class PolycastPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
-  public var window: UIWindow?
-
-  public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-    guard let windowScene = scene as? UIWindowScene else { return }
-    guard let appWindow = UIApplication.shared.delegate?.window ?? nil else { return }
-    appWindow.windowScene = windowScene
-    appWindow.makeKeyAndVisible()
-    window = appWindow
-  }
-}
