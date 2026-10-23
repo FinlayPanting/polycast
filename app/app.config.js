@@ -20,12 +20,14 @@ module.exports = ({ config }) => {
       usesAppleSignIn: false,
       infoPlist: { ...config.ios.infoPlist, UIBackgroundModes: ['audio'] },
     },
-    plugins: config.plugins.filter((p) => !['expo-apple-authentication', 'expo-notifications'].includes(pluginName(p))),
+    plugins: config.plugins.filter((p) => !['expo-apple-authentication', 'expo-notifications', './plugins/withCarPlay'].includes(pluginName(p))),
   }
   // Some packages add these on their own; a free account can't sign an app that asks for them.
   return withEntitlementsPlist(personal, (c) => {
     delete c.modResults['aps-environment']
     delete c.modResults['com.apple.developer.applesignin']
+    // CarPlay needs Apple's grant on the paid team (PC-1022-10).
+    delete c.modResults['com.apple.developer.carplay-audio']
     return c
   })
 }

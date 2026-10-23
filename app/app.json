@@ -160,7 +160,8 @@
           }
         }
       ],
-      "./plugins/withAppShortcuts"
+      "./plugins/withAppShortcuts",
+      "./plugins/withCarPlay"
     ],
     "experiments": {
       "typedRoutes": true

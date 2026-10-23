@@ -18,6 +18,7 @@ import { config } from '../lib/config'
 import { observeConfig } from '../lib/observe'
 import { reportFirstOpen } from '../lib/firstOpen'
 import { routeForNotification } from '../lib/notificationRoute'
+import { useCarPlay } from '../lib/carPlay'
 import { useShortcuts } from '../lib/shortcuts'
 import { tidyDownloads } from '../lib/episodeAudio'
 import { savedWordEpisodes } from '../lib/words'
@@ -61,6 +62,7 @@ function Routes() {
   }, [ready, signedIn, onboarded, lastResponse])
   // "Hey Siri, carry on listening in Polycast" and friends (PC-1021-09).
   useShortcuts(ready && signedIn && onboarded && !config.demo)
+  useCarPlay(ready && signedIn && onboarded && !config.demo)
   // Once a launch: tidy downloads untouched for 30 days, keeping any a saved word comes from.
   // If the saved words can't be read (offline), nothing is removed.
   useEffect(() => {
