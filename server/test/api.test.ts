@@ -647,6 +647,33 @@ run('API and worker', () => {
     expect(retry.waiting(ids[0]!, Date.now())).toBe(true)
   })
 
+  it('offers five words the learner already knows from a starter episode, with the host saying them (PC-1022-08)', async () => {
+    const it1 = await learner()
+    expect(await (await call(it1, 'GET', '/v1/known-words/it')).json()).toEqual({ words: [] })
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/it-pick.xml', 'Caffè Italiano', 'it') returning id`
+    await sql`insert into picks (language, podcast_id, position) values ('it', ${p!.id}, 1)`
+    const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+      values (${p!.id}, 'it-1', 'Puntata 1', now(), 900, 'https://a.example/it1.mp3', 'it', 'ready') returning id`
+    const text = 'è importante la musica per la famiglia al ristorante con il telefono'
+    const words = text.split(' ').map((t, i) => ({ text: t, start: i, end: i + 0.8 }))
+    const glossary = {
+      importante: { lemma: 'importante', meaning: 'important' },
+      musica: { lemma: 'musica', meaning: 'music' },
+      famiglia: { lemma: 'famiglia', meaning: 'family' },
+      ristorante: { lemma: 'ristorante', meaning: 'restaurant' },
+      telefono: { lemma: 'telefono', meaning: 'telephone' },
+      per: { lemma: 'per', meaning: 'for' },
+    }
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
+      values (${e!.id}, 'it', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])}, ${sql.json(glossary)})`
+    const other = await learner() // a fresh learner: the empty answer above is cached for an hour per language
+    const body = await (await api().request('/v1/known-words/it', { headers: { Authorization: `Bearer ${other}` } })).json()
+    expect(body).toMatchObject({ episodeId: e!.id, podcastTitle: 'Caffè Italiano', audioUrl: 'https://a.example/it1.mp3' })
+    expect(body.words.map((w: any) => w.text).sort()).toEqual(['famiglia', 'importante', 'musica', 'ristorante', 'telefono'])
+    expect(body.words.find((w: any) => w.text === 'importante')).toEqual({ text: 'importante', meaning: 'important', clip: { start: 0.88, end: 1.92 } })
+    expect((await call(other, 'GET', '/v1/known-words/../x')).status).toBe(404)
+  })
+
   it('reads a slow feed once while it loads, not once per learner (PC-1022-05)', async () => {
     const { FeedRetry } = await import('../src/api')
     let reads = 0

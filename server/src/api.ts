@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, isTipProduct, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry } from '@polycast/core'
+import { cohortAlert, isTipProduct, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -129,6 +129,15 @@ export class FeedRetry {
   }
 }
 export const SLOW_DOWN = 'Give it a moment, then try again.'
+
+/** What GET /v1/known-words/:language returns (PC-1022-08); no episode when there are too few words. */
+export interface KnownWordsBody {
+  episodeId?: string
+  episodeTitle?: string
+  podcastTitle?: string
+  audioUrl?: string
+  words: KnownWord[]
+}
 
 /**
  * Mood picks a learner can ask for each day (one small Gemini call each, about a tenth of a cent).
@@ -550,6 +559,41 @@ export function createApi(deps: ApiDeps) {
    * The Episode Primer (PC-1017-P1, P4): the warm-up shown before pressing play, for everyone
    * learning the episode, guided or not. Small, so the episode screen can ask for it every time.
    */
+  /**
+   * "You already know these words" (PC-1022-08), shown right after picking a language: up to five
+   * words from a starter episode (the newest ready episode of the first Polycast pick that has one)
+   * that look like their meaning, each with the host saying it. Built from the episode's glossary,
+   * so no AI is used; kept for an hour per language.
+   */
+  const knownCache = new Map<string, { at: number; body: KnownWordsBody }>()
+  app.get('/v1/known-words/:language', async (c) => {
+    const language = c.req.param('language')
+    if (!/^[a-z]{2}$/.test(language)) return c.json({ error: 'Not found' }, 404)
+    const [profile] = await sql`select native_language from profiles where id = ${c.get('userId')}`
+    const native = profile?.native_language ?? 'en'
+    const key = `${language}:${native}`
+    const hit = knownCache.get(key)
+    if (hit && Date.now() - hit.at < 60 * 60_000) return c.json(hit.body)
+    const candidates = await sql`
+      select distinct on (k.position) e.id, e.title, e.audio_url, p.title as podcast_title, t.words, t.glossary
+      from picks k join podcasts p on p.id = k.podcast_id and not p.removed
+      join episodes e on e.podcast_id = p.id and e.status = 'ready'
+      join transcripts t on t.episode_id = e.id and t.native_language = ${native}
+      where k.language = ${language}
+      order by k.position, e.published desc
+      limit 3`
+    let body: KnownWordsBody = { words: [] }
+    for (const ep of candidates) {
+      const words = knownWords(ep.words, ep.glossary ?? undefined, language)
+      if (words.length >= 3) {
+        body = { episodeId: ep.id, episodeTitle: ep.title, podcastTitle: ep.podcast_title, audioUrl: ep.audio_url, words }
+        break
+      }
+    }
+    knownCache.set(key, { at: Date.now(), body })
+    return c.json(body)
+  })
+
   app.get('/v1/episodes/:id/primer', async (c) => {
     const episodeId = c.req.param('id')
     const [episode] = await sql`select e.status from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`

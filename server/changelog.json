@@ -512,6 +512,14 @@
    "title": "Siri knows the shows you follow",
    "description": "“Play the newest episode” now works for shows you follow after installing Polycast, and the shortcuts no longer stop the app building for older iPhones.",
    "tryIt": "Follow a new show, then ask Siri to play its newest episode in Polycast"
+  },
+  {
+   "id": "PC-1022-08",
+   "date": "2026-10-23",
+   "kind": "UX",
+   "title": "You already know some words",
+   "description": "Right after picking a language, Polycast shows a few words from one of the first shows you could hear that you already know, like Italian “importante”, and the host says each one.",
+   "tryIt": "Pick a language when you first set up Polycast, then tap a word"
   }
  ]
 }
