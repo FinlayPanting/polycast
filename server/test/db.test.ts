@@ -23,6 +23,7 @@ import {
 } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
 import { LESSON_PLAN_VERSION } from '@polycast/core'
+import { savedLoudness } from '../src/worker'
 
 const run = PG_TEST_URL ? describe : describe.skip
 
@@ -166,6 +167,17 @@ run('database', () => {
       expect(await requestPreparation(sql, a, await episode(7201), 'mia')).toEqual({ status: 'refused', reason: 'too-long' })
     })
 
+    it('never spends the free episode on an auto-download, but does use Plus hours (PC-1017-F12)', async () => {
+      const a = await learner()
+      const ep = await episode(600)
+      expect(await requestPreparation(sql, a, ep, 'mia', { plusOnly: true })).toEqual({ status: 'refused', reason: 'free-used' })
+      expect((await sql`select free_episode_used from profiles where id = ${a}`)[0]!.free_episode_used).toBe(false)
+      expect((await sql`select status from episodes where id = ${ep}`)[0]!.status).not.toBe('preparing')
+      await sql`update profiles set plan = 'plus', plus_period_start = now(), plus_used_sec = 0 where id = ${a}`
+      expect(await requestPreparation(sql, a, ep, 'mia', { plusOnly: true })).toMatchObject({ status: 'queued', charge: 'plus' })
+      expect((await sql`select plus_used_sec from profiles where id = ${a}`)[0]!.plus_used_sec).toBe(600)
+    })
+
     it('counts Plus hours and pauses everyone at the daily cap', async () => {
       const a = await learner()
       await sql`update profiles set plan = 'plus', plus_period_start = now(), plus_used_sec = ${4.5 * 3600} where id = ${a}`
@@ -210,6 +222,26 @@ run('database', () => {
       expect(leo).toMatchObject({ status: 'queued', charge: 'none' })
       const [pb] = await sql`select free_episode_used from profiles where id = ${b}`
       expect(pb!.free_episode_used).toBe(false)
+    })
+
+    it('clears line reports when an episode is prepared again with new lines, not when another guide is voiced (PC-1021-05)', async () => {
+      const [a, b] = [await learner(), await learner()]
+      const ep = await episode()
+      await requestPreparation(sql, a, ep, 'mia')
+      const first = fakeResult(ep)
+      await completePreparation(sql, (await claimNextJob(sql))!.id, first)
+      const report = () => sql`insert into alerts (kind, message) values ('line_report', ${JSON.stringify({ episodeId: ep, segmentId: 's1', key: 'k' })})`
+      const reports = async () => (await sql`select count(*)::int as n from alerts where kind = 'line_report' and message::jsonb->>'episodeId' = ${ep}`)[0]!.n
+      await report()
+      await requestPreparation(sql, b, ep, 'leo')
+      await completePreparation(sql, (await claimNextJob(sql))!.id, { ...fakeResult(ep), guideId: 'leo' })
+      expect(await reports()).toBe(1)
+      await sql`update episodes set status = 'none' where id = ${ep}`
+      await requestPreparation(sql, b, ep, 'mia')
+      const job = await claimNextJob(sql)
+      const r = fakeResult(ep)
+      await completePreparation(sql, job!.id, { ...r, transcript: { ...r.transcript, segments: [{ id: 's1', start: 0, end: 0.4, text: 'Hej', wordStart: 0, wordEnd: 1 }] as never[] } })
+      expect(await reports()).toBe(0)
     })
 
     it('retries a failed job, then gives the learner their free episode back', async () => {
@@ -277,15 +309,24 @@ run('database', () => {
       const result = fakeResult(ep, 'mia')
       ;(result.plan as any).syncUrl = 'https://s/sync.fp'
       result.plan.version = LESSON_PLAN_VERSION - 1
+      ;(result.plan as any).loudnessLufs = -26
       await sql`update prep_jobs set status = 'running' where id = ${job!.id}`
       await completePreparation(sql, job!.id, result)
       expect(await queueSyncUpgrades(sql)).toBe(1)
+      expect(await savedLoudness(sql, ep)).toBe(-26)
       const [e] = await sql`select status from episodes where id = ${ep}`
       expect(e!.status).toBe('preparing')
       expect(await sql`select 1 from transcripts where episode_id = ${ep}`).toHaveLength(1)
-      expect(await sql`select 1 from lesson_plans where episode_id = ${ep}`).toHaveLength(0)
-      const [queued] = await sql`select charge, guide_id, requested_by from prep_jobs where episode_id = ${ep} and status = 'queued'`
+      // The old plan waits for the new one, so the re-plan can carry its loudness over (PC-1020-01).
+      expect(await sql`select 1 from lesson_plans where episode_id = ${ep}`).toHaveLength(1)
+      const [queued] = await sql`select id, charge, guide_id, requested_by from prep_jobs where episode_id = ${ep} and status = 'queued'`
       expect(queued).toMatchObject({ charge: 'none', guide_id: 'mia', requested_by: a })
+      expect(await queueSyncUpgrades(sql)).toBe(0)
+      await sql`update prep_jobs set status = 'running' where id = ${queued!.id}`
+      const replanned = fakeResult(ep, 'mia')
+      ;(replanned.plan as any).syncUrl = 'https://s/sync.fp'
+      await completePreparation(sql, queued!.id, replanned)
+      expect((await sql`select version from lesson_plans where episode_id = ${ep}`).map((r) => r.version)).toEqual([LESSON_PLAN_VERSION])
       expect(await queueSyncUpgrades(sql)).toBe(0)
     })
 

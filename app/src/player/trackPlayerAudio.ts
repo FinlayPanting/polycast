@@ -1,5 +1,6 @@
 import TrackPlayer, { AppKilledPlaybackBehavior, Capability, Event, IOSCategory, IOSCategoryMode } from 'react-native-track-player'
 import { plog } from '../lib/playbackLog'
+import { POLYCAST_USER_AGENT, audioHeaders } from '../lib/userAgent'
 import type { EpisodeAudio } from './types'
 
 let setup: Promise<void> | undefined
@@ -35,7 +36,7 @@ export function trackPlayerAudio(): EpisodeAudio {
     async load(track, startAt = 0) {
       await ensureSetup()
       await TrackPlayer.reset()
-      await TrackPlayer.add({ url: track.url, title: track.title, artist: track.artist, artwork: track.artwork, duration: track.durationSec })
+      await TrackPlayer.add({ url: track.url, userAgent: POLYCAST_USER_AGENT, headers: audioHeaders(track.url), title: track.title, artist: track.artist, artwork: track.artwork, duration: track.durationSec })
       if (startAt > 0) await TrackPlayer.seekTo(startAt)
     },
     play: () => TrackPlayer.play(),

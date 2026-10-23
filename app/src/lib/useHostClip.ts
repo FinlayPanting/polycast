@@ -1,5 +1,6 @@
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio'
 import { useEffect, useRef } from 'react'
+import { audioSource } from './userAgent'
 
 /** Plays the stretch of the episode where the host said a word (word review, the primer's words). */
 export function useHostClip() {
@@ -12,7 +13,7 @@ export function useHostClip() {
   return async (audioUrl: string, start: number, end: number) => {
     clearTimeout(timer.current)
     player.current?.remove()
-    const p = createAudioPlayer(audioUrl)
+    const p = createAudioPlayer(audioSource(audioUrl))
     player.current = p
     await p.seekTo(start)
     p.play()

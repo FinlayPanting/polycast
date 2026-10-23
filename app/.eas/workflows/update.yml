@@ -1,0 +1,25 @@
+# Publishes an over-the-air update whenever the update branch moves (PC-1020-U1).
+# The nightly run pushes rebuild-ios here when the app changed but nothing native did
+# (scripts/release-target.mjs decides), so JavaScript-only fixes reach installed TestFlight and
+# App Store builds without spending a build. Runs on Expo's servers; no secrets needed.
+# Builds only take an update made for the same native code (runtimeVersion policy: fingerprint),
+# so an update can never land on a build that lacks a native module it needs.
+name: Update
+
+on:
+  push:
+    branches: ['update']
+
+jobs:
+  publish_update:
+    name: Publish update to production
+    type: update
+    environment: production
+    # Same public values as eas.json's base build profile; a test keeps them in step.
+    env:
+      EXPO_PUBLIC_API_URL: https://polycast-production.up.railway.app
+      EXPO_PUBLIC_SUPABASE_URL: https://usfdvpivogjtmrbwopzg.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_AoGtiBtbd9z_xFnR8SX-6Q_WQPA2xTI
+    params:
+      channel: production
+      platform: ios

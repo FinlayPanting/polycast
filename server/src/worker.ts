@@ -44,22 +44,43 @@ async function guard(deps: WorkerDeps): Promise<SpendGuard> {
   return new SpendGuard(pgSpendLedger(deps.sql), cap, (c) => deps.alert?.('spend-cap', `Daily spending cap of $${c} reached; new episodes paused until tomorrow (UTC).`))
 }
 
-/** Looks for a word-timed transcript in the episode's feed, so transcription can be skipped. */
-async function feedWordsFor(deps: WorkerDeps, feedUrl: string, guid: string, language: string) {
+/** Fetches a feed (or anything it links to) safely: both addresses come from outside. */
+function feedGetter(deps: Pick<WorkerDeps, 'fetch' | 'lookupHost'>) {
+  return async (url: string) => {
+    const res = await safeFetch(url, { fetch: deps.fetch, lookupHost: deps.lookupHost, headers: POLYCAST_UA })
+    if (!res.ok) throw new Error(`${url} returned ${res.status}`)
+    return new TextDecoder().decode(res.body)
+  }
+}
+
+/** The episode's word-timed transcript link in its feed, if it has one Polycast can use. */
+export async function feedTranscriptLink(deps: Pick<WorkerDeps, 'fetch' | 'lookupHost'>, feedUrl: string, guid: string, language: string) {
   try {
-    // Both addresses come from outside (the app, then the feed), so both are fetched safely.
-    const get = async (url: string) => {
-      const res = await safeFetch(url, { fetch: deps.fetch, lookupHost: deps.lookupHost, headers: POLYCAST_UA })
-      if (!res.ok) throw new Error(`${url} returned ${res.status}`)
-      return new TextDecoder().decode(res.body)
-    }
-    const feed = parseFeed(await get(feedUrl))
+    const feed = parseFeed(await feedGetter(deps)(feedUrl))
     const link = pickTimedTranscript(feed.episodes.find((e) => e.guid === guid)?.transcripts ?? [], language)
-    if (!link?.type.includes('json')) return undefined
-    return wordsFromPodcastJson(JSON.parse(await get(link.url)))
+    return link?.type.includes('json') ? link : undefined
   } catch {
     return undefined
   }
+}
+
+/** Looks for a word-timed transcript in the episode's feed, so transcription can be skipped. */
+async function feedWordsFor(deps: WorkerDeps, feedUrl: string, guid: string, language: string) {
+  try {
+    const link = await feedTranscriptLink(deps, feedUrl, guid, language)
+    if (!link) return undefined
+    return wordsFromPodcastJson(JSON.parse(await feedGetter(deps)(link.url)))
+  } catch {
+    return undefined
+  }
+}
+
+/** The loudness measured for an episode's earlier plan, if any (PC-1020-01). */
+export async function savedLoudness(sql: Sql, episodeId: string): Promise<number | undefined> {
+  const [row] = await sql`
+    select (plan->>'loudnessLufs')::float8 as lufs from lesson_plans
+    where episode_id = ${episodeId} and plan ? 'loudnessLufs' order by created_at desc limit 1`
+  return row && Number.isFinite(row.lufs) ? Number(row.lufs) : undefined
 }
 
 /** The show's title, its hosts (the feed's author) and names that recur in its episode titles. */
@@ -104,7 +125,7 @@ async function runJobWith(deps: WorkerDeps, job: ClaimedJob, ownGuard?: SpendGua
   try {
     const g = ownGuard ?? (await guard(deps))
     if (job.kind === 'voice') {
-      const [row] = await sql`select plan from lesson_plans where episode_id = ${job.episodeId} limit 1`
+      const [row] = await sql`select plan from lesson_plans where episode_id = ${job.episodeId} order by version desc, created_at desc limit 1`
       const { plan, usage } = await voiceForGuide(job.id, row!.plan as LessonPlan, guide, ep!.duration_sec, { ...deps, guard: g })
       await sql`insert into lesson_plans (episode_id, guide_id, version, plan) values (${job.episodeId}, ${guide.id}, ${plan.version}, ${sql.json(plan as any)})
                 on conflict (episode_id, guide_id) do update set plan = excluded.plan`
@@ -131,6 +152,7 @@ async function runJobWith(deps: WorkerDeps, job: ClaimedJob, ownGuard?: SpendGua
         feedWords: saved ? undefined : await feedWordsFor(deps, ep!.feed_url, ep!.guid, ep!.language),
         savedTranscript: saved,
         savedSyncUrl: saved ? await deps.storage.exists?.(syncPath(job.episodeId)) : undefined,
+        savedLoudnessLufs: saved ? await savedLoudness(sql, job.episodeId) : undefined,
         names: saved ? undefined : await showNamesFor(sql, ep!.podcast_id),
       },
       {

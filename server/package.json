@@ -9,6 +9,7 @@
     "prepare-episode": "tsx src/cli/prepare.ts",
     "audition-voices": "tsx src/cli/audition.ts",
     "voice-check": "tsx src/cli/voice-check.ts",
+    "voice-room": "tsx src/cli/voice-room.ts",
     "start": "tsx src/main.ts",
     "test:db": "PG_TEST_URL=${PG_TEST_URL:-postgres://postgres@localhost:54329/postgres} vitest run"
   },

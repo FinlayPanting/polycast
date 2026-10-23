@@ -1,0 +1,10 @@
+# TestFlight builds (Expo free plan: 15 iOS builds a calendar month). One line per build: date, then a note.
+# Add a line in the same commit you push to `testflight`. Check: node scripts/release-target.mjs --budget
+# October seeded from the TestFlight emails (builds 1-2 on 19 Oct are assumed from build 3's number).
+2026-10-19 build 1
+2026-10-19 build 2
+2026-10-19 build 3
+2026-10-20 build 4
+2026-10-20 build 5
+2026-10-21 build 6
+2026-10-22 build 7

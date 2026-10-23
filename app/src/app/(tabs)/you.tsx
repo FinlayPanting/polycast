@@ -14,6 +14,8 @@ import { GUIDANCE, GUIDES, LANGUAGES, languageName } from '../../lib/languages'
 import { useSession, type ProfilePrefs } from '../../lib/session'
 import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
+import { SwitchRow } from '../../components/SwitchRow'
+import { setAllowsMobileData, useAllowsMobileData } from '../../lib/autoDownload'
 import Constants from 'expo-constants'
 import { playbackLog } from '../../lib/playbackLog'
 import { useWhatsNewDot } from '../../lib/whatsNew'
@@ -53,6 +55,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function You() {
   const p = usePalette()
+  const autoMobileData = useAllowsMobileData()
   const { profile, updatePrefs, signOut } = useSession()
   // What's new (PC-1019-F02): an orange dot until the latest build's changes have been seen.
   const whatsNew = useWhatsNewDot()
@@ -156,6 +159,12 @@ export default function You() {
           <Txt variant="small" tone="faint">
             Downloads stay out of your iCloud backup, and ones you haven’t played for 30 days are tidied away, unless a saved word comes from them.
           </Txt>
+          <SwitchRow
+            label="Auto-download on mobile data"
+            hint="For shows you’ve set to download new episodes. Off means Wi-Fi only."
+            value={autoMobileData}
+            onChange={setAllowsMobileData}
+          />
           {usedBytes > 0 ? (
             <Button
               kind="secondary"

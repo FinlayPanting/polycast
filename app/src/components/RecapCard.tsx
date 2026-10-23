@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system'
 import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { Share, View } from 'react-native'
-import Svg, { Rect, Text as SvgText, TSpan } from 'react-native-svg'
+import Svg, { Circle, Rect, Text as SvgText, TSpan } from 'react-native-svg'
 import { STORY, type StoryLayout } from '../lib/recap'
 import { base64ToBytes, CARD_COLOURS, type CardText } from '../lib/shareCard'
 import { font } from '../theme'
@@ -15,7 +15,7 @@ function Block({ t }: { t: CardText }) {
   return (
     <>
       {t.lines.map((l, i) => (
-        <SvgText key={i} x={STORY.padding} y={t.y + i * t.lineHeight} fill={t.colour} fontSize={t.size} fontFamily={t.weight === 'semibold' ? font.semibold : font.regular}>
+        <SvgText key={i} x={t.x ?? STORY.padding} y={t.y + i * t.lineHeight} fill={t.colour} fontSize={t.size} fontFamily={t.weight === 'semibold' ? font.semibold : font.regular}>
           {l}
         </SvgText>
       ))}
@@ -58,6 +58,14 @@ export const RecapCard = forwardRef<RecapCardHandle, { layout: StoryLayout; name
         {layout.texts.map((t, i) => (
           <Block key={i} t={t} />
         ))}
+        {layout.badge ? (
+          <>
+            <Circle cx={layout.badge.cx} cy={layout.badge.cy} r={layout.badge.r} fill={layout.badge.colour} />
+            <SvgText x={layout.badge.cx} y={layout.badge.cy + layout.badge.size * 0.36} textAnchor="middle" fill={CARD_COLOURS.text} fontSize={layout.badge.size} fontFamily={font.semibold}>
+              {layout.badge.initial}
+            </SvgText>
+          </>
+        ) : null}
         {layout.wordRows.map((r, i) => (
           <SvgText key={`w${i}`} x={STORY.padding} y={r.y} fontSize={r.size}>
             <TSpan fill={CARD_COLOURS.accent} fontFamily={font.semibold}>

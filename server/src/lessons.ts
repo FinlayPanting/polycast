@@ -1,16 +1,23 @@
 import { lessonText } from '@polycast/core'
 import type { Sql } from './db'
-import { LINE_REPORT_KIND, lineReports } from './lineReports'
+import { LINE_REPORT_KIND, LINE_REPORT_LIMITS, lineReports } from './lineReports'
 
 /** Recently prepared episodes that have a lesson plan, ones with reported lines first, then newest first. */
 export async function recentLessons(sql: Sql, limit = 30) {
+  // Reports are read once and counted per episode, not re-scanned for every row (PC-1021-05).
   return sql`
-    select e.id, e.title, p.title as podcast_title, e.language, e.ready_at, count(l.guide_id)::int as plans,
-      (select count(*)::int from alerts a where a.kind = ${LINE_REPORT_KIND} and a.message::jsonb->>'episodeId' = e.id::text) as reports
+    with r as (
+      select message::jsonb->>'episodeId' as episode_id, count(*)::int as n
+      from alerts
+      where kind = ${LINE_REPORT_KIND} and created_at >= now() - make_interval(days => ${LINE_REPORT_LIMITS.keepDays})
+      group by 1
+    )
+    select e.id, e.title, p.title as podcast_title, e.language, e.ready_at, count(l.guide_id)::int as plans, coalesce(max(r.n), 0)::int as reports
     from episodes e join podcasts p on p.id = e.podcast_id join lesson_plans l on l.episode_id = e.id
+    left join r on r.episode_id = e.id::text
     where e.status = 'ready'
     group by e.id, p.title
-    order by (select count(*) > 0 from alerts a where a.kind = ${LINE_REPORT_KIND} and a.message::jsonb->>'episodeId' = e.id::text) desc, e.ready_at desc nulls last
+    order by coalesce(max(r.n), 0) > 0 desc, e.ready_at desc nulls last
     limit ${limit}`
 }
 

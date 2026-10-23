@@ -7,6 +7,7 @@ import { api, refusalOf } from '../../lib/api'
 import { GUIDANCE, guideName, guidanceLevelOr, languageName, voicedGuideId, type GuidanceLevelId } from '../../lib/languages'
 import { canSyncOnDevice, prefetchEpisode, type GetReadyStep } from '../../lib/episodeAudio'
 import { downloadForOffline, isSavedForOffline, loadLesson, removeSaved } from '../../lib/offline'
+import { rememberHandled } from '../../lib/autoDownload'
 import { earlyPrimerUrl, jumpStart, loadEarlyPrimer, primerSource } from '../../lib/primer'
 import { config } from '../../lib/config'
 import { Primer, PrimerBuilding } from '../../components/Primer'
@@ -20,7 +21,7 @@ import { useAsync } from '../../lib/useAsync'
 import { MIN_TAP, space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
 import { loadOwnKeys, type OwnKeys } from '../../lib/ownKeys'
-import { ALREADY_PREPARED_LINE, estimateLine, estimateSplit, OWN_KEYS_COST_LINE, SLOW_KEY_LINE, usedLine } from '../../lib/ownKeysCore'
+import { ALREADY_PREPARED_LINE, episodeEstimateLine, estimateSplit, OWN_KEYS_COST_LINE, SLOW_KEY_LINE, transcriptNote, usedLine, type EpisodeEstimate } from '../../lib/ownKeysCore'
 import { listenLater, useKept } from '../../lib/keptList'
 import { laterId, laterLabel } from '../../lib/keptListCore'
 
@@ -54,7 +55,7 @@ export default function Episode() {
   }, [])
   const later = useKept(listenLater)
   // Own keys (PC-1017-K4): an estimate before preparing, and what it used afterwards.
-  const [estimate, setEstimate] = useState<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>()
+  const [estimate, setEstimate] = useState<EpisodeEstimate>()
   const [showSplit, setShowSplit] = useState(false)
   const [usedUSD, setUsedUSD] = useState<number | null>()
   const [serverPrimer, setServerPrimer] = useState<PrimerData | null>()
@@ -80,7 +81,7 @@ export default function Episode() {
     let live = true
     if (ep.status === 'ready') {
       if (preparedByMe) api.ownKeysCost(ep.id).then((r) => live && setUsedUSD(r.usedUSD), () => {})
-    } else api.ownKeysEstimate(ep.duration_sec).then((r) => live && setEstimate(r), () => {})
+    } else api.ownKeysEpisodeEstimate(ep.id).then((r) => live && setEstimate(r), () => {})
     return () => {
       live = false
     }
@@ -173,6 +174,8 @@ export default function Episode() {
         style: 'destructive',
         onPress: () => {
           removeSaved(ep.id, ep.audio_url)
+          // Auto-download won't bring it back (PC-1021-02).
+          void rememberHandled(ep.id)
           setSaved(false)
         },
       },
@@ -304,9 +307,9 @@ export default function Episode() {
             <Txt tone="quiet">{cost}</Txt>
             {ownKeys && estimate ? (
               <Pressable accessibilityRole="button" accessibilityState={{ expanded: showSplit }} accessibilityHint="Shows what each provider charges" onPress={() => setShowSplit((v) => !v)} style={{ minHeight: MIN_TAP, justifyContent: 'center', gap: 2 }}>
-                <Txt variant="smallStrong">{estimateLine(estimate.totalUSD)}</Txt>
+                <Txt variant="smallStrong">{episodeEstimateLine(estimate)}</Txt>
                 {showSplit
-                  ? estimateSplit(estimate).map((line) => (
+                  ? [...estimateSplit(estimate), ...(transcriptNote(estimate) ? [transcriptNote(estimate)!] : [])].map((line) => (
                       <Txt key={line} variant="small" tone="quiet">
                         {line}
                       </Txt>

@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Polycast Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Polycast Lab: one dark navy page in the app's own palette. Orange = play and actions, magenta = the
+   guide speaking, violet = settings, coral = picks. Cards stack on a phone, sit side by side on a desk. */
+:root {
+  --bg: #1A1A30; --raised: #24243D; --sunken: #12121F; --line: #33334D; --line-strong: #474766;
+  --text: #EDEBE7; --quiet: #9A98A3; --faint: #7d7b8a;
+  --orange: #FF9C18; --magenta: #D23193; --guide: #EE6FB8; --coral: #FC8A7A; --violet: #B3A7DD; --ink: #0D0D0F;
+  --ok: #7FD1A8; --warn: #F2C35B;
+  --r: 14px; --r-sm: 9px;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--orange); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px 80px; }
+
+/* Header */
+header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1180px; margin: 0 auto; padding: 12px 16px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -0.3px; }
+.brand svg { width: 28px; height: 28px; border-radius: 7px; }
+.brand small { font-weight: 600; color: var(--quiet); font-size: 13px; letter-spacing: 0; }
+.spend { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; background: var(--raised); border: 1px solid var(--line); font-size: 13px; color: var(--quiet); white-space: nowrap; }
+.chip b { color: var(--text); font-weight: 600; }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+nav { max-width: 1180px; margin: 0 auto; padding: 8px 16px 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+nav::-webkit-scrollbar { display: none; }
+nav button { background: none; border: 0; padding: 9px 12px 11px; color: var(--quiet); font-weight: 600; font-size: 15px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--orange); }
+
+/* Sections */
+section { display: none; padding-top: 20px; }
+section.on { display: block; }
+h2 { font-size: 24px; letter-spacing: -0.3px; margin: 4px 0 4px; }
+.lede { color: var(--quiet); margin: 0 0 18px; max-width: 70ch; }
+h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--quiet); margin: 22px 0 10px; font-weight: 700; }
+.card { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.row > label { flex: 1 1 140px; }
+label { display: block; font-size: 13px; color: var(--quiet); font-weight: 600; }
+label > input, label > select, label > textarea { margin-top: 4px; }
+input[type=text], input[type=password], input[type=number], select, textarea {
+  width: 100%; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px; outline: none; min-height: 42px;
+}
+textarea { min-height: 120px; resize: vertical; line-height: 1.45; }
+input:focus, select:focus, textarea:focus { border-color: var(--orange); }
+input[type=range] { width: 100%; accent-color: var(--orange); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--line-strong); background: transparent; font-weight: 700; cursor: pointer; }
+.btn:hover { border-color: var(--quiet); }
+.btn.go { background: var(--orange); color: var(--ink); border-color: var(--orange); }
+.btn.go:disabled { opacity: 0.5; cursor: progress; }
+.btn.small { min-height: 32px; padding: 0 12px; font-size: 14px; }
+.btn.pick { border-color: color-mix(in srgb, var(--coral) 55%, var(--line)); color: var(--coral); }
+.btn.picked { background: var(--coral); color: var(--ink); border-color: var(--coral); }
+.btn.ghost { border-color: transparent; color: var(--quiet); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--quiet); cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--orange); width: 18px; height: 18px; }
+.actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.estimate { color: var(--quiet); font-size: 14px; }
+.estimate b { color: var(--text); }
+.muted { color: var(--quiet); font-size: 14px; }
+.err { color: var(--coral); font-size: 14px; }
+.warnline { color: var(--warn); font-size: 13px; margin-top: 6px; }
+.mono { font-family: var(--mono); font-size: 13px; }
+
+/* Takes */
+.takes { display: grid; gap: 10px; }
+.take { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); padding: 12px; border-radius: var(--r); background: var(--sunken); border: 1px solid var(--line); position: relative; }
+.take .x { position: absolute; top: 6px; right: 6px; background: none; border: 0; color: var(--faint); font-size: 20px; cursor: pointer; line-height: 1; padding: 4px 8px; }
+.take .tag { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-weight: 700; padding-right: 28px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.speedv { font-family: var(--mono); color: var(--text); }
+
+/* Moments */
+.moments { display: grid; gap: 6px; max-height: 360px; overflow: auto; padding-right: 4px; }
+.moment { text-align: left; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px; cursor: pointer; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.moment[aria-pressed="true"] { border-color: var(--orange); background: color-mix(in srgb, var(--orange) 8%, var(--sunken)); }
+.moment .t { font-family: var(--mono); color: var(--quiet); font-size: 13px; padding-top: 1px; }
+.moment .k { font-weight: 700; font-size: 14px; }
+.moment .s { grid-column: 2; color: var(--quiet); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--violet); }
+.script { font-size: 15px; line-height: 1.55; }
+.script .tl { color: var(--guide); font-style: italic; }
+.script .clip { display: inline-block; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--orange); border-radius: 6px; padding: 0 6px; margin: 0 2px; }
+
+/* Results */
+.result { display: flex; flex-direction: column; gap: 8px; }
+.result .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.result .name { font-weight: 800; font-size: 17px; }
+.result .meta { color: var(--quiet); font-size: 13px; }
+audio { width: 100%; height: 40px; }
+.lineblock { margin-bottom: 18px; }
+.lineblock .said { margin-bottom: 10px; }
+.timeline { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--sunken); }
+.timeline span { display: block; height: 100%; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--quiet); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.levels { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--quiet); }
+.levels b { color: var(--text); font-weight: 600; }
+.cols { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.doc { font-size: 14px; line-height: 1.55; max-height: 70vh; overflow: auto; padding-right: 6px; }
+.doc h1 { font-size: 17px; margin: 0 0 8px; }
+.doc h2 { font-size: 15px; margin: 16px 0 6px; color: var(--violet); }
+.doc h3 { font-size: 14px; margin: 12px 0 4px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.doc p { margin: 0 0 8px; }
+.doc ul { margin: 0 0 8px; padding-left: 18px; }
+.stats { display: flex; gap: 6px; flex-wrap: wrap; }
+.notes { width: 100%; min-height: 64px; }
+.history { display: grid; gap: 8px; }
+.hrun { text-align: left; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.hrun .t { font-weight: 700; }
+.hrun .m { color: var(--quiet); font-size: 13px; }
+.hrun .c { font-family: var(--mono); font-size: 13px; text-align: right; }
+.empty { color: var(--quiet); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: var(--r); }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+/* Sign-in */
+#gate { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: grid; place-items: center; padding: 16px; }
+#gate .card { width: 100%; max-width: 380px; padding: 24px; }
+#gate h1 { margin: 12px 0 4px; font-size: 24px; }
+.hidden { display: none !important; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line-strong); padding: 10px 16px; border-radius: 99px; font-size: 14px; z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,.4); max-width: calc(100vw - 32px); }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <form class="card" id="gateForm">
+    <svg viewBox="0 0 40 40" width="44" height="44" aria-hidden="true"><rect width="40" height="40" rx="9" fill="#1A1A30" stroke="#33334D"/><rect x="11" y="8" width="3" height="25" rx="1.5" fill="#FF9C18"/><rect x="15" y="9" width="15" height="4" rx="1" fill="#D23193"/><rect x="15" y="14.5" width="15" height="4" rx="1" fill="#EDEBE7"/><rect x="15" y="20" width="15" height="4" rx="1" fill="#7F6FA4"/></svg>
+    <h1>Polycast Lab</h1>
+    <p class="muted">Test voices, sounds, scripts and lesson plans without the phone.</p>
+    <label>Password<input type="password" id="gatePw" autocomplete="current-password" required></label>
+    <p class="err" id="gateErr"></p>
+    <button class="btn go" style="width:100%">Open the Lab</button>
+  </form>
+</div>
+
+<header>
+  <div class="bar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" fill="#24243D"/><rect x="11" y="8" width="3" height="25" rx="1.5" fill="#FF9C18"/><rect x="15" y="9" width="15" height="4" rx="1" fill="#D23193"/><rect x="15" y="14.5" width="15" height="4" rx="1" fill="#EDEBE7"/><rect x="15" y="20" width="15" height="4" rx="1" fill="#7F6FA4"/></svg>
+      Polycast Lab <small>Mia &amp; Leo test bench</small>
+    </div>
+    <div class="spend" id="spend"></div>
+  </div>
+  <nav role="tablist" id="tabs">
+    <button role="tab" data-tab="voices" aria-selected="true">Voices</button>
+    <button role="tab" data-tab="moments">Moments</button>
+    <button role="tab" data-tab="room">In the room</button>
+    <button role="tab" data-tab="scripts">Scripts</button>
+    <button role="tab" data-tab="plans">Lesson plans</button>
+    <button role="tab" data-tab="history">History</button>
+  </nav>
+</header>
+
+<div class="wrap">
+
+<!-- VOICES -->
+<section id="voices" class="on">
+  <h2>Voice studio</h2>
+  <p class="lede">Any lines, any language, any voice. Words in <span class="script"><span class="tl">[[double brackets]]</span></span> are said in the language being learnt, slowly when they stand alone, just as in a real lesson. A take you've voiced before is free.</p>
+  <div class="row">
+    <label>Language being learnt<select id="vTarget"></select></label>
+    <label>Guide speaks<select id="vNative"></select></label>
+    <div><button class="btn small" id="vSamples" type="button">Use sample lines</button></div>
+  </div>
+  <label style="margin-top:12px">Lines, one per row
+    <textarea id="vLines" rows="5" placeholder="Swedes call a coffee break [[fika]], and they take it very seriously."></textarea>
+  </label>
+  <h3>Voices to compare</h3>
+  <div class="takes" id="vTakes"></div>
+  <div class="actions">
+    <button class="btn small" id="vAdd" type="button">+ Add a voice</button>
+    <button class="btn small ghost" id="vNow" type="button">Mia &amp; Leo today</button>
+    <button class="btn small ghost" id="vProviders" type="button">One of each provider</button>
+  </div>
+  <div class="actions">
+    <button class="btn go" id="vRun" type="button">Voice them</button>
+    <label class="toggle"><input type="checkbox" id="vBlind"> Blind (names hidden, order shuffled)</label>
+    <span class="estimate" id="vEst"></span>
+  </div>
+  <div id="vOut" style="margin-top:20px"></div>
+</section>
+
+<!-- shared episode and moment picker, moved into Moments / In the room / Scripts -->
+<template id="pickerTpl">
+  <div class="picker">
+    <div class="row">
+      <label style="flex:3 1 260px">Episode<select class="pEpisode"></select></label>
+      <label style="flex:1 1 120px">Guide<select class="pGuide"></select></label>
+    </div>
+    <p class="muted pInfo" style="margin:8px 0"></p>
+    <div class="row" style="margin-bottom:8px">
+      <label style="flex:1 1 200px">Show<select class="pKind"><option value="">Every moment</option></select></label>
+    </div>
+    <div class="moments pMoments"></div>
+  </div>
+</template>
+
+<!-- MOMENTS -->
+<section id="moments">
+  <h2>Guide moments, heard in place</h2>
+  <p class="lede">A few seconds of the episode, the guide stepping in exactly as the phone does it (fade, breath, Mia, the host's clips, the episode picking up two seconds back), as one file. Use the lines already stored (free) or re-voice them with any voice.</p>
+  <div class="pickerSlot"></div>
+  <div class="card" style="margin-top:14px"><div class="muted">Script</div><div class="script mScript">Pick a moment.</div></div>
+  <h3>Versions to hear</h3>
+  <label class="toggle"><input type="checkbox" id="mStored" checked> The stored lines (what learners hear now)</label>
+  <div class="takes" id="mTakes" style="margin-top:10px"></div>
+  <div class="actions"><button class="btn small" id="mAdd" type="button">+ Re-voice with another voice</button></div>
+  <div class="row" style="margin-top:14px">
+    <label>Seconds of episode before <span class="speedv" id="mLeadV">8</span><input type="range" id="mLead" min="0" max="30" value="8"></label>
+    <label>Seconds after <span class="speedv" id="mTailV">6</span><input type="range" id="mTail" min="0" max="30" value="6"></label>
+  </div>
+  <div class="actions">
+    <button class="btn go" id="mRun" type="button">Make the previews</button>
+    <label class="toggle"><input type="checkbox" id="mBlind"> Blind</label>
+    <span class="estimate" id="mEst"></span>
+  </div>
+  <div id="mOut" style="margin-top:20px"></div>
+</section>
+
+<!-- ROOM -->
+<section id="room">
+  <h2>In the room</h2>
+  <p class="lede">The same guide moment with different sounds, so Mia sits in the show rather than on top of it. Polycast's own settings are free and work on any voice; ElevenLabs' effects need an ElevenLabs voice (and cost the same as a plain line).</p>
+  <div class="pickerSlot"></div>
+  <h3>Voice</h3>
+  <div class="row">
+    <label>Read by<select id="rSource"><option value="stored">The stored lines</option><option value="take">A voice of my choice</option></select></label>
+  </div>
+  <div class="takes" id="rTakes" style="margin-top:10px"></div>
+  <h3>Sounds to compare</h3>
+  <div class="grid" id="rSounds"></div>
+  <div class="actions">
+    <button class="btn go" id="rRun" type="button">Make the previews</button>
+    <label class="toggle"><input type="checkbox" id="rBlind" checked> Blind</label>
+    <span class="estimate" id="rEst"></span>
+  </div>
+  <div id="rOut" style="margin-top:20px"></div>
+</section>
+
+<!-- SCRIPTS -->
+<section id="scripts">
+  <h2>Scripts</h2>
+  <p class="lede">Rewrite one guide moment with different models, under the lesson writer's own rules, plus anything you'd like changed. Then hear any version in place.</p>
+  <div class="pickerSlot"></div>
+  <h3>Models</h3>
+  <div class="grid sModels"></div>
+  <label style="margin-top:12px">What to change (optional)
+    <textarea id="sInstr" rows="3" placeholder="Sound more like a friend listening along. Fewer words before the term."></textarea>
+  </label>
+  <div class="actions">
+    <button class="btn go" id="sRun" type="button">Write them</button>
+    <span class="estimate" id="sEst"></span>
+  </div>
+  <div id="sOut" style="margin-top:20px"></div>
+</section>
+
+<!-- PLANS -->
+<section id="plans">
+  <h2>Lesson plans</h2>
+  <p class="lede">The whole lesson plan for an episode written by different models, side by side, with what each cost. Start with the first ten minutes to keep it cheap.</p>
+  <div class="row">
+    <label style="flex:3 1 260px">Episode<select id="lEpisode"></select></label>
+    <label style="flex:1 1 140px">How much<select id="lMinutes"><option value="10">First 10 minutes</option><option value="20">First 20 minutes</option><option value="0">Whole episode</option></select></label>
+  </div>
+  <h3>Models</h3>
+  <div class="grid lModels"></div>
+  <div class="actions">
+    <button class="btn go" id="lRun" type="button">Write the plans</button>
+    <span class="estimate" id="lEst"></span>
+  </div>
+  <div id="lOut" style="margin-top:20px"></div>
+</section>
+
+<!-- HISTORY -->
+<section id="history">
+  <h2>History</h2>
+  <p class="lede">Every test, what it cost and what was picked. Runs Claude made are marked.</p>
+  <div class="row" style="margin-bottom:12px">
+    <label style="max-width:240px">Show<select id="hKind"><option value="">Everything</option><option value="voice">Voices</option><option value="moment">Moments</option><option value="room">In the room</option><option value="script">Scripts</option><option value="plan">Lesson plans</option></select></label>
+  </div>
+  <div class="history" id="hList"></div>
+</section>
+
+</div>
+
+<script>
+'use strict'
+const $ = (s, el = document) => el.querySelector(s)
+const $$ = (s, el = document) => [...el.querySelectorAll(s)]
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const usd = (n) => n === undefined || n === null ? '–' : n < 0.0005 && n > 0 ? '<$0.001' : n === 0 ? '$0' : n < 0.1 ? '$' + n.toFixed(3) : '$' + n.toFixed(2)
+const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+const LANG = { sv: 'Swedish', de: 'German', es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese', en: 'English' }
+const KIND = { warmup: 'Warm-up', listenFor: 'Listen for', spotlight: 'Spotlight', cultureNote: 'Culture note', quickQuestion: 'Quick question', chapterRecap: 'Recap', wrapUp: 'Wrap-up' }
+const LEVEL = { light: 'Light', standard: 'Standard', handsOn: 'Hands-on' }
+const PROVIDER = { elevenlabs: 'ElevenLabs', chirp: 'Chirp 3 HD', gemini: 'Gemini TTS' }
+const COLORS = ['#FF9C18', '#EE6FB8', '#7FD1A8', '#B3A7DD', '#FC8A7A', '#6EC3F4', '#F2C35B', '#C9C7CF']
+let token = ''
+let opts = null
+const store = { get(k) { try { return localStorage.getItem(k) } catch { return null } }, set(k, v) { try { localStorage.setItem(k, v) } catch {} } }
+
+function toast(msg) {
+  const t = document.createElement('div')
+  t.className = 'toast'
+  t.textContent = msg
+  document.body.append(t)
+  setTimeout(() => t.remove(), 3200)
+}
+
+async function api(path, body) {
+  const res = await fetch('/lab/api' + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const json = await res.json().catch(() => ({}))
+  if (res.status === 401) { showGate('That password isn’t right.'); throw new Error('Signed out') }
+  if (!res.ok) throw new Error(json.error || `Something went wrong (${res.status})`)
+  return json
+}
+const renderUrl = (id) => `/lab/api/render/${id}?token=${encodeURIComponent(token)}`
+
+/* Sign-in */
+function showGate(err) { $('#gate').classList.remove('hidden'); $('#gateErr').textContent = err || '' }
+$('#gateForm').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  token = $('#gatePw').value.trim()
+  try { await boot(); store.set('labToken', token); $('#gate').classList.add('hidden') } catch (err) { if (err.message !== 'Signed out') showGate(err.message) }
+})
+
+/* Tabs */
+$$('#tabs button').forEach((b) => b.addEventListener('click', () => openTab(b.dataset.tab)))
+function openTab(tab) {
+  $$('#tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)))
+  $$('section').forEach((s) => s.classList.toggle('on', s.id === tab))
+  const slot = $(`#${tab} .pickerSlot`)
+  if (slot) slot.append(picker.el)
+  if (tab === 'history') loadHistory()
+  store.set('labTab', tab)
+  if (tab === 'room') renderRoomSounds()
+  refreshEstimates()
+}
+
+/* Spend */
+function showSpend() {
+  const s = opts.spend
+  $('#spend').innerHTML = s
+    ? `<span class="chip">Today <b>${usd(s.todayUSD)}</b></span><span class="chip">This month <b>${usd(s.monthUSD)}</b></span>`
+    : `<span class="chip warn" title="Apply migration 0012 in Supabase">Runs aren’t being saved yet</span>`
+}
+async function refreshSpend() { try { opts.spend = (await api('/options')).spend; showSpend() } catch {} }
+
+/* Take builder */
+function defaultTake(i = 0) {
+  const g = opts.guides[i % opts.guides.length]
+  return { label: g.name, provider: 'elevenlabs', voice: g.elevenLabsVoiceId, model: opts.voices.elevenlabs.defaultModel, speed: 0.9, sound: 'dry', effects: null }
+}
+function takeEditor(container, takes, onChange, { allowEffects = true, allowSound = true } = {}) {
+  container.innerHTML = ''
+  takes.forEach((t, i) => {
+    const el = document.createElement('div')
+    el.className = 'take'
+    const p = opts.voices[t.provider]
+    const voices = t.provider === 'elevenlabs' ? p.voices.map((v) => [v.id, v.name + (v.labels?.accent ? ` · ${v.labels.accent}` : '') + (v.labels?.gender ? ` · ${v.labels.gender}` : '')]) : p.voices.map((v) => [v, v])
+    const models = t.provider === 'elevenlabs' ? p.models.map((m) => [m.id, m.name]) : t.provider === 'gemini' ? p.models.map((m) => [m, m]) : []
+    const fx = allowEffects && t.provider === 'elevenlabs' ? opts.elevenEffects : []
+    el.innerHTML = `
+      <div class="tag"><span class="dot" style="background:${COLORS[i % COLORS.length]}"></span><input type="text" value="${esc(t.label)}" data-f="label" style="min-height:34px;padding:5px 9px;font-weight:700"></div>
+      <button class="x" type="button" aria-label="Remove">×</button>
+      <label>Provider<select data-f="provider">${Object.entries(PROVIDER).map(([k, n]) => `<option value="${k}" ${k === t.provider ? 'selected' : ''} ${opts.voices[k].available ? '' : 'disabled'}>${n}${opts.voices[k].available ? '' : ' (no key)'}</option>`).join('')}</select></label>
+      <label>Voice<select data-f="voice">${voices.map(([v, n]) => `<option value="${esc(v)}" ${v === t.voice ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      ${models.length ? `<label>Model<select data-f="model">${models.map(([v, n]) => `<option value="${esc(v)}" ${v === t.model ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''}
+      <label>Speed <span class="speedv">${(t.speed ?? 0.9).toFixed(2)}</span><input type="range" min="0.7" max="1.2" step="0.05" value="${t.speed ?? 0.9}" data-f="speed"></label>
+      ${allowSound ? `<label>Sound<select data-f="sound">${opts.sounds.map((s) => `<option value="${s.id}" ${s.id === (t.sound || 'dry') ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select></label>` : ''}
+      ${fx.length ? `<label>ElevenLabs effect<select data-f="effects"><option value="">None</option>${fx.map((e, j) => `<option value="${j}" ${JSON.stringify(e.effects) === JSON.stringify(t.effects) ? 'selected' : ''}>${esc(e.note)}</option>`).join('')}</select></label>` : ''}
+      <div class="muted" style="grid-column:1/-1;font-size:12px">${perHour(t)}</div>`
+    el.addEventListener('input', (e) => {
+      const f = e.target.dataset.f
+      if (!f) return
+      if (f === 'speed') { t.speed = Number(e.target.value); e.target.previousElementSibling.textContent = t.speed.toFixed(2) }
+      else if (f === 'effects') t.effects = e.target.value === '' ? null : fx[Number(e.target.value)].effects
+      else if (f === 'provider') {
+        t.provider = e.target.value
+        const np = opts.voices[t.provider]
+        const g = opts.guides[i % opts.guides.length]
+        t.voice = t.provider === 'elevenlabs' ? g.elevenLabsVoiceId : g.googleVoice
+        t.model = t.provider === 'elevenlabs' ? np.defaultModel : t.provider === 'gemini' ? np.models[0] : undefined
+        t.effects = null
+        takeEditor(container, takes, onChange, { allowEffects, allowSound })
+      } else t[f] = e.target.value
+      onChange()
+    })
+    $('.x', el).addEventListener('click', () => { takes.splice(i, 1); takeEditor(container, takes, onChange, { allowEffects, allowSound }); onChange() })
+    container.append(el)
+  })
+}
+function perHour(t) {
+  const p = opts.voices[t.provider]
+  const h = t.provider === 'gemini' ? p.perHourUSD[t.model] : p.perHourUSD
+  return `About ${usd(h)} an hour of guide speech`
+}
+const takeBody = (t) => ({ label: t.label, provider: t.provider, voice: t.voice, model: t.model, speed: t.speed, sound: t.sound, effects: t.effects })
+
+/* Estimates (debounced) */
+const estTimers = {}
+function estimate(key, fn) { clearTimeout(estTimers[key]); estTimers[key] = setTimeout(fn, 400) }
+function refreshEstimates() {
+  const tab = store.get('labTab') || 'voices'
+  if (tab === 'voices') estimate('v', estVoices)
+  if (tab === 'moments') estimate('m', estMoments)
+  if (tab === 'room') estimate('r', estRoom)
+  if (tab === 'scripts') estimate('s', estScripts)
+  if (tab === 'plans') estimate('l', estPlans)
+}
+
+/* Picks */
+async function savePick(runId, pick, note) {
+  if (!runId) { toast('Picked, but runs aren’t being saved until the Lab’s migration is applied.'); return }
+  try { await api(`/runs/${runId}/pick`, { pick, note }); toast('Pick saved') } catch (e) { toast(e.message) }
+}
+
+function shuffle(a) { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]] } return b }
+const blindName = (i) => `Take ${String.fromCharCode(65 + i)}`
+function scriptHtml(s) {
+  return esc(s).replace(/\[\[([^\[\]]+)\]\]/g, '<span class="tl">$1</span>').replace(/\{clip:(\d+)\}/g, '<span class="clip">host</span>').replace(/\{(term\d*|sentence)\}/g, '<span class="clip">host</span>')
+}
+function busy(btn, on, label) {
+  btn.disabled = on
+  if (on) { btn.dataset.label = btn.textContent; btn.innerHTML = `<span class="spinner"></span> ${esc(label || 'Working…')}` }
+  else btn.textContent = btn.dataset.label || btn.textContent
+}
+
+/* ---------- Voices ---------- */
+const vTakes = []
+function vChanged() { estimate('v', estVoices) }
+function vLines() { return $('#vLines').value.split('\n').map((l) => l.trim()).filter(Boolean) }
+async function estVoices() {
+  if (!vLines().length || !vTakes.length) { $('#vEst').textContent = ''; return }
+  try {
+    const r = await api('/voice', { estimate: true, lines: vLines(), takes: vTakes.map(takeBody), nativeLanguage: $('#vNative').value, targetLanguage: $('#vTarget').value })
+    $('#vEst').innerHTML = `About <b>${usd(r.totalUSD)}</b> (less for takes voiced before)`
+  } catch (e) { $('#vEst').textContent = e.message }
+}
+$('#vSamples').addEventListener('click', () => { $('#vLines').value = (opts.sampleLines[$('#vTarget').value] || []).join('\n'); vChanged() })
+$('#vLines').addEventListener('input', vChanged)
+$('#vTarget').addEventListener('change', () => { if ($('#vTarget').value === 'en' && $('#vNative').value === 'en') $('#vNative').value = 'de'; vChanged() })
+$('#vNative').addEventListener('change', vChanged)
+$('#vAdd').addEventListener('click', () => { vTakes.push({ ...defaultTake(vTakes.length), label: `Voice ${vTakes.length + 1}` }); takeEditor($('#vTakes'), vTakes, vChanged); vChanged() })
+$('#vNow').addEventListener('click', () => { vTakes.splice(0, vTakes.length, defaultTake(0), defaultTake(1)); takeEditor($('#vTakes'), vTakes, vChanged); vChanged() })
+$('#vProviders').addEventListener('click', () => {
+  const g = opts.guides[0]
+  vTakes.splice(0, vTakes.length,
+    { ...defaultTake(0), label: 'ElevenLabs' },
+    { label: 'Chirp', provider: 'chirp', voice: g.googleVoice, speed: 0.9, sound: 'dry', effects: null },
+    { label: 'Gemini', provider: 'gemini', voice: g.googleVoice, model: opts.voices.gemini.models[0], speed: 0.9, sound: 'dry', effects: null })
+  takeEditor($('#vTakes'), vTakes, vChanged); vChanged()
+})
+$('#vRun').addEventListener('click', async () => {
+  const btn = $('#vRun')
+  const lines = vLines()
+  if (!lines.length) return toast('Add a line first')
+  if (!vTakes.length) return toast('Add a voice first')
+  busy(btn, true, 'Voicing…')
+  try {
+    const r = await api('/voice', { lines, takes: vTakes.map(takeBody), nativeLanguage: $('#vNative').value, targetLanguage: $('#vTarget').value })
+    showVoiceResults(r, lines, vTakes.map((t) => ({ ...t })), $('#vBlind').checked)
+    refreshSpend()
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+function showVoiceResults(r, lines, takes, blind) {
+  const out = $('#vOut')
+  const picks = {}
+  out.innerHTML = `<div class="actions" style="margin:0 0 14px"><span class="muted">Cost <b>${usd(r.costUSD)}</b></span>${blind ? '<button class="btn small" type="button" id="vReveal">Reveal names</button>' : ''}</div>`
+  r.results.forEach((row, li) => {
+    const order = blind ? shuffle(row.map((_, i) => i)) : row.map((_, i) => i)
+    const block = document.createElement('div')
+    block.className = 'lineblock'
+    block.innerHTML = `<div class="said script">${scriptHtml(lines[li])}</div><div class="grid"></div>`
+    order.forEach((ti, pos) => {
+      const x = row[ti]
+      const card = document.createElement('div')
+      card.className = 'card result'
+      card.innerHTML = `<div class="head"><span class="name" data-real="${esc(x.label)}" data-blind="${blindName(pos)}">${esc(blind ? blindName(pos) : x.label)}</span><span class="meta">${x.error ? '' : `${x.durationSec ? x.durationSec.toFixed(1) + 's · ' : ''}${x.cached ? 'free (voiced before)' : usd(x.costUSD)}`}</span></div>
+        ${x.error ? `<div class="err">${esc(x.error)}</div>` : `<audio controls preload="none" src="${esc(x.url)}"></audio><button class="btn small pick" type="button">Pick this one</button>`}`
+      const pb = $('.pick', card)
+      if (pb) pb.addEventListener('click', () => {
+        $$('.pick', block).forEach((b) => { b.classList.remove('picked'); b.textContent = 'Pick this one' })
+        pb.classList.add('picked'); pb.textContent = 'Picked'
+        picks[li] = x.label
+        savePick(r.runId, { lines: picks, line: lines[li], label: x.label, take: takes[ti] })
+      })
+      $('.grid', block).append(card)
+    })
+    out.append(block)
+  })
+  const rv = $('#vReveal')
+  if (rv) rv.addEventListener('click', () => $$('.name', out).forEach((n) => (n.textContent = n.dataset.real)))
+}
+
+/* ---------- Shared episode and moment picker ---------- */
+const picker = { el: null, episodes: [], ep: null, moment: null, listeners: [] }
+function buildPicker() {
+  picker.el = $('#pickerTpl').content.firstElementChild.cloneNode(true)
+  const sel = $('.pEpisode', picker.el)
+  sel.innerHTML = picker.episodes.length
+    ? picker.episodes.map((e) => `<option value="${e.id}">${esc(LANG[e.language] || e.language)} · ${esc(e.podcast_title)}: ${esc(e.title)}</option>`).join('')
+    : '<option value="">No prepared episodes yet</option>'
+  $('.pGuide', picker.el).innerHTML = opts.guides.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('')
+  $('.pKind', picker.el).innerHTML += Object.entries(KIND).map(([k, n]) => `<option value="${k}">${n}</option>`).join('')
+  sel.addEventListener('change', loadEpisode)
+  $('.pGuide', picker.el).addEventListener('change', loadEpisode)
+  $('.pKind', picker.el).addEventListener('change', drawMoments)
+  const last = store.get('labEpisode')
+  if (last && picker.episodes.some((e) => e.id === last)) sel.value = last
+  if (picker.episodes.length) loadEpisode()
+}
+async function loadEpisode() {
+  const id = $('.pEpisode', picker.el).value
+  if (!id) return
+  store.set('labEpisode', id)
+  $('.pInfo', picker.el).textContent = 'Loading…'
+  try {
+    picker.ep = await api(`/episodes/${id}?guide=${$('.pGuide', picker.el).value}`)
+    picker.moment = picker.ep.moments.find((m) => m.kind === 'listenFor') || picker.ep.moments[0] || null
+    $('.pInfo', picker.el).textContent = `${LANG[picker.ep.language] || picker.ep.language} for ${LANG[picker.ep.nativeLanguage] || picker.ep.nativeLanguage} speakers · ${clock(picker.ep.durationSec)} · ${picker.ep.moments.length} moments · ${picker.ep.guide === $('.pGuide', picker.el).value ? '' : `only ${picker.ep.guide}’s plan exists · `}${picker.ep.synced ? 'adverts lined up automatically' : 'no sync fingerprint (older episode)'}`
+    drawMoments()
+  } catch (e) { $('.pInfo', picker.el).textContent = e.message }
+}
+function drawMoments() {
+  const box = $('.pMoments', picker.el)
+  const kind = $('.pKind', picker.el).value
+  const ms = (picker.ep?.moments || []).filter((m) => !kind || m.kind === kind)
+  box.innerHTML = ms.length ? '' : '<div class="empty">No moments of that kind.</div>'
+  ms.forEach((m) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'moment'
+    b.setAttribute('aria-pressed', String(picker.moment?.id === m.id))
+    b.innerHTML = `<span class="t">${clock(m.at)}</span><span class="k"><span class="kind">${esc(KIND[m.kind] || m.kind)}</span>${m.term ? ` · ${esc(m.term.text)}` : ''}${m.stored ? '' : ' <span class="muted">(not voiced)</span>'}</span><span class="s">${esc(m.script.replace(/\[\[|\]\]/g, '').replace(/\{clip:\d+\}/g, '▸'))}</span>`
+    b.addEventListener('click', () => { picker.moment = m; drawMoments() })
+    box.append(b)
+  })
+  const cur = picker.moment
+  $$('.mScript').forEach((el) => (el.innerHTML = cur ? scriptHtml(cur.script) : 'Pick a moment.'))
+  refreshEstimates()
+}
+const momentBase = () => ({ episodeId: picker.ep?.id, guide: $('.pGuide', picker.el)?.value, momentId: picker.moment?.id })
+
+function previewCard(x, name, onPick) {
+  const card = document.createElement('div')
+  card.className = 'card result'
+  if (x.error) { card.innerHTML = `<div class="head"><span class="name">${esc(name)}</span></div><div class="err">${esc(x.error)}</div>`; return card }
+  const total = x.durationSec || 1
+  const colour = { episode: '#5b5a72', guide: '#D23193', clip: '#FF9C18', pause: 'transparent' }
+  card.innerHTML = `<div class="head"><span class="name" data-real="${esc(x.label)}">${esc(name)}</span><span class="meta">${x.durationSec.toFixed(1)}s · ${usd(x.costUSD)}</span></div>
+    <audio controls preload="auto" src="${renderUrl(x.renderId)}"></audio>
+    <div class="timeline">${x.pieces.map((p) => `<span title="${esc(p.kind)}${p.text ? ': ' + esc(p.text) : ''}" style="width:${(100 * p.durationSec) / total}%;background:${colour[p.kind]}"></span>`).join('')}</div>
+    <div class="levels">${x.episodeLufs !== undefined && x.episodeLufs !== null ? `<span>Episode <b>${x.episodeLufs.toFixed(1)}</b> LUFS</span>` : ''}${x.guideLufs !== undefined && x.guideLufs !== null ? `<span>Guide <b>${x.guideLufs.toFixed(1)}</b> LUFS</span>` : ''}</div>
+    ${(x.warnings || []).map((w) => `<div class="warnline">${esc(w)}</div>`).join('')}
+    <button class="btn small pick" type="button">Pick this one</button>`
+  $('.pick', card).addEventListener('click', (e) => onPick(e.currentTarget))
+  return card
+}
+const legend = '<div class="legend"><span><i style="background:#5b5a72"></i>episode</span><span><i style="background:#D23193"></i>guide</span><span><i style="background:#FF9C18"></i>host clip</span></div>'
+function showPreviews(out, r, blind, kind) {
+  out.innerHTML = `<div class="actions" style="margin:0 0 12px"><span class="muted">Cost <b>${usd(r.costUSD)}</b></span>${blind ? '<button class="btn small" type="button" data-reveal>Reveal names</button>' : ''}${legend}</div><div class="grid"></div><label style="margin-top:14px">Notes on this run<textarea class="notes" placeholder="What did you notice?"></textarea></label><div class="actions"><button class="btn small" type="button" data-note>Save notes</button></div>`
+  const SYNC = /wasn’t checked against it/
+  if (r.renders.some((x) => (x.warnings || []).some((w) => SYNC.test(w)))) $('.actions', out).insertAdjacentHTML('afterend', '<div class="warnline" style="margin:-4px 0 12px">Timings are from the copy that was transcribed; this download wasn’t lined up with it, so adverts could shift things a little.</div>')
+  r.renders.forEach((x) => x.warnings && (x.warnings = x.warnings.filter((w) => !SYNC.test(w))))
+  const order = blind ? shuffle(r.renders.map((_, i) => i)) : r.renders.map((_, i) => i)
+  let picked = null
+  order.forEach((i, pos) => {
+    const x = r.renders[i]
+    $('.grid', out).append(previewCard(x, blind ? blindName(pos) : x.label, (btn) => {
+      $$('.pick', out).forEach((b) => { b.classList.remove('picked'); b.textContent = 'Pick this one' })
+      btn.classList.add('picked'); btn.textContent = 'Picked'
+      picked = { label: x.label, take: x.take, sound: x.sound, script: x.script }
+      savePick(r.runId, picked, $('.notes', out).value || undefined)
+    }))
+  })
+  const rv = $('[data-reveal]', out)
+  if (rv) rv.addEventListener('click', () => $$('.name', out).forEach((n) => n.dataset.real && (n.textContent = n.dataset.real)))
+  $('[data-note]', out).addEventListener('click', () => savePick(r.runId, picked, $('.notes', out).value))
+}
+
+/* ---------- Moments ---------- */
+const mTakes = []
+function mChanged() { estimate('m', estMoments) }
+function mVariants() {
+  return [...($('#mStored').checked ? [{ label: 'Stored lines' }] : []), ...mTakes.map((t) => ({ label: t.label, take: takeBody(t) }))]
+}
+async function estMoments() {
+  if (!picker.moment) return
+  try { const r = await api('/moment', { ...momentBase(), variants: mVariants(), estimate: true }); $('#mEst').innerHTML = `About <b>${usd(r.totalUSD)}</b> · ${esc(r.note)}` } catch (e) { $('#mEst').textContent = e.message }
+}
+$('#mStored').addEventListener('change', mChanged)
+$('#mAdd').addEventListener('click', () => { mTakes.push({ ...defaultTake(mTakes.length), label: `Voice ${mTakes.length + 1}` }); takeEditor($('#mTakes'), mTakes, mChanged); mChanged() })
+;['mLead', 'mTail'].forEach((id) => $('#' + id).addEventListener('input', (e) => ($('#' + id + 'V').textContent = e.target.value)))
+$('#mRun').addEventListener('click', async () => {
+  if (!picker.moment) return toast('Pick a moment first')
+  const variants = mVariants()
+  if (!variants.length) return toast('Choose at least one version')
+  const btn = $('#mRun')
+  busy(btn, true, 'Making previews (the first one downloads the episode)…')
+  try {
+    const r = await api('/moment', { ...momentBase(), variants, leadSec: Number($('#mLead').value), tailSec: Number($('#mTail').value) })
+    showPreviews($('#mOut'), r, $('#mBlind').checked, 'moment')
+    refreshSpend()
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+
+/* ---------- In the room ---------- */
+const rTakes = []
+const rChosen = new Set(['dry', 'studio', 'smallRoom'])
+function renderRoomSounds() {
+  const box = $('#rSounds')
+  const usingEleven = $('#rSource').value === 'take' && rTakes[0]?.provider === 'elevenlabs'
+  const items = [
+    ...opts.sounds.map((s) => ({ id: s.id, label: s.label, note: s.note, free: true })),
+    ...opts.elevenEffects.map((e, i) => ({ id: 'fx' + i, label: 'ElevenLabs: ' + e.label, note: e.note, effects: e.effects, eleven: true })),
+  ]
+  box.innerHTML = ''
+  items.forEach((it) => {
+    const off = it.eleven && !usingEleven
+    const el = document.createElement('label')
+    el.className = 'card toggle'
+    el.style.cssText = 'display:flex;align-items:flex-start;gap:10px;color:var(--text);opacity:' + (off ? 0.45 : 1)
+    el.innerHTML = `<input type="checkbox" ${rChosen.has(it.id) && !off ? 'checked' : ''} ${off ? 'disabled' : ''}><span><b>${esc(it.label)}</b><br><span class="muted">${esc(it.note)}${off ? ' Needs an ElevenLabs voice below.' : ''}</span></span>`
+    $('input', el).addEventListener('change', (e) => { e.target.checked ? rChosen.add(it.id) : rChosen.delete(it.id); estimate('r', estRoom) })
+    el.dataset.id = it.id
+    box.append(el)
+  })
+  box._items = items
+}
+function rVariants() {
+  const items = $('#rSounds')._items || []
+  const base = $('#rSource').value === 'take' && rTakes[0] ? takeBody(rTakes[0]) : null
+  return items.filter((it) => rChosen.has(it.id) && !(it.eleven && !(base && base.provider === 'elevenlabs'))).map((it) =>
+    it.eleven ? { label: it.label, take: { ...base, sound: 'dry', effects: it.effects } } : base ? { label: it.label, take: { ...base, sound: it.id, effects: null } } : { label: it.label, sound: it.id })
+}
+async function estRoom() {
+  if (!picker.moment) return
+  try { const r = await api('/moment', { ...momentBase(), variants: rVariants(), estimate: true }); $('#rEst').innerHTML = `About <b>${usd(r.totalUSD)}</b>` } catch (e) { $('#rEst').textContent = e.message }
+}
+$('#rSource').addEventListener('change', () => {
+  if ($('#rSource').value === 'take' && !rTakes.length) rTakes.push(defaultTake(0))
+  if ($('#rSource').value === 'stored') rTakes.splice(0)
+  takeEditor($('#rTakes'), rTakes, () => { renderRoomSounds(); estimate('r', estRoom) }, { allowEffects: false, allowSound: false })
+  renderRoomSounds(); estimate('r', estRoom)
+})
+$('#rRun').addEventListener('click', async () => {
+  if (!picker.moment) return toast('Pick a moment first')
+  const variants = rVariants()
+  if (!variants.length) return toast('Choose at least one sound')
+  const btn = $('#rRun')
+  busy(btn, true, 'Making previews…')
+  try {
+    const r = await api('/moment', { ...momentBase(), variants, kind: 'room', leadSec: 8, tailSec: 6 })
+    showPreviews($('#rOut'), r, $('#rBlind').checked, 'room')
+    refreshSpend()
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+
+/* ---------- Model checkboxes ---------- */
+function modelBoxes(box, chosen, onChange) {
+  box.innerHTML = ''
+  opts.textModels.forEach((m) => {
+    const el = document.createElement('label')
+    el.className = 'card toggle'
+    el.style.cssText = 'display:flex;align-items:flex-start;gap:10px;color:var(--text);opacity:' + (m.available ? 1 : 0.45)
+    el.innerHTML = `<input type="checkbox" ${chosen.has(m.id) && m.available ? 'checked' : ''} ${m.available ? '' : 'disabled'}><span><b>${esc(m.label)}</b><br><span class="muted">$${m.perMillionUSD.in.toFixed(2)} in, $${m.perMillionUSD.out.toFixed(2)} out per million tokens${m.note ? '. ' + esc(m.note) : ''}${m.available ? '' : ' Needs its key on the server.'}</span></span>`
+    $('input', el).addEventListener('change', (e) => { e.target.checked ? chosen.add(m.id) : chosen.delete(m.id); onChange() })
+    box.append(el)
+  })
+}
+const modelName = (id) => opts.textModels.find((m) => m.id === id)?.label || id
+
+/* ---------- Scripts ---------- */
+const sChosen = new Set(['gemini-3.8-flash', 'claude-haiku-5-5'])
+async function estScripts() {
+  if (!picker.moment) return
+  try { const r = await api('/scripts', { ...momentBase(), models: [...sChosen], instruction: $('#sInstr').value, estimate: true }); $('#sEst').innerHTML = `About <b>${usd(r.totalUSD)}</b>` } catch (e) { $('#sEst').textContent = e.message }
+}
+$('#sInstr').addEventListener('input', () => estimate('s', estScripts))
+$('#sRun').addEventListener('click', async () => {
+  if (!picker.moment) return toast('Pick a moment first')
+  const btn = $('#sRun')
+  busy(btn, true, 'Writing…')
+  try {
+    const base = momentBase()
+    const r = await api('/scripts', { ...base, models: [...sChosen], instruction: $('#sInstr').value })
+    const out = $('#sOut')
+    out.innerHTML = `<div class="actions" style="margin:0 0 12px"><span class="muted">Cost <b>${usd(r.costUSD)}</b></span></div><div class="cols"></div>`
+    const cards = [{ model: 'Now', ok: true, script: r.current, costUSD: 0, now: true }, ...r.results]
+    cards.forEach((x) => {
+      const c = document.createElement('div')
+      c.className = 'card result'
+      c.innerHTML = `<div class="head"><span class="name">${esc(x.now ? 'What the guide says now' : modelName(x.model))}</span><span class="meta">${x.now ? '' : usd(x.costUSD)}</span></div>
+        ${x.ok ? `<div class="script">${scriptHtml(x.script)}</div>${(x.clipProblems || []).map((p) => `<div class="warnline">Host clip marker ${esc(p)}</div>`).join('')}
+        ${x.now ? '' : '<div class="actions" style="margin-top:4px"><button class="btn small" type="button" data-hear>Hear it in place</button><button class="btn small pick" type="button">Pick this one</button></div><div data-audio></div>'}` : `<div class="err">${esc(x.error)}</div>`}`
+      const hear = $('[data-hear]', c)
+      if (hear) hear.addEventListener('click', async () => {
+        busy(hear, true, 'Voicing…')
+        try {
+          const g = opts.guides.find((g) => g.id === base.guide) || opts.guides[0]
+          const rr = await api('/moment', { ...base, variants: [{ label: modelName(x.model), script: x.script, take: { provider: 'elevenlabs', voice: g.elevenLabsVoiceId, speed: 0.9 } }] })
+          const slot = $('[data-audio]', c)
+          slot.innerHTML = ''
+          const pc = previewCard(rr.renders[0], 'In place', () => {})
+          $('.pick', pc)?.remove()
+          slot.append(pc)
+          refreshSpend()
+        } catch (e) { toast(e.message) } finally { busy(hear, false) }
+      })
+      const pick = $('.pick', c)
+      if (pick) pick.addEventListener('click', () => {
+        $$('.pick', out).forEach((b) => { b.classList.remove('picked'); b.textContent = 'Pick this one' })
+        pick.classList.add('picked'); pick.textContent = 'Picked'
+        savePick(r.runId, { model: x.model, script: x.script })
+      })
+      $('.cols', out).append(c)
+    })
+    refreshSpend()
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+
+/* ---------- Lesson plans ---------- */
+const lChosen = new Set(['gemini-3.8-flash', 'claude-haiku-5-5'])
+function lBody() { return { episodeId: $('#lEpisode').value, models: [...lChosen], minutes: Number($('#lMinutes').value) } }
+async function estPlans() {
+  if (!$('#lEpisode').value) return
+  try { const r = await api('/plans', { ...lBody(), estimate: true }); $('#lEst').innerHTML = `About <b>${usd(r.totalUSD)}</b>` } catch (e) { $('#lEst').textContent = e.message }
+}
+$('#lEpisode').addEventListener('change', () => estimate('l', estPlans))
+$('#lMinutes').addEventListener('change', () => estimate('l', estPlans))
+function md(text) {
+  const lines = String(text || '').split('\n')
+  let html = ''
+  let list = false
+  const inline = (s) => scriptHtml(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/_([^_]+)_/g, '<i>$1</i>')
+  for (const l of lines) {
+    if (/^\s*[-*] /.test(l)) { if (!list) { html += '<ul>'; list = true } html += `<li>${inline(l.replace(/^\s*[-*] /, ''))}</li>`; continue }
+    if (list) { html += '</ul>'; list = false }
+    if (/^### /.test(l)) html += `<h3>${inline(l.slice(4))}</h3>`
+    else if (/^## /.test(l)) html += `<h2>${inline(l.slice(3))}</h2>`
+    else if (/^# /.test(l)) html += `<h1>${inline(l.slice(2))}</h1>`
+    else if (l.trim()) html += `<p>${inline(l)}</p>`
+  }
+  return html + (list ? '</ul>' : '')
+}
+$('#lRun').addEventListener('click', async () => {
+  if (!$('#lEpisode').value) return toast('Pick an episode first')
+  const btn = $('#lRun')
+  busy(btn, true, 'Writing plans (up to a couple of minutes)…')
+  try {
+    const r = await api('/plans', lBody())
+    const out = $('#lOut')
+    out.innerHTML = `<div class="actions" style="margin:0 0 12px"><span class="muted">Cost <b>${usd(r.costUSD)}</b></span></div><div class="cols"></div><label style="margin-top:14px">Notes on this run<textarea class="notes"></textarea></label>`
+    let picked = null
+    r.results.forEach((x) => {
+      const c = document.createElement('div')
+      c.className = 'card result'
+      const s = x.stats
+      c.innerHTML = `<div class="head"><span class="name">${esc(modelName(x.model))}</span><span class="meta">${usd(x.costUSD)} · ${x.seconds}s</span></div>
+        <div class="muted">${x.inTokens.toLocaleString()} tokens in, ${x.outTokens.toLocaleString()} out</div>
+        ${x.ok ? `<div class="stats"><span class="chip"><b>${s.moments}</b> moments</span>${Object.entries(s.byKind).map(([k, v]) => `<span class="chip">${v} ${esc(KIND[k] || k)}</span>`).join('')}</div>
+        <div class="levels">${Object.entries(s.guideSecByLevel).map(([l, v]) => `<span>${esc(LEVEL[l] || l)} about <b>${clock(v)}</b> of guide</span>`).join('')}</div>
+        ${s.dropped.length ? `<div class="warnline">${s.dropped.length} item${s.dropped.length > 1 ? 's' : ''} dropped: ${esc(s.dropped.slice(0, 4).join('; '))}${s.dropped.length > 4 ? '…' : ''}</div>` : ''}
+        <button class="btn small pick" type="button">Pick this one</button>
+        <div class="doc">${md(x.page)}</div>` : `<div class="err">${esc(x.error)}</div>`}`
+      const pick = $('.pick', c)
+      if (pick) pick.addEventListener('click', () => {
+        $$('.pick', out).forEach((b) => { b.classList.remove('picked'); b.textContent = 'Pick this one' })
+        pick.classList.add('picked'); pick.textContent = 'Picked'
+        picked = { model: x.model }
+        savePick(r.runId, picked, $('.notes', out).value || undefined)
+      })
+      $('.cols', out).append(c)
+    })
+    $('.notes', out).addEventListener('change', () => savePick(r.runId, picked, $('.notes', out).value))
+    refreshSpend()
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+
+/* ---------- History ---------- */
+$('#hKind').addEventListener('change', loadHistory)
+async function loadHistory() {
+  const box = $('#hList')
+  box.innerHTML = '<div class="muted">Loading…</div>'
+  try {
+    const r = await api('/runs' + ($('#hKind').value ? '?kind=' + $('#hKind').value : ''))
+    if (!r.saving) { box.innerHTML = '<div class="empty">Runs aren’t being saved yet: migration 0012 needs applying in Supabase.</div>'; return }
+    if (!r.runs.length) { box.innerHTML = '<div class="empty">Nothing yet. Every test you run lands here.</div>'; return }
+    box.innerHTML = ''
+    const names = { voice: 'Voices', moment: 'Moment', room: 'In the room', script: 'Script', plan: 'Lesson plan' }
+    r.runs.forEach((run) => {
+      const b = document.createElement('div')
+      b.className = 'hrun'
+      const when = new Date(run.created_at)
+      const pick = run.pick ? (run.pick.label || modelName(run.pick.model) || 'picked') : ''
+      b.innerHTML = `<div><div class="t">${esc(run.title || names[run.kind])}</div><div class="m"><span class="kind">${esc(names[run.kind])}</span> · ${when.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${run.created_by === 'claude' ? ' · run by Claude' : ''}${pick ? ` · picked <b style="color:var(--coral)">${esc(pick)}</b>` : ''}${run.note ? ` · “${esc(run.note.slice(0, 80))}”` : ''}</div></div><div class="c">${usd(run.cost_usd)}</div><div class="detail" style="grid-column:1/-1"></div>`
+      b.addEventListener('click', (e) => { if (e.target.closest('audio,button,a')) return; toggleRun(b, run) })
+      box.append(b)
+    })
+  } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>` }
+}
+function toggleRun(el, run) {
+  const d = $('.detail', el)
+  if (d.innerHTML) { d.innerHTML = ''; return }
+  if (run.kind === 'voice') {
+    d.innerHTML = run.results.map((row, li) => `<div style="margin-top:10px"><div class="script">${scriptHtml(run.config.lines[li])}</div><div class="grid" style="margin-top:6px">${row.map((x) => `<div class="card"><b>${esc(x.label)}</b>${x.url ? `<audio controls preload="none" src="${esc(x.url)}"></audio>` : `<div class="err">${esc(x.error)}</div>`}</div>`).join('')}</div></div>`).join('')
+  } else if (run.kind === 'plan') {
+    d.innerHTML = `<div class="cols" style="margin-top:10px">${run.results.map((x) => `<div class="card"><b>${esc(modelName(x.model))}</b> <span class="muted">${usd(x.costUSD)}</span><div class="doc">${x.ok ? md(x.page) : esc(x.error)}</div></div>`).join('')}</div>`
+  } else if (run.kind === 'script') {
+    d.innerHTML = `<div class="cols" style="margin-top:10px"><div class="card"><b>Now</b><div class="script">${scriptHtml(run.results.current)}</div></div>${run.results.results.map((x) => `<div class="card"><b>${esc(modelName(x.model))}</b><div class="script">${x.ok ? scriptHtml(x.script) : esc(x.error)}</div></div>`).join('')}</div>`
+  } else {
+    d.innerHTML = `<p class="muted" style="margin-top:8px">${run.results.map((x) => esc(x.label) + (x.error ? ` (failed: ${esc(x.error)})` : ` · ${x.durationSec?.toFixed(1)}s`)).join(' · ')}</p><p class="muted">Previews include the episode's own audio, so they aren't kept; run it again from Moments to hear it.</p>`
+  }
+}
+
+/* ---------- Start ---------- */
+async function boot() {
+  opts = await api('/options')
+  showSpend()
+  const langOpts = (sel, v) => (sel.innerHTML = opts.languages.map((l) => `<option value="${l}" ${l === v ? 'selected' : ''}>${LANG[l] || l}</option>`).join(''))
+  langOpts($('#vTarget'), 'sv')
+  langOpts($('#vNative'), 'en')
+  if (!vTakes.length) { vTakes.push(defaultTake(0), defaultTake(1)); $('#vLines').value = opts.sampleLines.sv.join('\n') }
+  takeEditor($('#vTakes'), vTakes, vChanged)
+  modelBoxes($('.sModels'), sChosen, () => estimate('s', estScripts))
+  modelBoxes($('.lModels'), lChosen, () => estimate('l', estPlans))
+  picker.episodes = (await api('/episodes')).episodes
+  $('#lEpisode').innerHTML = picker.episodes.map((e) => `<option value="${e.id}">${esc(LANG[e.language] || e.language)} · ${esc(e.podcast_title)}: ${esc(e.title)}</option>`).join('') || '<option value="">No prepared episodes yet</option>'
+  buildPicker()
+  renderRoomSounds()
+  openTab(store.get('labTab') || 'voices')
+}
+
+const saved = store.get('labToken')
+if (saved) { token = saved; boot().then(() => $('#gate').classList.add('hidden')).catch(() => showGate()) }
+</script>
+</body>
+</html>

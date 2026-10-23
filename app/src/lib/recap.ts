@@ -96,6 +96,28 @@ export function statChips(s: RecapStats): string[] {
   return chips
 }
 
+/**
+ * The guide's sign-off on the recap card (PC-1021-10), e.g. "Mia: you caught “fika” like a local".
+ * Written from templates, never generated, so nothing is asked of an AI after the listen. The
+ * phrasing is picked from the word so the same lesson always reads the same.
+ */
+export function guideSignOff(guideName: string, words: readonly RecapWord[], stats: RecapStats, languageName: string, maxChars = Infinity): string {
+  const w = words[0]?.word
+  if (w) {
+    const lines = [`you caught “${w}” like a local`, `“${w}” is yours now`, `you picked up “${w}” from a real host`].map((l) => `${guideName}: ${l}`)
+    let h = 0
+    for (const ch of w) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+    // The word's own phrasing if it fits on one line, else the next that does, else the shortest.
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[(h + i) % lines.length]!
+      if (l.length <= maxChars) return l
+    }
+    return lines[1]!
+  }
+  if (stats.quiz && stats.quiz.of > 0 && stats.quiz.right === stats.quiz.of) return `${guideName}: every question right, nicely done`
+  return `${guideName}: you followed a real ${languageName} podcast`
+}
+
 export interface RecapInput {
   languageName: string
   flagId?: string | null
@@ -104,6 +126,8 @@ export interface RecapInput {
   words: RecapWord[]
   didYouKnow?: string
   stats: RecapStats
+  /** The guide who signs the card (PC-1021-10). */
+  guide?: { id: string; name: string }
 }
 
 export interface Chip {
@@ -121,6 +145,8 @@ export interface StoryLayout {
   /** A word and its meaning sit on one row: the word in orange. */
   wordRows: { y: number; word: string; meaning: string; size: number }[]
   chips: Chip[]
+  /** The guide's small round mark beside their sign-off (PC-1021-10). */
+  badge?: { cx: number; cy: number; r: number; colour: string; initial: string; size: number }
   /** Where the footer starts: nothing above may reach it. */
   footerTop: number
 }
@@ -181,9 +207,24 @@ export function recapLayout(r: RecapInput): StoryLayout {
 
   if (r.didYouKnow) {
     const heading = text('Did you know?', 36, y, CARD_COLOURS.accent, 'semibold', 1)
-    const body = text(r.didYouKnow, 40, after(heading, 64), CARD_COLOURS.text, 'regular', 4, 54)
+    // With the guide's sign-off below, the note keeps to three lines so a full card still fits.
+    const body = text(r.didYouKnow, 40, after(heading, 64), CARD_COLOURS.text, 'regular', r.guide ? 3 : 4, 54)
     texts.push(heading, body)
-    y = after(body, 100)
+    y = after(body, r.guide ? 76 : 100)
+  }
+
+  // The guide signs the card: the one thing no other app's card has (PC-1021-10).
+  let badge: StoryLayout['badge']
+  if (r.guide) {
+    const indent = 76
+    const fits = (size: number) => Math.floor((innerWidth - indent) / (size * CHAR_WIDTH))
+    const signOff = guideSignOff(r.guide.name, r.words, r.stats, r.languageName, fits(40))
+    // A very long word: a smaller line rather than a cut-off one.
+    const size = signOff.length <= fits(40) ? 40 : 32
+    const lines = clamp(wrapText(signOff, fits(size)), 2)
+    texts.push({ lines, size, lineHeight: 52, y, colour: CARD_COLOURS.text, weight: 'semibold', x: P + indent })
+    badge = { cx: P + 26, cy: y - 14, r: 26, colour: r.guide.id === 'leo' ? BRAND.violet : BRAND.magenta, initial: r.guide.name.slice(0, 1), size: 30 }
+    y += (lines.length - 1) * 52 + 64
   }
 
   // Chips sit just above the footer, wrapping onto a second row if needed.
@@ -213,7 +254,7 @@ export function recapLayout(r: RecapInput): StoryLayout {
   })
 
   texts.push({ lines: [FOOTER], size: 32, lineHeight: 42, y: STORY.height - P, colour: CARD_COLOURS.accent, weight: 'semibold' })
-  return { background: BRAND.navy, mark, texts, wordRows, chips, footerTop }
+  return { background: BRAND.navy, mark, texts, wordRows, chips, badge, footerTop }
 }
 
 /** The "Word of the episode" story card, on orange: one word, its meaning, the host's line, the show. */

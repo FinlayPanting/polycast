@@ -28,4 +28,12 @@ describe('cost estimate on own keys (PC-1017-K4)', () => {
     expect(halved.elevenlabsUSD).toBeLessThan(base.elevenlabsUSD)
     expect(halved.googleUSD).toBe(base.googleUSD)
   })
+
+  it('leaves out transcription when the transcript is already there (PC-1020-09)', () => {
+    const full = ownKeysEstimate(3600, { at })
+    const cheap = ownKeysEstimate(3600, { at, feedTranscript: true })
+    expect(cheap.elevenlabsUSD).toBeLessThan(full.elevenlabsUSD)
+    expect(cheap.googleUSD).toBe(full.googleUSD)
+    expect(cheap.elevenlabsUSD).toBe(toFiveCents(ownKeysCostUSD(3600, at, { feedTranscript: true }).elevenlabs))
+  })
 })

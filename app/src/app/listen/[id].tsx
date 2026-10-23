@@ -28,6 +28,10 @@ import { useSession } from '../../lib/session'
 import { countFinished, resumePosition, savePosition } from '../../lib/data'
 import { listWords, SAVE_WORD_FAILED } from '../../lib/words'
 import { plog } from '../../lib/playbackLog'
+import { claimFirstWordBloom } from '../../lib/firstWord'
+import { firstWordLine } from '../../lib/firstWordCore'
+import { DEFAULT_MARK } from '@polycast/core'
+import { useReducedMotion } from 'react-native-reanimated'
 import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
 import { usePlayer } from '../../player/PlayerProvider'
 import { fromParam } from '../../player/session'
@@ -61,8 +65,9 @@ function Control({ icon, label, onPress, size = 28, primary = false }: { icon: S
 }
 
 /** A tapped word: its meaning in this episode, and a button to keep it. */
-function WordSheet({ word, onSave, onClose, saved }: { word?: { form: string; lemma: string; meaning?: string }; saved: boolean; onSave: () => void; onClose: () => void }) {
+function WordSheet({ word, onSave, onClose, saved, bloom }: { word?: { form: string; lemma: string; meaning?: string }; saved: boolean; onSave: () => void; onClose: () => void; bloom?: string }) {
   const p = usePalette()
+  const reduceMotion = useReducedMotion()
   return (
     <Modal visible={Boolean(word)} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} accessibilityLabel="Close" />
@@ -76,6 +81,15 @@ function WordSheet({ word, onSave, onClose, saved }: { word?: { form: string; le
           ) : null}
           <Txt>{word.meaning ?? 'No meaning for this one yet.'}</Txt>
           <Button label={saved ? 'Saved to your words' : 'Save word'} kind={saved ? 'secondary' : 'primary'} disabled={saved || !word.meaning} onPress={onSave} style={{ marginTop: space.md }} />
+          {bloom ? (
+            // The first word ever saved (PC-1018-06): the mark's stems open out, once. With Reduce Motion they are simply there.
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.sm }} accessibilityLiveRegion="polite">
+              <Mark height={36} flagId={DEFAULT_MARK.id} arrive={!reduceMotion} accessibilityLabel="" />
+              <Txt variant="bodyStrong" style={{ color: p.saved }}>
+                {bloom}
+              </Txt>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Modal>
@@ -125,14 +139,16 @@ function ShareRecap({ data, savedThisListen, stats }: { data: ListenPayload; sav
   const { profile } = useSession()
   const card = useRef<RecapCardHandle>(null)
   const [choice, setChoice] = useState<'recap' | 'word'>('recap')
+  // The guide the lesson was heard in signs the card (PC-1021-10).
+  const guide = voicedGuideId(data.guideId, profile?.guide_id)
   const words = useMemo(() => recapWords(data.plan, savedThisListen, data.transcript.glossary), [data, savedThisListen])
   const word = useMemo(() => wordOfTheEpisode(words, data.transcript.segments), [words, data])
   const layout = useMemo(
     () =>
       choice === 'word' && word
         ? wordCardLayout(word, data.episode.podcastTitle, profile?.flag_id)
-        : recapLayout({ languageName: languageName(data.transcript.language), flagId: profile?.flag_id, showTitle: data.episode.podcastTitle, episodeTitle: data.episode.title, words, didYouKnow: didYouKnow(data.plan), stats }),
-    [choice, word, words, data, profile?.flag_id, stats],
+        : recapLayout({ languageName: languageName(data.transcript.language), flagId: profile?.flag_id, showTitle: data.episode.podcastTitle, episodeTitle: data.episode.title, words, didYouKnow: didYouKnow(data.plan), stats, guide: { id: guide, name: guideName(guide) } }),
+    [choice, word, words, data, profile?.flag_id, stats, guide],
   )
   const label = choice === 'word' && word ? `Word of the episode: ${word.word}, ${word.meaning}` : `Lesson recap: ${data.episode.title}. ${words.map((w) => `${w.word}, ${w.meaning}`).join('; ')}`
   return (
@@ -161,11 +177,11 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
   const all = questions.length > 0 && Object.keys(answers).length === questions.length
   const invite = plusInvite(data.freeEpisode, listenedSec, savedThisListen.length)
   const lines = useMemo(() => shareableLines(data.transcript.segments, caughtAt), [data, caughtAt])
-  // Podcasts finished overall, this one included once it's saved as finished (PC-1019-F01).
+  // Podcasts finished overall, this one included even before its finish is saved (PC-1020-04).
   const [completed, setCompleted] = useState<number>()
   useEffect(() => {
-    void countFinished().then(setCompleted, () => {})
-  }, [])
+    void countFinished(data.episode.id).then(setCompleted, () => {})
+  }, [data.episode.id])
   const answered = Object.keys(answers).length
   const stats = useMemo<RecapStats>(() => ({ minutes: listenedSec / 60, quiz: answered ? { right, of: questions.length } : undefined, completed }), [listenedSec, answered, right, questions.length, completed])
   return (
@@ -224,6 +240,7 @@ export default function Listen() {
   const { saved, caughtAt, oldFriends, keepWord } = player
   const [mode, setMode] = useState<SubtitleMode>(profile?.subtitle_mode ?? 'both')
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
+  const [bloom, setBloom] = useState<string>()
 
   const clipText = useCallback(
     (c: Clip) =>
@@ -425,14 +442,20 @@ export default function Listen() {
       <WordSheet
         word={tapped}
         saved={Boolean(tapped && saved.includes(tapped.lemma))}
-        onClose={() => setTapped(undefined)}
+        bloom={bloom}
+        onClose={() => {
+          setTapped(undefined)
+          setBloom(undefined)
+        }}
         onSave={() => {
           if (!tapped?.meaning) return
           const w = data.transcript.words
           const occ = { first: tapped.index, last: tapped.index, start: w[tapped.index]!.start, end: w[tapped.index]!.end }
           const sentence = data.transcript.segments.find((s) => tapped.index >= s.wordStart && tapped.index < s.wordEnd)?.text ?? ''
-          void keepWord(tapped.lemma, tapped.form, tapped.meaning, wordClip(w, occ), sentence).then((ok) => {
-            if (!ok) Alert.alert(SAVE_WORD_FAILED)
+          const language = data.transcript.language
+          void keepWord(tapped.lemma, tapped.form, tapped.meaning, wordClip(w, occ), sentence).then(async (ok) => {
+            if (!ok) return Alert.alert(SAVE_WORD_FAILED)
+            if (await claimFirstWordBloom(language)) setBloom(firstWordLine(languageName(language)))
           })
         }}
       />

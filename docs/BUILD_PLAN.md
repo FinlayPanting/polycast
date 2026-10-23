@@ -16,10 +16,13 @@ Target: public App Store launch before the On Air Fest pitch (aim 23 Oct 2026). 
 - Offline downloads for Plus (spec: My library). Not built yet; left off the Plus screen until it is.
 - Starter shelf: a script to add Finlay's picks and pre-prepare their recent episodes through Gemini's batch service.
 - Website pages the app links to: privacy policy, terms, creators (removal requests). Written in `site/` (18 Oct), hosted on Vercel at polycast.app; Finlay to review the legal wording.
-- App Store listing: screenshots, description (first draft in docs/APP_STORE.md), privacy labels, reviewer demo account.
+- App Store listing: screenshots, description (first draft in docs/APP_STORE.md), privacy labels, reviewer demo account. App Review notes covering every feature and Mia's safeguards are written (PC-1018-05, 21 Oct), ready to paste.
 - On a real iPhone: background play with the screen locked, headphone presses, the guide's voice over a paused episode, Sign in with Apple, purchases. The two audio libraries share the iPhone's audio session; if they fight, swap the guide's voice onto the track player (one file to change).
 - Mia matches the show's volume (PC-1017-F16): step 1 is built (measured loudness, matched guide level); step 2, boosting very quiet episodes with a native gain on iOS, isn't.
 - Listen later and followed shows (PC-1017-F09, F10) are kept on the phone; moving them to the account (a migration) would carry them to a new phone and let new-episode nudges use follows.
+- Over-the-air updates (PC-1020-U1, 21 Oct): live from the first TestFlight build that includes expo-updates. Verify once on a phone that a JavaScript-only change pushed to the `update` branch arrives on the second open. The nightly build run now decides with `node scripts/release-target.mjs <start>` (22 Oct); the script also counts lock-file, root package, `app/targets` and `app/native` changes as native (PC-1021-01).
+- On a real iPhone (22 Oct build): the Siri and Spotlight shortcuts (PC-1021-09; native Swift written without a Mac, first compiled by the TestFlight build), and that episode requests name Polycast in hosts' stats (PC-1019-04). The OPAWG list entry in `docs/OPAWG.md` is ready to send.
+- Lock-screen transcript test (PC-1020-L1): built on branch `build/PC-1020-L1`, waiting on the LiveLine extension's App ID and provisioning profile.
 - One server test (Discover shelves) failed once in about a dozen runs and hasn't reproduced; watch for it.
 
 ## Preview without an iPhone

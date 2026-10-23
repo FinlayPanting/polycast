@@ -7,7 +7,7 @@ import { followId, laterId, parseKept, removeKept, toggleKept, type FollowedShow
  * shows at once in the Library. Simplest option picked: kept on this phone rather than the account,
  * so it needs no new database table (see docs/DECISIONS.md).
  */
-class KeptList<T> {
+export class KeptList<T> {
   private items: T[] = []
   private loaded?: Promise<void>
   private listeners = new Set<(items: T[]) => void>()

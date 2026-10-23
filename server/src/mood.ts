@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { checkMoodPicks, costUSD, DISCOVER_CATEGORIES, moodKey, moodPrompt, prefilterCandidates, ZERO_USAGE, type MoodCandidate, type Usage } from '@polycast/core'
 import { SpendGuard } from './budget'
-import { categoryChart, topChart, type Fetch } from './catalogue'
+import { categoryChart, topChart, type Fetch, type NetOpts } from './catalogue'
 import { getSetting, pgSpendLedger, type Sql } from './db'
 import type { TextModel } from './providers/types'
 
@@ -22,7 +22,7 @@ const ESTIMATE: Usage = { ...ZERO_USAGE, textInTokens: 6000, textOutTokens: 400 
  * hosts say what each is about), then the top chart and category charts. Charts come from the
  * daily cache Discover already keeps, descriptions included, so building the pool costs nothing.
  */
-export async function moodPool(sql: Sql, f: Fetch, language: string, podcastIndex?: { key: string; secret: string }): Promise<{ candidates: MoodCandidate[]; open: Map<string, Opener> }> {
+export async function moodPool(sql: Sql, f: Fetch, language: string, podcastIndex?: { key: string; secret: string }, net: NetOpts = {}): Promise<{ candidates: MoodCandidate[]; open: Map<string, Opener> }> {
   const candidates: MoodCandidate[] = []
   const open = new Map<string, Opener>()
   const seen = new Set<string>()
@@ -54,7 +54,7 @@ export async function moodPool(sql: Sql, f: Fetch, language: string, podcastInde
   }
 
   const [top, ...categories] = await Promise.all([
-    topChart(sql, f, language).catch(() => []),
+    topChart(sql, f, language, net).catch(() => []),
     ...DISCOVER_CATEGORIES.map((c) => categoryChart(sql, f, language, c, podcastIndex).catch(() => [])),
   ])
   for (const s of top) addShow(`a${s.appleId}`, { title: s.title, author: s.author, description: s.description, tags: s.genres }, { kind: 'show', title: s.title, author: s.author, artwork: s.artwork, appleId: s.appleId }, s.feedUrl)
@@ -82,13 +82,13 @@ export async function cachedMood(sql: Sql, language: string, mood: string, nativ
  * The answer is cached for a day so the same mood is free next time.
  */
 export async function recommendByMood(
-  deps: { sql: Sql; fetch: Fetch; text: TextModel; podcastIndex?: { key: string; secret: string }; guard?: SpendGuard },
+  deps: { sql: Sql; fetch: Fetch; text: TextModel; podcastIndex?: { key: string; secret: string }; guard?: SpendGuard; lookupHost?: NetOpts['lookupHost'] },
   language: string,
   mood: string,
   nativeLanguage = 'en',
 ): Promise<MoodResult[]> {
   const { sql } = deps
-  const { candidates, open } = await moodPool(sql, deps.fetch, language, deps.podcastIndex)
+  const { candidates, open } = await moodPool(sql, deps.fetch, language, deps.podcastIndex, { lookupHost: deps.lookupHost })
   if (candidates.length === 0) return []
   const shortlist = prefilterCandidates(mood, candidates)
   const guard = deps.guard ?? new SpendGuard(pgSpendLedger(sql), Number(await getSetting(sql, 'daily_cap_usd', 10)))

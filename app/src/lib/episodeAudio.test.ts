@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const files = new Map<string, number>()
 const modified = new Map<string, number>()
 const excluded: string[] = []
-let tasks: { url: string; progress: (p: { bytesWritten: number; totalBytes: number }) => void; finish: () => void }[] = []
+let tasks: { url: string; headers?: Record<string, string>; progress: (p: { bytesWritten: number; totalBytes: number }) => void; finish: () => void }[] = []
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('../../modules/polycast-fingerprint', () => ({ PolycastFingerprint: { fingerprint: async () => '', excludeFromBackup: (uri: string) => (excluded.push(uri), true) } }))
@@ -31,10 +31,10 @@ vi.mock('expo-file-system', () => {
     list() { return [...files.keys()].filter((k) => k.startsWith(`${this.uri}/`)).map((k) => new File(k)) }
   }
   class DownloadTask {
-    constructor(private url: string, private to: File, private o: { onProgress: (p: { bytesWritten: number; totalBytes: number }) => void }) {}
+    constructor(private url: string, private to: File, private o: { headers?: Record<string, string>; onProgress: (p: { bytesWritten: number; totalBytes: number }) => void }) {}
     downloadAsync() {
       return new Promise<File>((resolve) => {
-        tasks.push({ url: this.url, progress: this.o.onProgress, finish: () => { files.set(this.to.uri, 100); resolve(this.to) } })
+        tasks.push({ url: this.url, headers: this.o.headers, progress: this.o.onProgress, finish: () => { files.set(this.to.uri, 100); resolve(this.to) } })
       })
     }
   }
@@ -61,6 +61,13 @@ describe('downloadEpisode', () => {
     expect(player.at(-1)).toBe(0.5)
     tasks[0]!.finish()
     expect(await a).toBe(await b)
+  })
+
+  it('names Polycast to the host, so the listen counts in the show’s stats', async () => {
+    const { downloadEpisode } = await import('./episodeAudio')
+    void downloadEpisode('ep-ua', 'https://x.test/ep-ua.mp3', () => {})
+    expect(tasks[0]!.headers).toEqual({ 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' })
+    tasks[0]!.finish()
   })
 
   it('a player joining late starts from the progress so far', async () => {

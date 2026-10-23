@@ -136,10 +136,13 @@ export interface SafeFetchOptions {
 export const FEED_MAX_BYTES = 20 * 1024 * 1024
 export const FEED_TIMEOUT_MS = 15_000
 
-/** Fetches a public address under a time and size limit, following at most a few checked redirects. */
-export async function safeFetch(raw: string, opts: SafeFetchOptions = {}): Promise<{ status: number; ok: boolean; body: Uint8Array; url: string }> {
+/**
+ * Opens a public address, following at most a few redirects, each checked before it is fetched,
+ * and hands back the reply unread, for callers that only want the start of it (PC-1022-01). The
+ * time limit covers reading the body too.
+ */
+export async function safeOpen(raw: string, opts: SafeFetchOptions = {}): Promise<{ res: Response; url: string }> {
   const f = opts.fetch ?? fetch
-  const maxBytes = opts.maxBytes ?? FEED_MAX_BYTES
   const signal = AbortSignal.timeout(opts.timeoutMs ?? FEED_TIMEOUT_MS)
   let current = raw
   for (let hop = 0; ; hop++) {
@@ -152,9 +155,15 @@ export async function safeFetch(raw: string, opts: SafeFetchOptions = {}): Promi
       current = new URL(location, url).href
       continue
     }
-    const body = res.ok ? await readCapped(res, maxBytes) : (await res.body?.cancel().catch(() => {}), new Uint8Array(0))
-    return { status: res.status, ok: res.ok, body, url: url.href }
+    return { res, url: url.href }
   }
+}
+
+/** Fetches a public address under a time and size limit, following at most a few checked redirects. */
+export async function safeFetch(raw: string, opts: SafeFetchOptions = {}): Promise<{ status: number; ok: boolean; body: Uint8Array; url: string }> {
+  const { res, url } = await safeOpen(raw, opts)
+  const body = res.ok ? await readCapped(res, opts.maxBytes ?? FEED_MAX_BYTES) : (await res.body?.cancel().catch(() => {}), new Uint8Array(0))
+  return { status: res.status, ok: res.ok, body, url }
 }
 
 export const POLYCAST_UA = { 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' }

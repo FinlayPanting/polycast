@@ -1,3 +1,5 @@
+import type { ShowEpisodes } from './libraryCore'
+import type { EpisodeEstimate } from './ownKeysCore'
 import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
 import { demoCall } from '../demo/api'
@@ -98,6 +100,8 @@ export const api = {
   discover: (language: string) => call<{ shelves: Shelf[] }>('GET', `/v1/discover/${language}`),
   search: (q: string, language: string) => call<{ results: PodcastSummary[] }>('GET', `/v1/search?q=${encodeURIComponent(q)}&language=${language}`),
   // Opening a show re-reads its feed on the server, which may take up to 15 seconds itself.
+  /** New episodes from every followed show, in one call from the catalogue (PC-1020-02). */
+  newEpisodes: (podcastIds: string[]) => call<{ shows: ShowEpisodes[] }>('POST', '/v1/library/new-episodes', { podcastIds }),
   openShow: (show: { appleId?: string; feedUrl?: string; podcastId?: string }) => call<ShowPage>('POST', '/v1/podcasts/open', show, 25_000),
   /** Shared translations (PC-1017-T1): a list's titles, and a show's or episode's description by id. */
   translate: (req: { titles?: string[]; podcastId?: string; episodeId?: string }) =>
@@ -105,11 +109,15 @@ export const api = {
   /** With `ownKeys`, the episode is prepared on the learner's own API keys (PC-1017-K1). */
   prepare: (episodeId: string, ownKeys?: { elevenlabs: string; gemini: string }) =>
     call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, ownKeys ? { ownKeys } : undefined),
+  /** Auto-download's preparation (PC-1017-F12): Plus hours only, never the free episode. */
+  prepareAuto: (episodeId: string) => call<PrepareResult>('POST', `/v1/episodes/${episodeId}/prepare`, { auto: true }),
   job: (jobId: string) => call<{ id: string; status: 'queued' | 'running' | 'done' | 'failed'; stage: string | null; message?: string }>('GET', `/v1/jobs/${jobId}`),
   /** 'That looks wrong' (PC-1018-04): flags one subtitle line. Only the episode and line are sent. */
   reportLine: (episodeId: string, segmentId: string) => call<{ ok: true }>('POST', `/v1/episodes/${episodeId}/report-line`, { segmentId }),
   testKey: (provider: 'elevenlabs' | 'gemini', key: string) => call<{ ok: true } | { ok: false; message: string }>('POST', '/v1/keys/test', { provider, key }),
   /** Own-keys cost estimate from an episode's length, worked out on the server (PC-1017-K4). */
+  /** One episode's own-keys estimate, leaving out transcription when it isn't needed (PC-1020-09). */
+  ownKeysEpisodeEstimate: (episodeId: string) => call<EpisodeEstimate>('GET', `/v1/episodes/${episodeId}/own-keys-estimate`),
   ownKeysEstimate: (durationSec: number) => call<{ elevenlabsUSD: number; googleUSD: number; totalUSD: number }>('GET', `/v1/keys/estimate?durationSec=${Math.round(durationSec)}`),
   /** What preparing this episode on the learner's own keys actually used, if they did. */
   ownKeysCost: (episodeId: string) => call<{ usedUSD: number | null }>('GET', `/v1/episodes/${episodeId}/own-keys-cost`),

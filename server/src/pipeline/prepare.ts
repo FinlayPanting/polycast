@@ -37,6 +37,8 @@ export interface PrepareInput {
   savedTranscript?: Transcript
   /** The fingerprint an earlier attempt stored with that transcript, if any. */
   savedSyncUrl?: string
+  /** The episode's loudness from an earlier plan, carried over when the transcript is reused (PC-1020-01). */
+  savedLoudnessLufs?: number
   /** The show's title, hosts and recurring names, for spelling them right in the transcript. */
   names?: ShowNames
 }
@@ -89,7 +91,7 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
   const meter = new UsageMeter()
   const resumed = input.savedTranscript
   let syncUrl = resumed ? input.savedSyncUrl : undefined
-  let loudnessLufs: number | undefined
+  let loudnessLufs: number | undefined = resumed ? input.savedLoudnessLufs : undefined
   await deps.guard.reserve(input.jobId, estimatePrepCostUSD(input.durationSec, { feedTranscript: Boolean(input.feedWords || resumed) }))
   try {
     let transcript: Transcript
@@ -98,6 +100,13 @@ export async function prepareEpisode(input: PrepareInput, deps: PrepareDeps): Pr
     } else {
       await deps.onStage?.('transcribing')
       let words = input.feedWords
+      // With the publisher's own transcript there's nothing to transcribe or fingerprint, but Mia
+      // still needs the show's loudness to match it (PC-1020-01): measure a copy, then let it go.
+      if (words && deps.downloadAudio && deps.loudness) {
+        let audio: Uint8Array | undefined = await withRetry(() => deps.downloadAudio!(input.audioUrl)).catch(() => undefined)
+        if (audio) loudnessLufs = await deps.loudness(audio).catch(() => undefined)
+        audio = undefined // never kept
+      }
       if (!words) {
         let audio: Uint8Array | undefined
         if (deps.downloadAudio && deps.fingerprint) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GuideMoment, LessonPlan, Segment } from '@polycast/core'
 import { bottomOf } from './shareCard'
-import { didYouKnow, enoughWords, recapLayout, recapWords, statChips, STORY, wordCardLayout, wordOfTheEpisode } from './recap'
+import { didYouKnow, enoughWords, guideSignOff, recapLayout, recapWords, statChips, STORY, wordCardLayout, wordOfTheEpisode } from './recap'
 
 const moment = (id: string, kind: GuideMoment['kind'], extra: Partial<GuideMoment> = {}): GuideMoment => ({ id, kind, at: 10, minLevel: 'standard', script: '', clips: [], ...extra })
 const term = (lemma: string, meaning: string, text = lemma) => ({ lemma, text, meaning })
@@ -66,8 +66,10 @@ describe('the lesson recap (PC-1019-F01)', () => {
       words: [1, 2, 3, 4, 5].map((i) => ({ word: `ordet${i}`, meaning: 'a meaning that is rather long and keeps on going for a while' })),
       didYouKnow: Array.from({ length: 25 }, () => 'word').join(' '),
       stats: { minutes: 64, quiz: { right: 3, of: 3 }, completed: 120 },
+      guide: { id: 'mia', name: 'Mia' },
     })
     const top = layout.footerTop
+    expect(layout.badge!.cy + layout.badge!.r).toBeLessThan(Math.min(...layout.chips.map((c) => c.y)))
     for (const t of layout.texts.slice(0, -1)) expect(bottomOf(t)).toBeLessThan(top)
     for (const c of layout.chips) {
       expect(c.y + c.height).toBeLessThanOrEqual(top)
@@ -83,6 +85,46 @@ describe('the lesson recap (PC-1019-F01)', () => {
     expect(layout.wordRows).toEqual([])
     expect(layout.texts.some((t) => t.lines.includes('Did you know?'))).toBe(false)
     expect(layout.chips.map((c) => c.label)).toEqual(['10 min listened'])
+  })
+})
+
+describe('the guide signs the recap card (PC-1021-10)', () => {
+  it('names a word the learner picked up, in one of a few phrasings that stay the same for that word', () => {
+    const line = guideSignOff('Mia', [{ word: 'fika', meaning: 'coffee break' }], { minutes: 10 }, 'Swedish')
+    expect(line).toMatch(/^Mia: .*“fika”/)
+    expect(guideSignOff('Mia', [{ word: 'fika', meaning: 'coffee break' }], { minutes: 3 }, 'Swedish')).toBe(line)
+    expect(guideSignOff('Leo', [], { minutes: 10, quiz: { right: 2, of: 2 } }, 'French')).toBe('Leo: every question right, nicely done')
+    expect(guideSignOff('Leo', [], { minutes: 10, quiz: { right: 1, of: 2 } }, 'French')).toBe('Leo: you followed a real French podcast')
+    for (const w of ['fika', 'tåg', 'Schadenfreude', 'saudade']) expect(guideSignOff('Mia', [{ word: w, meaning: 'm' }], { minutes: 1 }, 'x')).not.toMatch(/!/)
+  })
+
+  it('puts the line and a small mark in the guide’s colour on the card, between the words and the chips', () => {
+    const base = { languageName: 'Swedish', showTitle: 'Show', episodeTitle: 'Ep', words: [{ word: 'fika', meaning: 'coffee break' }], stats: { minutes: 10 } }
+    const mia = recapLayout({ ...base, guide: { id: 'mia', name: 'Mia' } })
+    const leo = recapLayout({ ...base, guide: { id: 'leo', name: 'Leo' } })
+    expect(mia.texts.some((t) => t.lines.join(' ').startsWith('Mia: '))).toBe(true)
+    expect(mia.badge).toMatchObject({ initial: 'M' })
+    expect(leo.badge).toMatchObject({ initial: 'L' })
+    expect(mia.badge!.colour).not.toBe(leo.badge!.colour)
+    expect(recapLayout(base).badge).toBeUndefined()
+  })
+
+  it('keeps a very long word on one whole line, and a full card still fits', () => {
+    const long = 'A very long episode title that goes on and on about trains, fika, the weather and much more besides'
+    const layout = recapLayout({
+      languageName: 'German',
+      showTitle: long,
+      episodeTitle: long,
+      words: ['Rindfleischetikettierung', 'b', 'c', 'd', 'e'].map((word) => ({ word, meaning: 'a meaning that is rather long and keeps on going for a while' })),
+      didYouKnow: Array.from({ length: 25 }, () => 'word').join(' '),
+      stats: { minutes: 64, quiz: { right: 3, of: 3 }, completed: 120 },
+      guide: { id: 'leo', name: 'Leo' },
+    })
+    const sign = layout.texts.find((t) => t.lines[0]!.startsWith('Leo: '))!
+    expect(sign.lines).toHaveLength(1)
+    expect(sign.lines[0]).toContain('“Rindfleischetikettierung”')
+    expect(sign.lines[0]).not.toContain('…')
+    for (const c of layout.chips) expect(c.y + c.height).toBeLessThanOrEqual(layout.footerTop)
   })
 })
 

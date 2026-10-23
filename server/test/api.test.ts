@@ -308,10 +308,14 @@ run('API and worker', () => {
     expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
     expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: 'nope' })).status).toBe(404)
     expect((await call(me, 'POST', `/v1/episodes/not-an-id/report-line`, { segmentId: row!.seg })).status).toBe(404)
+    // A second learner's report counts; the same learner's second press of that line doesn't (PC-1021-05).
+    expect((await call(await learner(), 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
     const stored = await sql`select kind, message from alerts where kind = 'line_report'`
     expect(stored.length).toBe(2)
     expect(stored[0]!.message).not.toContain(me)
-    expect(JSON.parse(stored[0]!.message)).toEqual({ episodeId: row!.episode_id, segmentId: row!.seg })
+    const { reportKey } = await import('../src/lineReports')
+    expect(JSON.parse(stored[0]!.message)).toEqual({ episodeId: row!.episode_id, segmentId: row!.seg, key: reportKey(me, row!.episode_id, row!.seg) })
+    expect(reportKey(me, row!.episode_id, row!.seg)).not.toContain(me)
     expect((await sql`select count(*)::int as n from alerts`)[0]!.n).toBe(before[0]!.n + 2)
 
     const admin = createApi({ sql, verify: async () => undefined, fetch: fakeFetch, funnelToken: 't0ken' })
@@ -321,6 +325,17 @@ run('API and worker', () => {
     expect(text).toContain('## Reported lines')
     expect(text).toContain('(2 reports, last ')
     expect(text.indexOf('## Reported lines')).toBeLessThan(text.indexOf('## Moments'))
+
+    // Reports older than 90 days don't count and are removed with the next report (PC-1021-05).
+    await sql`update alerts set created_at = now() - interval '91 days' where kind = 'line_report'`
+    expect((await (await admin.request('/admin/lessons?token=t0ken')).json()).lessons.find((l: any) => l.title === 'Tåget').reports).toBe(0)
+    expect((await call(me, 'POST', `/v1/episodes/${row!.episode_id}/report-line`, { segmentId: row!.seg })).status).toBe(200)
+    expect((await sql`select count(*)::int as n from alerts where kind = 'line_report'`)[0]!.n).toBe(1)
+
+    // Prepared again: its reports are cleared.
+    const { clearLineReports } = await import('../src/lineReports')
+    await clearLineReports(sql, row!.episode_id)
+    expect((await sql`select count(*)::int as n from alerts where kind = 'line_report'`)[0]!.n).toBe(0)
   })
 
   it('accepts a creator’s removal request without an account, and alerts Finlay', async () => {
@@ -570,6 +585,118 @@ run('API and worker', () => {
     // Only the learner who paid sees it.
     expect(await (await call(await learner(), 'GET', `/v1/episodes/${ep!.id}/own-keys-cost`)).json()).toEqual({ usedUSD: null })
     expect(await (await call(ben, 'GET', '/v1/episodes/not-an-id/own-keys-cost')).json()).toEqual({ usedUSD: null })
+  })
+
+  it("gives the Library every followed show's new episodes in one call, from the catalogue, under its own limit (PC-1020-02)", async () => {
+    const { NEW_EPISODES_LIMITS } = await import('../src/api')
+    const dana = await learner()
+    let feedReads = 0
+    const counting: typeof fetch = async (input, init) => (String(input).startsWith('https://feeds.example.com/lib-') && feedReads++, fakeFetch(input, init))
+    const lib = createApi({ sql, verify: async (t) => t, fetch: counting, lookupHost: publicHost })
+    const post = (body: unknown) => lib.request('/v1/library/new-episodes', { method: 'POST', headers: { Authorization: `Bearer ${dana}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const shows: string[] = []
+    for (let i = 0; i < 14; i++) {
+      const [p] = await sql`insert into podcasts (feed_url, title, language, updated_at) values (${`https://feeds.example.com/lib-${i}.xml`}, ${`Show ${i}`}, 'sv', ${i < 13 ? sql`now()` : sql`now() - interval '1 day'`}) returning id`
+      shows.push(p!.id)
+      await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language, published) values
+        (${p!.id}, 'new', ${`New ${i}`}, 600, 'https://cdn.example.com/n.mp3', 'sv', now() - interval '2 days'),
+        (${p!.id}, 'old', ${`Old ${i}`}, 600, 'https://cdn.example.com/o.mp3', 'sv', now() - interval '40 days')`
+    }
+    const res = await post({ podcastIds: [...shows, 'not-an-id'] })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    // Every follow, the thirteenth and fourteenth included, with only recent episodes.
+    expect(body.shows).toHaveLength(14)
+    const last = body.shows.find((s: any) => s.podcast.id === shows[13])
+    expect(last.episodes.map((e: any) => e.title)).toEqual(['New 13'])
+    expect(last.episodes[0]).toMatchObject({ duration_sec: 600, status: 'none' })
+    // Only the stale feed is re-read, in the background.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(feedReads).toBe(1)
+    expect(await (await post({ podcastIds: [] })).json()).toEqual({ shows: [] })
+    // Its own limit: the show-page limit isn't touched.
+    for (let i = 0; i < NEW_EPISODES_LIMITS.perMinute - 2; i++) await post({ podcastIds: [shows[0]] })
+    expect((await post({ podcastIds: [shows[0]] })).status).toBe(429)
+  })
+
+  it("doesn't let dead feeds hold up the Library's refresh of the other shows (PC-1021-04)", async () => {
+    const { FeedRetry } = await import('../src/api')
+    const dana = await learner()
+    const reads: string[] = []
+    const flaky: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.startsWith('https://feeds.example.com/dead-') || url.startsWith('https://feeds.example.com/alive-')) reads.push(url.slice(26, -4))
+      if (url.startsWith('https://feeds.example.com/dead-')) return new Response('gone', { status: 500 })
+      return fakeFetch(input, init)
+    }
+    const retry = new FeedRetry()
+    const lib = createApi({ sql, verify: async (t) => t, fetch: flaky, lookupHost: publicHost, feedRetry: retry })
+    const post = (podcastIds: string[]) => lib.request('/v1/library/new-episodes', { method: 'POST', headers: { Authorization: `Bearer ${dana}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastIds }) })
+    const ids: string[] = []
+    // Three dead feeds, staler than the live one, so they'd always be first in the queue.
+    for (const [name, days] of [['dead-1', 5], ['dead-2', 4], ['dead-3', 3], ['alive-1', 2]] as const) {
+      const [p] = await sql`insert into podcasts (feed_url, title, language, updated_at) values (${`https://feeds.example.com/${name}.xml`}, ${name}, 'sv', now() - make_interval(days => ${days})) returning id`
+      ids.push(p!.id)
+    }
+    await post(ids)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(reads).toEqual(['dead-1', 'dead-2', 'dead-3'])
+    await post(ids)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(reads.slice(3)).toEqual(['alive-1'])
+    expect(retry.waiting(ids[0]!, Date.now())).toBe(true)
+  })
+
+  it('waits longer each time a feed keeps failing, up to a day, and forgets once it loads (PC-1021-04)', async () => {
+    const { FeedRetry } = await import('../src/api')
+    const r = new FeedRetry()
+    const h = 60 * 60_000
+    r.failed('a', 0)
+    expect(r.waiting('a', h - 1)).toBe(true)
+    expect(r.waiting('a', h)).toBe(false)
+    r.failed('a', h)
+    expect(r.waiting('a', 3 * h - 1)).toBe(true)
+    for (let i = 0; i < 10; i++) r.failed('a', 0)
+    expect(r.waiting('a', 24 * h - 1)).toBe(true)
+    expect(r.waiting('a', 24 * h)).toBe(false)
+    r.ok('a')
+    expect(r.waiting('a', 1)).toBe(false)
+    expect(r.waiting('never-failed', 0)).toBe(false)
+  })
+
+  it('estimates an episode on own keys without transcription when the transcript is already there (PC-1020-09)', async () => {
+    const { ownKeysEstimate } = await import('@polycast/core')
+    const TX_FEED = 'https://feeds.example.com/tx.xml'
+    const txFeed = `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel><title>T</title><language>sv</language>
+      <item><title>With</title><guid>tx-with</guid><enclosure url="https://cdn.example.com/w.mp3" type="audio/mpeg"/><podcast:transcript url="https://cdn.example.com/w.json" type="application/json" language="sv"/></item>
+      <item><title>Without</title><guid>tx-without</guid><enclosure url="https://cdn.example.com/o.mp3" type="audio/mpeg"/></item>
+    </channel></rss>`
+    const fetchTx: typeof fetch = async (input, init) => (String(input) === TX_FEED ? new Response(txFeed) : fakeFetch(input, init))
+    const est = createApi({ sql, verify: async (t) => t, fetch: fetchTx, lookupHost: publicHost })
+    const get = async (user: string, id: string) => est.request(`/v1/episodes/${id}/own-keys-estimate`, { headers: { Authorization: `Bearer ${user}` } })
+    const [show] = await sql`insert into podcasts (feed_url, title, language) values (${TX_FEED}, 'T', 'sv') returning id`
+    const ep = async (guid: string, durationSec: number) =>
+      (await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language) values (${show!.id}, ${guid}, ${guid}, ${durationSec}, 'https://cdn.example.com/x.mp3', 'sv') returning id`)[0]!.id as string
+    const cleo = await learner()
+
+    const plain = await ep('tx-without', 1800)
+    expect(await (await get(cleo, plain)).json()).toEqual({ ...ownKeysEstimate(1800), perHour: false, transcript: null })
+
+    const withFeed = await ep('tx-with', 1800)
+    const fromFeed = await (await get(cleo, withFeed)).json()
+    expect(fromFeed).toEqual({ ...ownKeysEstimate(1800, { feedTranscript: true }), perHour: false, transcript: 'feed' })
+    expect(fromFeed.totalUSD).toBeLessThan(ownKeysEstimate(1800).totalUSD)
+
+    // Already transcribed by Polycast, in the learner's language: no transcription either.
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments) values (${plain}, 'sv', 'en', 'scribe', ${sql.json([{ text: 'Hej', start: 0, end: 0.4 }] as any)}, '[]')`
+    expect((await (await get(cleo, plain)).json()).transcript).toBe('polycast')
+
+    // No length from the feed: the price of an hour, said as such.
+    const noLength = await ep('tx-none', 0)
+    expect(await (await get(cleo, noLength)).json()).toEqual({ ...ownKeysEstimate(3600), perHour: true, transcript: null })
+
+    expect((await get(cleo, randomUUID())).status).toBe(404)
+    expect((await get(cleo, 'not-an-id')).status).toBe(404)
   })
 
   it('prepares an episode on a learner’s own keys: no allowance, their providers, keys gone afterwards (PC-1017-K1)', async () => {

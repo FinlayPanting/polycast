@@ -20,6 +20,7 @@ import { GuidedListen, type ListenState } from './GuidedListen'
 import { setRemoteHandler } from './remote'
 import { LAST_PLAYED_KEY, miniPlayerView, openDecision, parseLastPlayed, sessionKey, type LastPlayed, type ListenParams, type MiniPlayerView } from './session'
 import { trackPlayerAudio } from './trackPlayerAudio'
+import { nowPlayingTrack } from './nowPlaying'
 
 /**
  * The listen in progress, held above the screens (PC-1017-F04): swiping the full player away
@@ -185,7 +186,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           plog(`listen: ${d.episode.title} (${synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
           if (!config.demo) await prepareGuideAudio()
           if (r.disposed) return
-          await l.start({ url: d.episode.audioUrl, title: d.episode.title, artist: d.episode.podcastTitle, artwork: d.episode.image ?? undefined, durationSec: d.episode.durationSec }, startAt)
+          await l.start(nowPlayingTrack(d.episode), startAt)
           if (!r.disposed && from !== undefined) setHopBack(hopBackOffer(resumeAt, from, Date.now()))
           const known = await listWords(d.transcript.language).catch(() => [])
           if (!r.disposed) setOldFriends(new Set(findOldFriends(d.transcript.words, known, d.episode.id, d.transcript.language).map((f) => f.wordIndex)))

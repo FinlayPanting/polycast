@@ -408,6 +408,110 @@
    "title": "Hop back after the episode map",
    "description": "Jump to a place on the episode map and a small 'Back to where you were' button shows for 15 seconds, so peeking never loses your place.",
    "tryIt": "Open an episode you've started, tap a theme on its map, then tap 'Back to where you were'"
+  },
+  {
+   "id": "PC-1019-06",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Searching no longer uses up translations",
+   "description": "Search translates result titles once you stop typing (or press Search), so the show you open next still gets its English lines.",
+   "tryIt": "Search for a show, refine it a few times, then open one"
+  },
+  {
+   "id": "PC-1020-09",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Fairer own-key estimates",
+   "description": "On your own keys, the cost estimate now leaves out transcription when the show publishes its own transcript or Polycast already has one, and gives a price per hour when the feed doesn't say how long an episode is.",
+   "tryIt": "With your own keys on, open an episode that isn't ready yet and tap the estimate"
+  },
+  {
+   "id": "PC-1020-02",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "New episodes from every show you follow",
+   "description": "The Library now checks all the shows you follow in one go, not just the first 12, and no longer leaves you with 'Give it a moment' when you open a show straight after.",
+   "tryIt": "Library, then New episodes"
+  },
+  {
+   "id": "PC-1020-03",
+   "date": "2026-10-20",
+   "kind": "Bug",
+   "title": "Line by line stops cleanly",
+   "description": "Line by line now pauses exactly at the end of each line, even when sped up, so you no longer hear a clipped first syllable of the next one.",
+   "tryIt": "In the player, More, then Line by line"
+  },
+  {
+   "id": "PC-1017-F12",
+   "date": "2026-10-21",
+   "kind": "Feature",
+   "title": "New episodes download on their own",
+   "description": "Turn on 'Download new episodes' for a show you follow and its new episodes download when you open your Library, on Wi-Fi unless you allow mobile data. On Plus, ones that aren't ready yet are prepared from your Plus hours.",
+   "tryIt": "Follow a show, then turn on 'Download new episodes' under the Follow button"
+  },
+  {
+   "id": "PC-1018-06",
+   "date": "2026-10-21",
+   "kind": "UX",
+   "title": "Your first saved word blooms",
+   "description": "The first time you save a word, Polycast's coral, magenta and violet stems open out under the button, with a line naming the language. It only happens once.",
+   "tryIt": "While listening, tap a word and save it (if it's your first)"
+  },
+  {
+   "id": "PC-1020-04",
+   "date": "2026-10-22",
+   "kind": "Bug",
+   "title": "The recap counts the episode you just finished",
+   "description": "The podcasts completed chip on the lesson recap now includes the episode you have just finished, so your first recap shows it too.",
+   "tryIt": "Finish an episode and look at the recap card"
+  },
+  {
+   "id": "PC-1021-02",
+   "date": "2026-10-22",
+   "kind": "Bug",
+   "title": "Episodes you delete stay deleted",
+   "description": "Once you remove a downloaded episode, or once one has downloaded on its own, auto-download leaves it alone, so freeing up space sticks.",
+   "tryIt": "Remove an auto-downloaded episode, then open your Library again"
+  },
+  {
+   "id": "PC-1021-08",
+   "date": "2026-10-22",
+   "kind": "Content",
+   "title": "An All Saints’ weekend pick on Discover",
+   "description": "From 28 October to 2 November, Discover adds a mood pick for the holiday weekend in your language, with a short note on how it’s celebrated.",
+   "tryIt": "Open Discover between 28 October and 2 November and tap the first mood"
+  },
+  {
+   "id": "PC-1021-10",
+   "date": "2026-10-22",
+   "kind": "Growth",
+   "title": "Mia signs your recap card",
+   "description": "The lesson recap you share now carries a short line from your guide, like Mia: you caught “fika” like a local, with a small Mia or Leo mark.",
+   "tryIt": "Finish an episode and look at the recap card before you share it"
+  },
+  {
+   "id": "PC-1021-09",
+   "date": "2026-10-22",
+   "kind": "Feature",
+   "title": "Hey Siri, carry on listening",
+   "description": "Say “Carry on listening in Polycast” to pick up your last lesson, or “Play the newest episode in Polycast” for a show you follow. They also work from Spotlight and the Action button.",
+   "tryIt": "Ask Siri, or search Polycast in Spotlight"
+  },
+  {
+   "id": "PC-1022-07",
+   "date": "2026-10-23",
+   "kind": "Refinement",
+   "title": "New-episode nudges from your guide",
+   "description": "When a show you finished has a new episode, Mia or Leo tells you, and only ever points you to something you can play right away.",
+   "tryIt": "Finish an episode, then wait for the show's next one"
+  },
+  {
+   "id": "PC-1022-03",
+   "date": "2026-10-23",
+   "kind": "Bug",
+   "title": "Siri knows the shows you follow",
+   "description": "“Play the newest episode” now works for shows you follow after installing Polycast, and the shortcuts no longer stop the app building for older iPhones.",
+   "tryIt": "Follow a new show, then ask Siri to play its newest episode in Polycast"
   }
  ]
 }

@@ -13,6 +13,7 @@ import {
   LESSON_PLAN_VERSION,
 } from '@polycast/core'
 import type { SpendLedger } from '../budget'
+import { clearLineReports } from '../lineReports'
 
 export type Sql = postgres.Sql
 
@@ -45,7 +46,7 @@ export function pgSpendLedger(sql: Sql): SpendLedger {
   }
 }
 
-async function spendCapReached(tx: postgres.TransactionSql): Promise<boolean> {
+export async function spendCapReached(tx: Sql | postgres.TransactionSql): Promise<boolean> {
   const cap = Number(await getSetting(tx, 'daily_cap_usd', 10))
   const [row] = await tx`select coalesce(sum(usd), 0)::float as usd from spend_ledger where day = (now() at time zone 'utc')::date`
   return Number(row!.usd) >= cap
@@ -65,7 +66,14 @@ const PLUS_PERIOD = "interval '1 month'"
  * once, can't spend the free episode twice or start the same episode twice. The rules themselves live
  * in @polycast/core so the app can explain them in the same words.
  */
-export async function requestPreparation(sql: Sql, userId: string, episodeId: string, guideId: string): Promise<PrepRequestResult> {
+export async function requestPreparation(
+  sql: Sql,
+  userId: string,
+  episodeId: string,
+  guideId: string,
+  /** Auto-download (PC-1017-F12) prepares on Plus hours only: it never spends the free episode. */
+  opts: { plusOnly?: boolean } = {},
+): Promise<PrepRequestResult> {
   return sql.begin(async (tx) => {
     const [profile] = await tx`
       update profiles set
@@ -99,6 +107,7 @@ export async function requestPreparation(sql: Sql, userId: string, episodeId: st
       { freeCohortSize: Number(await getSetting(tx, 'free_cohort_size', 100)), spendCapReached: await spendCapReached(tx) },
     )
     if (!decision.allowed) return { status: 'refused', reason: decision.reason }
+    if (opts.plusOnly && decision.charge === 'freeEpisode') return { status: 'refused', reason: 'free-used' }
 
     if (decision.charge === 'freeEpisode') await tx`update profiles set free_episode_used = true where id = ${userId}`
     if (decision.charge === 'plus') await tx`update profiles set plus_used_sec = plus_used_sec + ${episode.duration_sec} where id = ${userId}`
@@ -119,6 +128,11 @@ export async function requestOwnKeysPreparation(
   episodeId: string,
   guideId: string,
   perDay: number,
+  /**
+   * Keeps the learner's sealed keys for a newly queued job, inside the same transaction, so the
+   * worker can never claim the job before its keys are there (PC-1019-01).
+   */
+  storeKeys?: (tx: postgres.TransactionSql, jobId: string) => Promise<void>,
 ): Promise<PrepRequestResult | { status: 'fairUse' }> {
   return sql.begin(async (tx) => {
     const [episode] = await tx`select id, status from episodes where id = ${episodeId} for update`
@@ -129,7 +143,9 @@ export async function requestOwnKeysPreparation(
     const [{ n }] = await tx`select count(*)::int as n from prep_jobs where requested_by = ${userId} and charge = 'ownKeys' and created_at > now() - interval '1 day'` as any
     if (n >= perDay) return { status: 'fairUse' } as const
     await tx`update episodes set status = 'preparing' where id = ${episodeId}`
-    return queueJob(tx, episodeId, userId, 'prepare', guideId, 'ownKeys', 0)
+    const queued = await queueJob(tx, episodeId, userId, 'prepare', guideId, 'ownKeys', 0)
+    if (queued.status === 'queued' && queued.charge === 'ownKeys') await storeKeys?.(tx, queued.jobId)
+    return queued
   })
 }
 
@@ -197,7 +213,10 @@ export async function completePreparation(
   await sql.begin(async (tx) => {
     const [job] = await tx`select episode_id from prep_jobs where id = ${jobId} for update`
     const episodeId = job!.episode_id as string
+    let linesChanged = false
     if (result.transcript.words.length > 0) {
+      const [before] = await tx`select segments = ${tx.json(result.transcript.segments as any)}::jsonb as same from transcripts where episode_id = ${episodeId}`
+      linesChanged = Boolean(before && !before.same)
       await tx`
         insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
         values (${episodeId}, ${result.transcript.language}, ${result.plan.nativeLanguage}, ${result.transcript.source},
@@ -208,9 +227,14 @@ export async function completePreparation(
       insert into lesson_plans (episode_id, guide_id, version, plan)
       values (${episodeId}, ${result.guideId}, ${result.plan.version}, ${tx.json(result.plan as any)})
       on conflict (episode_id, guide_id) do update set plan = excluded.plan, version = excluded.version`
+    // Plans from an older version (other guides' too) are replaced by this one.
+    await tx`delete from lesson_plans where episode_id = ${episodeId} and version < ${result.plan.version}`
     // ready_at stays the first time it was ready, so a quiet re-prep doesn't jump it up 'recently ready'.
     await tx`update episodes set status = 'ready', ready_at = coalesce(ready_at, now()), difficulty = ${tx.json(result.difficulty as any)} where id = ${episodeId}`
     await tx`update prep_jobs set status = 'done', stage = 'done', finished_at = now(), cost_usd = ${costUSD(result.usage)} where id = ${jobId}`
+    // Prepared again with new lines: reports on the old ones go (PC-1021-05). Voicing it for
+    // another guide keeps the same lines, so their reports stay.
+    if (linesChanged) await clearLineReports(tx as unknown as Sql, episodeId)
   })
 }
 
@@ -229,6 +253,8 @@ export async function failJob(sql: Sql, jobId: string, error: string, retryable:
       return 'retrying'
     }
     await tx`update prep_jobs set status = 'failed', error = ${error}, finished_at = now() where id = ${jobId}`
+    // A learner's own keys go as soon as the job has finally failed, however it failed (PC-1019-02).
+    await tx`delete from job_keys where job_id = ${jobId}`
     if (job.kind === 'prepare') {
       await tx`update episodes set status = 'none' where id = ${job.episode_id} and status = 'preparing'`
       if (job.charge === 'freeEpisode') await tx`update profiles set free_episode_used = false where id = ${job.requested_by}`
@@ -291,7 +317,9 @@ export async function queueSyncUpgrades(sql: Sql): Promise<number> {
         and exists (select 1 from transcripts t where t.episode_id = e.id)
       for update of e skip locked`
     for (const e of old) {
-      await tx`delete from lesson_plans where episode_id = ${e.id} and version < ${LESSON_PLAN_VERSION}`
+      // The old plans stay until the new one is written (completePreparation clears them), so the
+      // re-plan can carry over what was measured from the audio, like its loudness (PC-1020-01).
+      // The episode is 'preparing' meanwhile, so none of them is served.
       await tx`update episodes set status = 'preparing' where id = ${e.id}`
       await tx`
         insert into prep_jobs (episode_id, requested_by, kind, guide_id, charge, charged_sec)

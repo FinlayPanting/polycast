@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { Artwork, Button, Row, Screen, Txt, minutes } from '../../components/ui'
 import { listListens, type ListenRow } from '../../lib/data'
@@ -10,12 +10,14 @@ import { isSavedForOffline, listSavedLessons } from '../../lib/offline'
 import { LaterList } from '../../components/LaterList'
 import { api } from '../../lib/api'
 import { followedShows, useKept } from '../../lib/keptList'
+import { runAutoDownload } from '../../lib/autoDownload'
+import { useSession } from '../../lib/session'
 import { carryOn, LIBRARY_SECTIONS, newEpisodes, recentShows, type NewEpisode, type RecentShow } from '../../lib/libraryCore'
 
 const SECTION = Object.fromEntries(LIBRARY_SECTIONS.map((s) => [s.id, s])) as Record<(typeof LIBRARY_SECTIONS)[number]['id'], (typeof LIBRARY_SECTIONS)[number]>
 
-/** At most this many followed shows are checked for new episodes each time the Library opens. */
-const SHOWS_CHECKED = 12
+/** Up to this many followed shows are checked for new episodes, in one call (PC-1020-02). */
+const SHOWS_CHECKED = 200
 
 /**
  * The Library, built for keeping up (PC-1017-F11): the shows listened to recently along the top,
@@ -25,12 +27,12 @@ export default function Library() {
   const p = usePalette()
   const { data, loading, reload } = useAsync(listListens, [])
   const follows = useKept(followedShows)
-  const followKey = follows.slice(0, SHOWS_CHECKED).map((f) => f.podcastId).join(',')
+  // Sorted, so the same follows in another order don't ask again.
+  const followKey = follows.slice(0, SHOWS_CHECKED).map((f) => f.podcastId).sort().join(',')
   const fresh = useAsync(
     async () => {
       if (!followKey) return []
-      const pages = await Promise.allSettled(followKey.split(',').map((podcastId) => api.openShow({ podcastId })))
-      return pages.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+      return (await api.newEpisodes(followKey.split(','))).shows
     },
     [followKey],
     { cacheKey: `library:new:${followKey}` },
@@ -47,6 +49,15 @@ export default function Library() {
   const carry = useMemo(() => carryOn(data ?? []), [data])
   const started = useMemo(() => new Set((data ?? []).map((l) => l.episode_id)), [data])
   const fresher = useMemo(() => newEpisodes(fresh.data ?? [], Date.now(), started), [fresh.data, started])
+  // New episodes of shows set to download on their own (PC-1017-F12), once the check is back.
+  const { profile } = useSession()
+  const plan = profile?.plan
+  const plusUsedSec = profile?.plus_used_sec ?? 0
+  useEffect(() => {
+    if (!fresh.data?.length) return
+    const all = newEpisodes(fresh.data, Date.now(), new Set(), { max: 50 })
+    void runAutoDownload(all, plan ? { plan, plusUsedSec } : null).then(() => setDownloads(listSavedLessons()))
+  }, [fresh.data, plan, plusUsedSec])
 
   return (
     <Screen>

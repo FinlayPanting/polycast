@@ -1,4 +1,4 @@
-import { MOOD_CHIPS, MOOD_MAX_CHARS } from '@polycast/core'
+import { MOOD_CHIPS, MOOD_MAX_CHARS, seasonalMood } from '@polycast/core'
 import { router } from 'expo-router'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native'
@@ -23,6 +23,8 @@ export function MoodPicks({ language, guideName, flagId }: { language: string; g
   const [picks, setPicks] = useState<MoodPick[]>()
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
+  // A seasonal pick for a few days around a holiday (PC-1021-08); off by itself afterwards.
+  const season = seasonalMood(language, new Date())
 
   const ask = async (m: string) => {
     const text = m.trim()
@@ -78,7 +80,23 @@ export function MoodPicks({ language, guideName, flagId }: { language: string; g
           </Pressable>
         </View>
       </View>
+      {season ? (
+        <Txt variant="small" tone="quiet" style={{ paddingHorizontal: space.lg }}>
+          {guideName}: {season.note}
+        </Txt>
+      ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm }}>
+        {season ? (
+          <Pressable
+            key={season.seasonId}
+            accessibilityRole="button"
+            accessibilityLabel={`Ask ${guideName} for ${season.chip.toLowerCase()}`}
+            onPress={() => void ask(season.chip)}
+            style={({ pressed }) => ({ minHeight: MIN_TAP - 8, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: 999, borderWidth: 1, borderColor: p.guide, opacity: pressed ? 0.6 : 1 })}
+          >
+            <Txt variant="small">{season.chip}</Txt>
+          </Pressable>
+        ) : null}
         {MOOD_CHIPS.map((chip) => (
           <Pressable
             key={chip}

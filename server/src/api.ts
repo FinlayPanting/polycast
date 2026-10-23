@@ -16,7 +16,9 @@ import { countFirstOpen, countPlusScreen, funnelText, weeklyFunnel } from './fun
 import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
+import { feedTranscriptLink } from './worker'
 import { clientAddress, rateLimiter } from './rateLimit'
+import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
 
@@ -56,6 +58,10 @@ export interface ApiDeps {
   ownKeysSecret?: string
   /** Scales the own-keys cost estimate per provider, calibrated from logged preparations (PC-1017-K4). */
   ownKeysCalibration?: { elevenlabs?: number; google?: number }
+  /** Which failed feeds the Library's background refresh is waiting on (PC-1021-04); tests pass their own. */
+  feedRetry?: FeedRetry
+  /** The Lab test page (PC-1021-L1), on /lab. Unset (no LAB_TOKEN): not served. */
+  lab?: LabDeps
 }
 
 type Env = { Variables: { userId: string } }
@@ -82,6 +88,34 @@ export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddr
  * can't hammer them on Polycast's behalf. Generous enough that a person never notices.
  */
 export const LEARNER_LIMITS = { searchPerMinute: 30, openPerMinute: 30, preparePerMinute: 10, searchMaxChars: 100 }
+
+/**
+ * The Library's new episodes from followed shows (PC-1020-02): one call for every follow, from the
+ * catalogue, under its own limit. A few of the stalest feeds are re-read in the background each
+ * time, so new episodes turn up without anyone opening the show.
+ */
+export const NEW_EPISODES_LIMITS = { perMinute: 20, shows: 200, days: 14, perShow: 10, refreshPerCall: 3 }
+
+/**
+ * Feeds that failed to load wait before the background refresh tries them again (PC-1021-04): an
+ * hour after the first failure, doubling each time up to a day, so a dead feed can't keep its
+ * place at the front of the queue and hold up the learner's other shows. Kept in memory: a restart
+ * simply gives every feed another go.
+ */
+export class FeedRetry {
+  private waits = new Map<string, { until: number; failures: number }>()
+  constructor(private firstWaitMs = 60 * 60_000, private maxWaitMs = 24 * 60 * 60_000) {}
+  waiting(id: string, nowMs: number): boolean {
+    return (this.waits.get(id)?.until ?? 0) > nowMs
+  }
+  failed(id: string, nowMs: number): void {
+    const failures = (this.waits.get(id)?.failures ?? 0) + 1
+    this.waits.set(id, { failures, until: nowMs + Math.min(this.maxWaitMs, this.firstWaitMs * 2 ** (failures - 1)) })
+  }
+  ok(id: string): void {
+    this.waits.delete(id)
+  }
+}
 export const SLOW_DOWN = 'Give it a moment, then try again.'
 
 /**
@@ -107,6 +141,11 @@ export function createApi(deps: ApiDeps) {
     console.error(err)
     return c.json({ error: 'Something went wrong. Please try again.' }, 500)
   })
+
+  if (deps.lab) {
+    app.get('/lab/', (c) => c.redirect('/lab'))
+    app.route('/lab', createLab(deps.lab))
+  }
 
   app.get('/health', (c) => c.json({ ok: true }))
   // What's new (PC-1019-F02): the change log, public and cacheable, so it updates with every push.
@@ -191,7 +230,7 @@ export function createApi(deps: ApiDeps) {
       : sql`(plus_period_start is null or plus_period_start < now() - interval '27 days')`
 
   app.post('/webhooks/revenuecat', async (c) => {
-    if (!deps.revenueCatSecret || c.req.header('Authorization') !== `Bearer ${deps.revenueCatSecret}`) return c.json({ error: 'unauthorised' }, 401)
+    if (!deps.revenueCatSecret || !safeEqual(c.req.header('Authorization') ?? '', `Bearer ${deps.revenueCatSecret}`)) return c.json({ error: 'unauthorised' }, 401)
     const { event } = await c.req.json()
     // Restore purchases on a new phone or a fresh account: RevenueCat moves the subscription from
     // the old account to the one signed in now. Plus moves with it, along with the month's hours
@@ -267,13 +306,13 @@ export function createApi(deps: ApiDeps) {
     const segmentId = typeof body?.segmentId === 'string' ? body.segmentId.slice(0, 64) : ''
     if (!/^[0-9a-f-]{36}$/i.test(id) || !segmentId) return c.json({ error: 'Not found' }, 404)
     if (!reportLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
-    if (!(await reportLine(sql, id, segmentId))) return c.json({ error: 'Not found' }, 404)
+    if (!(await reportLine(sql, id, segmentId, c.get('userId')))) return c.json({ error: 'Not found' }, 404)
     return c.json({ ok: true })
   })
 
   app.get('/v1/discover/:language', async (c) => {
     const [profile] = await sql`select interests from profiles where id = ${c.get('userId')}`
-    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? []) })
+    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? [], { lookupHost: deps.lookupHost }) })
   })
 
   /** "Tell Mia what you're in the mood for": three shows or prepared episodes with a line on why. */
@@ -291,7 +330,7 @@ export function createApi(deps: ApiDeps) {
     const plus = profile?.plan === 'plus'
     if (!(plus ? moodPlus : moodFree).hit(userId)) return c.json({ error: plus ? MOOD_MESSAGES.plusUsed : MOOD_MESSAGES.freeUsed }, 429)
     try {
-      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard }, language, mood, nativeLanguage)
+      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard, lookupHost: deps.lookupHost }, language, mood, nativeLanguage)
       return c.json({ mood, picks })
     } catch (e) {
       if (e instanceof SpendCapReached) return c.json({ error: MOOD_MESSAGES.paused }, 503)
@@ -374,6 +413,48 @@ export function createApi(deps: ApiDeps) {
     return c.json({ podcast, episodes })
   })
 
+  const newEpisodesLimit = rateLimiter(NEW_EPISODES_LIMITS.perMinute, 60_000)
+  const feedRetry = deps.feedRetry ?? new FeedRetry()
+  app.post('/v1/library/new-episodes', async (c) => {
+    if (!newEpisodesLimit.hit(c.get('userId'))) return c.json({ error: SLOW_DOWN }, 429)
+    const body = await c.req.json().catch(() => ({}))
+    const ids = (Array.isArray(body?.podcastIds) ? body.podcastIds : [])
+      .filter((x: unknown): x is string => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x))
+      .slice(0, NEW_EPISODES_LIMITS.shows)
+    if (!ids.length) return c.json({ shows: [] })
+    const podcasts = await sql`select id, title, artwork, feed_url, updated_at from podcasts where id = any(${ids}::uuid[]) and not removed`
+    const episodes = podcasts.length
+      ? await sql`
+          select * from (
+            select e.id, e.podcast_id, e.title, e.published, e.duration_sec, e.image, e.status,
+              row_number() over (partition by e.podcast_id order by e.published desc) as n
+            from episodes e
+            where e.podcast_id = any(${podcasts.map((p) => p.id)}::uuid[])
+              and e.published > now() - make_interval(days => ${NEW_EPISODES_LIMITS.days})
+          ) x where n <= ${NEW_EPISODES_LIMITS.perShow}
+          order by published desc`
+      : []
+    const now = new Date()
+    const stale = podcasts
+      .filter((p) => !showIsFresh(p.updated_at, now) && !feedRetry.waiting(p.id, now.getTime()))
+      .sort((a, b) => new Date(a.updated_at ?? 0).getTime() - new Date(b.updated_at ?? 0).getTime())
+      .slice(0, NEW_EPISODES_LIMITS.refreshPerCall)
+    for (const p of stale) {
+      syncFeed(sql, deps.fetch, p.feed_url, undefined, { lookupHost: deps.lookupHost }).then(
+        () => feedRetry.ok(p.id),
+        () => feedRetry.failed(p.id, Date.now()),
+      )
+    }
+    return c.json({
+      shows: podcasts.map((p) => ({
+        podcast: { id: p.id, title: p.title, artwork: p.artwork },
+        episodes: episodes
+          .filter((e) => e.podcast_id === p.id)
+          .map((e) => ({ id: e.id, title: e.title, published: e.published, duration_sec: e.duration_sec, image: e.image, status: e.status })),
+      })),
+    })
+  })
+
   // "Use your own API keys" (PC-1017-K1): check a key with a tiny call, and forget every copy.
   const keyTestLimit = rateLimiter(20, 60_000)
   app.post('/v1/keys/test', async (c) => {
@@ -395,13 +476,16 @@ export function createApi(deps: ApiDeps) {
       if (!deps.ownKeysSecret) return c.json({ error: OWN_KEYS_MESSAGES.off }, 503)
       const keys = { elevenlabs: body.ownKeys.elevenlabs, gemini: body.ownKeys.gemini }
       if (!plausibleKey(keys.elevenlabs) || !plausibleKey(keys.gemini)) return c.json({ error: OWN_KEYS_MESSAGES.missing }, 400)
-      const r = await requestOwnKeysPreparation(sql, userId, c.req.param('id'), guideId, OWN_KEYS_LIMITS.preparationsPerDay)
+      const secret = deps.ownKeysSecret
+      // The keys are saved in the same step as the job is queued (PC-1019-01).
+      const r = await requestOwnKeysPreparation(sql, userId, c.req.param('id'), guideId, OWN_KEYS_LIMITS.preparationsPerDay, (tx, jobId) =>
+        storeJobKeys(tx, jobId, userId, keys, secret),
+      )
       if (r.status === 'fairUse') return c.json({ error: OWN_KEYS_MESSAGES.fairUse }, 429)
-      if (r.status === 'queued' && r.charge === 'ownKeys') await storeJobKeys(sql, r.jobId, userId, keys, deps.ownKeysSecret)
       return c.json(r)
     }
     const claimedBefore = await freeEpisodesClaimed(sql)
-    const result = await requestPreparation(sql, userId, c.req.param('id'), guideId)
+    const result = await requestPreparation(sql, userId, c.req.param('id'), guideId, { plusOnly: body?.auto === true })
     if (result.status === 'refused') return c.json({ ...result, message: REFUSAL_MESSAGES[result.reason] }, 402)
     if (result.status === 'queued' && result.charge === 'freeEpisode') {
       const threshold = cohortAlert(claimedBefore, await freeEpisodesClaimed(sql))
@@ -416,6 +500,31 @@ export function createApi(deps: ApiDeps) {
     const durationSec = Number(c.req.query('durationSec'))
     if (!Number.isFinite(durationSec) || durationSec <= 0 || durationSec > 6 * 3600) return c.json({ error: 'durationSec must be a length in seconds' }, 400)
     return c.json(ownKeysEstimate(durationSec, { calibration: deps.ownKeysCalibration }))
+  })
+
+  // The estimate for one episode (PC-1020-09): transcription is left out when the transcript is
+  // already there (one Polycast made in the learner's language, or the feed's own word-timed one),
+  // as preparing skips it then too. Without a length from the feed, the price of an hour is given.
+  const estimateLimit = rateLimiter(LEARNER_LIMITS.openPerMinute, 60_000)
+  app.get('/v1/episodes/:id/own-keys-estimate', async (c) => {
+    const id = c.req.param('id')
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return c.json({ error: 'Not found' }, 404)
+    const userId = c.get('userId')
+    if (!estimateLimit.hit(userId)) return c.json({ error: SLOW_DOWN }, 429)
+    const [ep] = await sql`
+      select e.duration_sec, e.guid, e.language, p.feed_url,
+        exists (select 1 from transcripts t where t.episode_id = e.id and jsonb_array_length(t.words) > 0
+                and t.native_language = coalesce((select native_language from profiles where id = ${userId}), 'en')) as has_transcript
+      from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${id} and not p.removed`
+    if (!ep) return c.json({ error: 'Not found' }, 404)
+    const transcript: 'polycast' | 'feed' | undefined = ep.has_transcript
+      ? 'polycast'
+      : (await withDeadline(feedTranscriptLink({ fetch: deps.fetch, lookupHost: deps.lookupHost }, ep.feed_url, ep.guid, ep.language), 8_000, undefined))
+        ? 'feed'
+        : undefined
+    const lengthKnown = Number(ep.duration_sec) > 0
+    const estimate = ownKeysEstimate(lengthKnown ? Number(ep.duration_sec) : 3600, { calibration: deps.ownKeysCalibration, feedTranscript: Boolean(transcript) })
+    return c.json({ ...estimate, perHour: !lengthKnown, transcript: transcript ?? null })
   })
 
   // What preparing this episode on the learner's own keys actually used, at list prices (PC-1017-K4).

@@ -4,6 +4,7 @@ import { Platform } from 'react-native'
 import { PolycastFingerprint } from '../../modules/polycast-fingerprint'
 import type { ListenPayload } from './api'
 import { staleEpisodes, totalSize, type FolderEntry } from './storage'
+import { audioHeaders } from './userAgent'
 
 /**
  * The learner's own copy of an episode, on their phone.
@@ -71,6 +72,7 @@ async function fetchEpisode(episodeId: string, url: string, onProgress: (p: numb
   const partial = new File(folder(), `${episodeId}.partial`)
   if (partial.exists) partial.delete()
   const task = new DownloadTask(url, partial, {
+    headers: audioHeaders(url),
     onProgress: (p) => p.totalBytes > 0 && onProgress(Math.min(1, p.bytesWritten / p.totalBytes)),
   })
   const done = await task.downloadAsync()
