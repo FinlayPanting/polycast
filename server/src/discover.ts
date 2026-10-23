@@ -1,5 +1,5 @@
 import { DISCOVER_CATEGORIES, type PodcastSummary, type TrendingPodcast } from '@polycast/core'
-import { categoryChart, forYou, topChart, type Fetch, type ForYouShow } from './catalogue'
+import { categoryChart, forYou, topChart, type Fetch, type ForYouShow, type NetOpts } from './catalogue'
 import type { Sql } from './db'
 
 export interface ShelfEpisode {
@@ -42,7 +42,7 @@ async function readyEpisodes(sql: Sql, where: ReturnType<Sql['unsafe']> | Return
  * The Discover tab for one target language, shelves in the spec's order. A learner who picked
  * interests gets a For you shelf first. Empty shelves are left out.
  */
-export async function discoverShelves(sql: Sql, f: Fetch, language: string, podcastIndex?: { key: string; secret: string }, interests: string[] = []): Promise<Shelf[]> {
+export async function discoverShelves(sql: Sql, f: Fetch, language: string, podcastIndex?: { key: string; secret: string }, interests: string[] = [], net: NetOpts = {}): Promise<Shelf[]> {
   const picks = await sql`
     select p.id, p.title, p.author, p.artwork,
       (select count(*)::int from episodes e where e.podcast_id = p.id and e.status = 'ready') as ready_episodes
@@ -57,8 +57,8 @@ export async function discoverShelves(sql: Sql, f: Fetch, language: string, podc
   favourites.sort((a, b) => favIds.indexOf(a.episodeId) - favIds.indexOf(b.episodeId))
 
   const [mine, top, ...categories] = await Promise.all([
-    forYou(sql, f, language, interests, podcastIndex).catch(() => [] as ForYouShow[]),
-    topChart(sql, f, language).catch(() => [] as PodcastSummary[]),
+    forYou(sql, f, language, interests, podcastIndex, 30, net).catch(() => [] as ForYouShow[]),
+    topChart(sql, f, language, net).catch(() => [] as PodcastSummary[]),
     ...DISCOVER_CATEGORIES.map((c) => categoryChart(sql, f, language, c, podcastIndex).catch(() => [] as TrendingPodcast[])),
   ])
 

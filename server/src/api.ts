@@ -300,7 +300,7 @@ export function createApi(deps: ApiDeps) {
 
   app.get('/v1/discover/:language', async (c) => {
     const [profile] = await sql`select interests from profiles where id = ${c.get('userId')}`
-    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? []) })
+    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? [], { lookupHost: deps.lookupHost }) })
   })
 
   /** "Tell Mia what you're in the mood for": three shows or prepared episodes with a line on why. */
@@ -318,7 +318,7 @@ export function createApi(deps: ApiDeps) {
     const plus = profile?.plan === 'plus'
     if (!(plus ? moodPlus : moodFree).hit(userId)) return c.json({ error: plus ? MOOD_MESSAGES.plusUsed : MOOD_MESSAGES.freeUsed }, 429)
     try {
-      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard }, language, mood, nativeLanguage)
+      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard, lookupHost: deps.lookupHost }, language, mood, nativeLanguage)
       return c.json({ mood, picks })
     } catch (e) {
       if (e instanceof SpendCapReached) return c.json({ error: MOOD_MESSAGES.paused }, 503)
