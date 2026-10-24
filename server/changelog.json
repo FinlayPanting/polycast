@@ -544,6 +544,14 @@
    "title": "Fresh voices on Discover",
    "description": "A new shelf of young, current shows from Spain, Argentina, France and Brazil sits next to the charts in Spanish, French and Portuguese.",
    "tryIt": "Open Discover in Spanish, French or Portuguese and scroll past Top charts"
+  },
+  {
+   "id": "PC-1023-09",
+   "date": "2026-10-24",
+   "kind": "Refinement",
+   "title": "Video podcasts play as audio",
+   "description": "When a show publishes episodes as video but also offers an audio version, Polycast now streams and downloads the audio, and video-only episodes wait for Wi-Fi before downloading on their own.",
+   "tryIt": "Follow a video-first show and turn on Download new episodes"
   }
  ]
 }

@@ -8,7 +8,8 @@ import type { NewEpisode } from './libraryCore'
  * A show is on only when the learner turns it on (default off). From then, each new episode of it
  * downloads on its own when the Library checks for new episodes: on Wi-Fi only unless they allow
  * mobile data. An episode that isn't ready yet is prepared first, but only for Plus, within the
- * month's Plus hours; the free episode and own keys are never spent on their own.
+ * month's Plus hours; the free episode and own keys are never spent on their own. An episode whose
+ * feed offers only a video file (PC-1023-09) waits for Wi-Fi even when mobile data is allowed.
  */
 
 export interface AutoShow {
@@ -61,7 +62,14 @@ export function autoDownloadPlan(input: AutoDownloadInput): AutoDownloadPlan {
   const candidates = [...input.episodes]
     .filter((e) => {
       const from = since.get(e.podcastId)
-      return from !== undefined && Number.isFinite(from) && Date.parse(e.published) >= from && !input.saved.has(e.episodeId) && !input.handled?.has(e.episodeId)
+      return (
+        from !== undefined &&
+        Number.isFinite(from) &&
+        Date.parse(e.published) >= from &&
+        !input.saved.has(e.episodeId) &&
+        !input.handled?.has(e.episodeId) &&
+        !(e.video && input.connection !== 'wifi')
+      )
     })
     .sort((a, b) => a.published.localeCompare(b.published))
   for (const e of candidates) {

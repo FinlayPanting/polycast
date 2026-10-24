@@ -610,12 +610,17 @@ run('API and worker', () => {
     const last = body.shows.find((s: any) => s.podcast.id === shows[13])
     expect(last.episodes.map((e: any) => e.title)).toEqual(['New 13'])
     expect(last.episodes[0]).toMatchObject({ duration_sec: 600, status: 'none' })
+    expect(last.episodes[0].video).toBeUndefined()
+    // A video-only episode says so, so auto-download can leave it for Wi-Fi (PC-1023-09).
+    await sql`update episodes set audio_url = 'https://cdn.example.com/n.mp4' where podcast_id = ${shows[12]!} and guid = 'new'`
+    const twelve = (await (await post({ podcastIds: [shows[12]] })).json()).shows[0]
+    expect(twelve.episodes[0]).toMatchObject({ title: 'New 12', video: true })
     // Only the stale feed is re-read, in the background.
     await new Promise((r) => setTimeout(r, 50))
     expect(feedReads).toBe(1)
     expect(await (await post({ podcastIds: [] })).json()).toEqual({ shows: [] })
     // Its own limit: the show-page limit isn't touched.
-    for (let i = 0; i < NEW_EPISODES_LIMITS.perMinute - 2; i++) await post({ podcastIds: [shows[0]] })
+    for (let i = 0; i < NEW_EPISODES_LIMITS.perMinute - 3; i++) await post({ podcastIds: [shows[0]] })
     expect((await post({ podcastIds: [shows[0]] })).status).toBe(429)
   })
 

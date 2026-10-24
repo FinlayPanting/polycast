@@ -45,6 +45,12 @@ describe('auto-download for followed shows (PC-1017-F12)', () => {
     expect(connectionAllows('wifi', false)).toBe(true)
   })
 
+  it('leaves a video-only episode for Wi-Fi, even with mobile data allowed (PC-1023-09)', () => {
+    const episodes = [{ ...ep('v1', 'A', '2026-10-20T08:00:00Z'), video: true }, ep('a1', 'A', '2026-10-20T09:00:00Z')]
+    expect(ids(autoDownloadPlan({ ...base, episodes, connection: 'cellular', allowMobileData: true }).download)).toEqual(['a1'])
+    expect(ids(autoDownloadPlan({ ...base, episodes, connection: 'wifi' }).download)).toEqual(['v1', 'a1'])
+  })
+
   it('never prepares on the free plan: an episode that isn’t ready waits', () => {
     const plan = autoDownloadPlan({ ...base, episodes: [ep('a1', 'A', '2026-10-20T08:00:00Z', false)] })
     expect(plan).toEqual({ download: [], prepare: [] })

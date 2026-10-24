@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, isTipProduct, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
+import { cohortAlert, isTipProduct, isVideo, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -446,7 +446,7 @@ export function createApi(deps: ApiDeps) {
     const episodes = podcasts.length
       ? await sql`
           select * from (
-            select e.id, e.podcast_id, e.title, e.published, e.duration_sec, e.image, e.status,
+            select e.id, e.podcast_id, e.title, e.published, e.duration_sec, e.image, e.status, e.audio_url,
               row_number() over (partition by e.podcast_id order by e.published desc) as n
             from episodes e
             where e.podcast_id = any(${podcasts.map((p) => p.id)}::uuid[])
@@ -471,7 +471,7 @@ export function createApi(deps: ApiDeps) {
         podcast: { id: p.id, title: p.title, artwork: p.artwork },
         episodes: episodes
           .filter((e) => e.podcast_id === p.id)
-          .map((e) => ({ id: e.id, title: e.title, published: e.published, duration_sec: e.duration_sec, image: e.image, status: e.status })),
+          .map((e) => ({ id: e.id, title: e.title, published: e.published, duration_sec: e.duration_sec, image: e.image, status: e.status, ...(isVideo(e.audio_url) ? { video: true } : {}) })),
       })),
     })
   })
