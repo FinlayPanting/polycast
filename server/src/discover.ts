@@ -1,5 +1,5 @@
 import { DISCOVER_CATEGORIES, type PodcastSummary, type TrendingPodcast } from '@polycast/core'
-import { categoryChart, forYou, topChart, type Fetch, type ForYouShow, type NetOpts } from './catalogue'
+import { categoryChart, forYou, freshVoices, topChart, type Fetch, type ForYouShow, type NetOpts } from './catalogue'
 import type { Sql } from './db'
 
 export interface ShelfEpisode {
@@ -18,6 +18,7 @@ export type Shelf =
   | { id: 'picks'; title: string; shows: { podcastId: string; title: string; author: string | null; artwork: string | null; readyEpisodes: number }[] }
   | { id: 'easy' | 'favourites'; title: string; episodes: ShelfEpisode[] }
   | { id: 'top'; title: string; shows: PodcastSummary[] }
+  | { id: 'fresh'; title: string; shows: (PodcastSummary & { why: string })[] }
   | { id: `category:${string}`; title: string; shows: TrendingPodcast[] }
 
 async function readyEpisodes(sql: Sql, where: ReturnType<Sql['unsafe']> | ReturnType<Sql>, limit: number): Promise<ShelfEpisode[]> {
@@ -56,9 +57,10 @@ export async function discoverShelves(sql: Sql, f: Fetch, language: string, podc
   const favourites = favIds.length ? await readyEpisodes(sql, sql`e.id in ${sql(favIds)}`, 20) : []
   favourites.sort((a, b) => favIds.indexOf(a.episodeId) - favIds.indexOf(b.episodeId))
 
-  const [mine, top, ...categories] = await Promise.all([
+  const [mine, top, fresh, ...categories] = await Promise.all([
     forYou(sql, f, language, interests, podcastIndex, 30, net).catch(() => [] as ForYouShow[]),
     topChart(sql, f, language, net).catch(() => [] as PodcastSummary[]),
+    freshVoices(sql, f, language, net).catch(() => []),
     ...DISCOVER_CATEGORIES.map((c) => categoryChart(sql, f, language, c, podcastIndex).catch(() => [] as TrendingPodcast[])),
   ])
 
@@ -71,6 +73,7 @@ export async function discoverShelves(sql: Sql, f: Fetch, language: string, podc
     },
     { id: 'easy', title: 'Easy listening', episodes: easy },
     { id: 'top', title: 'Top charts', shows: top as PodcastSummary[] },
+    { id: 'fresh', title: 'Fresh voices', shows: fresh as (PodcastSummary & { why: string })[] },
     ...DISCOVER_CATEGORIES.map((c, i) => ({ id: `category:${c}` as const, title: c, shows: (categories[i] ?? []) as TrendingPodcast[] })),
     { id: 'favourites', title: 'Listener favourites', episodes: favourites },
   ]

@@ -536,6 +536,14 @@
    "title": "Plus starts with what's yours",
    "description": "The Plus screen now opens with your own progress, like the words you've saved and the episodes you've finished with your guide.",
    "tryIt": "Open Plus from the You tab"
+  },
+  {
+   "id": "PC-1023-05",
+   "date": "2026-10-24",
+   "kind": "Content",
+   "title": "Fresh voices on Discover",
+   "description": "A new shelf of young, current shows from Spain, Argentina, France and Brazil sits next to the charts in Spanish, French and Portuguese.",
+   "tryIt": "Open Discover in Spanish, French or Portuguese and scroll past Top charts"
   }
  ]
 }

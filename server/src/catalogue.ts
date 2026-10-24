@@ -4,6 +4,8 @@ import {
   feedDescriptionFromHead,
   CHART_COUNTRY,
   feedLanguageFromHead,
+  FRESH_VOICES,
+  freshVoiceWhy,
   interestQueries,
   interleaveCharts,
   itunesLookupManyUrl,
@@ -13,6 +15,7 @@ import {
   parseFeed,
   parseItunesResults,
   parsePodcastIndexTrending,
+  sameShowTitle,
   podcastIndexTrendingUrl,
   TOP_CHART_COUNTRIES,
   type Feed,
@@ -193,6 +196,28 @@ export function topChart(sql: Sql, f: Fetch, language: string, net: NetOpts = {}
       }),
     )
     return (await keepShowsInLanguage(sql, f, interleaveCharts(charts), language, net)).slice(0, 50)
+  })
+}
+
+/**
+ * Fresh voices (PC-1023-05): Spotify's RADAR 2026 shows for the language, each found in Apple's catalogue
+ * by its exact title in its own country, then kept only when its public feed is in the language. Refreshed
+ * once a day like the charts; a show that can't be found is simply left out.
+ */
+export function freshVoices(sql: Sql, f: Fetch, language: string, net: NetOpts = {}): Promise<(PodcastSummary & { why: string })[]> {
+  const list = FRESH_VOICES[language]
+  if (!list?.length) return Promise.resolve([])
+  return cachedChart(sql, language, 'fresh-voices:radar-2026', async () => {
+    const found = await mapLimit(list, 4, async (v) => {
+      const res = await f(itunesSearchUrl(v.title, v.country, 10)).catch(() => undefined)
+      if (!res?.ok) return undefined
+      const hit = parseItunesResults(await res.json()).find((r) => sameShowTitle(r.title, v.title))
+      return hit ? { ...hit, why: freshVoiceWhy(v.country) } : undefined
+    })
+    const shows = found.filter((s): s is PodcastSummary & { why: string } => Boolean(s))
+    const kept = await keepShowsInLanguage(sql, f, shows, language, net)
+    const why = new Map(shows.map((s) => [s.appleId, s.why]))
+    return kept.map((s) => ({ ...s, why: why.get(s.appleId) ?? freshVoiceWhy('') }))
   })
 }
 

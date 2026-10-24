@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { forYou, keepShowsInLanguage, topChart } from '../src/catalogue'
+import { forYou, freshVoices, keepShowsInLanguage, topChart } from '../src/catalogue'
 import { discoverShelves } from '../src/discover'
 import type { Sql } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
@@ -62,6 +62,39 @@ run('Top charts only show the target language', () => {
     expect(kept.map((s) => s.appleId)).toEqual(['sv-2'])
     expect(calls.some((u) => u.includes('internal.example'))).toBe(false)
     expect(calls).toContain('https://feeds.example.com/redir-1.xml')
+  })
+
+  it('finds Fresh voices by exact title in their country and keeps only feeds in the language (PC-1023-05)', async () => {
+    const calls: string[] = []
+    const byTitle: Record<string, { collectionId: string; collectionName: string }[]> = {
+      'STONKS! avec Arthur Perticoz': [{ collectionId: 'fr-71', collectionName: 'Stonks avec Arthur Perticoz' }],
+      'Star System': [{ collectionId: 'fr-72', collectionName: 'Star System Academy' }], // not the same show
+      'Tunnel par Anna Toumazoff': [{ collectionId: 'en-73', collectionName: 'Tunnel par Anna Toumazoff' }], // feed in English
+    }
+    const base = fakeApple({}, calls)
+    const f: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.includes('itunes.apple.com/search')) {
+        calls.push(url)
+        const term = new URL(url).searchParams.get('term')!
+        return Response.json({ results: (byTitle[term] ?? []).map((r) => ({ ...r, artistName: 'Host', feedUrl: `https://feeds.example.com/${r.collectionId}.xml` })) })
+      }
+      return base(input, init)
+    }
+    const shows = await freshVoices(sql, f, 'fr', NET)
+    expect(shows.map((s) => s.appleId)).toEqual(['fr-71'])
+    expect(shows[0]).toMatchObject({ title: 'Stonks avec Arthur Perticoz', why: 'New voice from France', feedUrl: 'https://feeds.example.com/fr-71.xml' })
+    expect(calls.filter((u) => u.includes('/search')).every((u) => new URL(u).searchParams.get('country') === 'fr')).toBe(true)
+    // Kept for the day like the charts: no second round of searches.
+    const before = calls.length
+    expect((await freshVoices(sql, f, 'fr', NET)).map((s) => s.appleId)).toEqual(['fr-71'])
+    expect(calls.length).toBe(before)
+    // Spotify named no Swedish shows.
+    expect(await freshVoices(sql, f, 'sv', NET)).toEqual([])
+    const shelves = await discoverShelves(sql, f, 'fr', undefined, [], NET)
+    const ids = shelves.map((s) => s.id)
+    expect(ids).toContain('fresh')
+    expect(shelves.find((s) => s.id === 'fresh')!.title).toBe('Fresh voices')
   })
 
   it("keeps Swedish shows and drops English ones from Sweden's chart", async () => {
