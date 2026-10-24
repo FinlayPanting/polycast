@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, isTipProduct, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
+import { cohortAlert, isRequestableLanguage, isTipProduct, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -13,6 +13,7 @@ import { translateTexts } from './translations'
 import type { TextModel } from './providers/types'
 import { SpendCapReached, type SpendGuard } from './budget'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
+import { countLanguageRequest, languageRequestsText, weeklyLanguageRequests } from './languageRequests'
 import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
@@ -213,6 +214,18 @@ export function createApi(deps: ApiDeps) {
     return c.json({ ok: true })
   })
 
+  // "Learning something else?" in the language picker (PC-1023-02). Only the language is counted; nothing
+  // identifies anyone. Each address gets a generous hourly allowance so a script can't skew the counts.
+  const languageRequestLimit = rateLimiter(30, 60 * 60_000)
+  app.post('/events/language-request', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const language = body?.language
+    if (!isRequestableLanguage(language)) return c.json({ error: 'Unknown language' }, 400)
+    if (!languageRequestLimit.hit(clientAddress((n) => c.req.header(n)))) return c.json({ ok: true })
+    await countLanguageRequest(sql, language)
+    return c.json({ ok: true })
+  })
+
   /** The weekly drop-off funnel, as counts. `week` is a Monday (YYYY-MM-DD); defaults to last week. */
   // The token can also come as ?token=, because the morning email's fetch tool can't send headers.
   // It only unlocks these counts (no personal data, read-only), so a token in a URL is acceptable here.
@@ -225,7 +238,8 @@ export function createApi(deps: ApiDeps) {
     const week = c.req.query('week') ?? lastMonday(new Date())
     if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return c.json({ error: 'week must be YYYY-MM-DD' }, 400)
     const funnel = await weeklyFunnel(sql, week)
-    return c.json({ funnel, text: funnelText(funnel) })
+    const languageRequests = await weeklyLanguageRequests(sql, week)
+    return c.json({ funnel, languageRequests, text: `${funnelText(funnel)}\n${languageRequestsText(languageRequests)}` })
   })
 
   // Lessons as readable pages, so Claude and Finlay can review what the guide actually says.

@@ -528,6 +528,14 @@
    "title": "Fits the iPhone Duo's outer screen",
    "description": "On a short, wide screen like the iPhone Duo's outer display, the player makes room for your guide instead of crowding the title and controls.",
    "tryIt": "Open any episode on the iPhone Duo's outer screen"
+  },
+  {
+   "id": "PC-1023-02",
+   "date": "2026-10-24",
+   "kind": "Feature",
+   "title": "Learning something else?",
+   "description": "Under the six languages, tap the one you really wanted. It's counted with nothing about you attached, and the most-asked-for languages come next.",
+   "tryIt": "Pick a language in setup, then tap Learning something else?"
   }
  ]
 }

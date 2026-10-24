@@ -66,6 +66,27 @@ run('weekly funnel', () => {
     expect((await api().request('/admin/funnel?week=soon', { headers: { Authorization: 'Bearer t0ken' } })).status).toBe(400)
   })
 
+  it('counts "Learning something else?" taps per language, with nothing else (PC-1023-02)', async () => {
+    const post = (body: unknown) => api().request('/events/language-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    for (const language of ['nl', 'ja', 'nl', 'other']) expect((await post({ language })).status).toBe(200)
+    expect((await post({ language: 'es' })).status).toBe(400) // already offered
+    expect((await post({ language: 'xx' })).status).toBe(400)
+    expect((await post({})).status).toBe(400)
+    const cols = await sql`select column_name from information_schema.columns where table_name = 'language_requests' order by column_name`
+    expect(cols.map((c) => c.column_name)).toEqual(['day', 'language', 'requests'])
+    await sql`update language_requests set day = '2026-10-07'`
+    const res = await api().request('/admin/funnel?week=2026-10-05', { headers: { Authorization: 'Bearer t0ken' } })
+    const body = await res.json()
+    expect(body.languageRequests).toEqual([
+      { language: 'nl', name: 'Dutch', requests: 2 },
+      { language: 'ja', name: 'Japanese', requests: 1 },
+      { language: 'other', name: 'Something else', requests: 1 },
+    ])
+    expect(body.text).toContain('Asked for other languages: Dutch 2, Japanese 1, Something else 1')
+    const next = await (await api().request('/admin/funnel?week=2026-10-12', { headers: { Authorization: 'Bearer t0ken' } })).json()
+    expect(next.text).toContain('Asked for other languages: none')
+  })
+
   it('also takes the token in the address, for the morning email', async () => {
     expect((await api().request('/admin/funnel?week=2026-10-05&token=t0ken')).status).toBe(200)
     expect((await api().request('/admin/funnel?week=2026-10-05&token=wrong')).status).toBe(401)
