@@ -1,4 +1,4 @@
-import { alternateIconName, flagsForLanguage, PLUS_MONTHLY_SEC } from '@polycast/core'
+import { alternateIconName, flagsForLanguage, PLUS_MONTHLY_SEC, seasonalLine } from '@polycast/core'
 import { setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
@@ -73,6 +73,8 @@ export default function You() {
 
   const set = (prefs: ProfilePrefs) => updatePrefs(prefs).catch((e) => setError(e instanceof Error ? e.message : 'Couldn’t save that.'))
   const language = profile.target_language ?? 'sv'
+  // New Year learners (PC-1023-04): 26 Dec to 18 Jan only, then gone by itself. Copy and timing, no price change.
+  const newYear = seasonalLine('plusCard', new Date(), languageName(language))
   const flagOptions = [{ id: 'polycast', label: 'Polycast colours' }, ...flagsForLanguage(language).map((f) => ({ id: f.id, label: f.label }))]
 
   return (
@@ -92,6 +94,7 @@ export default function You() {
                 : 'Your free episode is waiting: pick any show and prepare one episode, up to 2 hours.'}
           </Txt>
           {ownKeys ? <Tag label="Using your own keys" tone="saved" /> : null}
+          {profile.plan !== 'plus' && newYear ? <Txt variant="small">{newYear}</Txt> : null}
           {profile.plan !== 'plus' ? <Button label="See Plus" onPress={() => router.push('/plus')} style={{ marginTop: space.sm }} /> : null}
         </View>
 

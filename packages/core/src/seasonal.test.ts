@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LAUNCH_LANGUAGES } from './index'
 import { MOOD_MAX_CHARS } from './mood'
-import { SEASONS, localDay, seasonalMood } from './seasonal'
+import { SEASONAL_LINES, SEASONS, localDay, seasonalLine, seasonalMood } from './seasonal'
 
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h)
 
@@ -31,5 +31,25 @@ describe('the All Saints’ weekend pick on Discover (PC-1021-08)', () => {
     const later = [{ id: 'x', from: '2027-06-01', to: '2027-06-02', byLanguage: { sv: { chip: 'Midsommar', note: 'Note.' } } }]
     expect(seasonalMood('sv', at(2027, 6, 2), later)?.chip).toBe('Midsommar')
     expect(seasonalMood('sv', at(2027, 6, 3), later)).toBeUndefined()
+  })
+})
+
+describe('New Year lines (PC-1023-04)', () => {
+  const at = (iso: string) => new Date(`${iso}T12:00:00`)
+  it('show from 26 December to 18 January, then switch themselves off', () => {
+    expect(seasonalLine('welcome', at('2026-12-25'))).toBeUndefined()
+    expect(seasonalLine('welcome', at('2026-12-26'))).toMatch(/New year/)
+    expect(seasonalLine('plusCard', at('2027-01-01'), 'Spanish')).toBe('One podcast a week in Spanish this year? Plus brings your guide to every episode.')
+    expect(seasonalLine('plusCard', at('2027-01-18'), 'Swedish')).toContain('Swedish')
+    expect(seasonalLine('plusCard', at('2027-01-19'), 'Swedish')).toBeUndefined()
+  })
+
+  it('skip Black Friday and never mention a discount or price', () => {
+    expect(seasonalLine('welcome', at('2026-11-27'))).toBeUndefined()
+    for (const l of SEASONAL_LINES) for (const s of [l.welcome, l.plusCard]) expect(s).not.toMatch(/€|%|discount|off|sale|!|\$/i)
+  })
+
+  it('fall back to a plain phrase without a language', () => {
+    expect(seasonalLine('plusCard', at('2027-01-05'))).toContain('in your language this year')
   })
 })

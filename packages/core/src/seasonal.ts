@@ -68,3 +68,36 @@ export function seasonalMood(language: string, now: Date, seasons: Season[] = SE
   }
   return undefined
 }
+
+/**
+ * New Year lines (PC-1023-04): from Boxing Day to mid-January, when most people start learning, the welcome
+ * screen and the free plan's card on You speak to New Year learners, then switch themselves off. No discount
+ * and no price change: copy and timing only. `{language}` becomes the language's English name.
+ */
+export interface SeasonalLines {
+  id: string
+  /** First and last day it shows, inclusive, as YYYY-MM-DD in the learner's own time zone. */
+  from: string
+  to: string
+  /** Under the welcome screen's introduction, before a language is picked. */
+  welcome: string
+  /** On the free plan's card in You, above "See Plus". */
+  plusCard: string
+}
+
+export const SEASONAL_LINES: SeasonalLines[] = [
+  {
+    id: 'new-year-2027',
+    from: '2026-12-26',
+    to: '2027-01-18',
+    welcome: 'New year, new language? One podcast a week is a gentle way in.',
+    plusCard: 'One podcast a week in {language} this year? Plus brings your guide to every episode.',
+  },
+]
+
+/** The seasonal line for this place today, if one is on. */
+export function seasonalLine(place: 'welcome' | 'plusCard', now: Date, languageName = 'your language', lines: SeasonalLines[] = SEASONAL_LINES): string | undefined {
+  const day = localDay(now)
+  const s = lines.find((l) => day >= l.from && day <= l.to)
+  return s?.[place].replace('{language}', languageName)
+}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Linking, Platform, useColorScheme, View } from 'react-native'
 import { Mark } from '../components/Mark'
 import { Button, Screen, Txt } from '../components/ui'
+import { seasonalLine } from '@polycast/core'
 import { REAL_HOST_LINE } from '../lib/copy'
 import { useSession } from '../lib/session'
 import { space } from '../theme'
@@ -12,6 +13,8 @@ export default function Welcome() {
   const scheme = useColorScheme()
   const { signInWithApple } = useSession()
   const [error, setError] = useState<string>()
+  // New Year learners (PC-1023-04): 26 Dec to 18 Jan only, then gone by itself.
+  const newYear = seasonalLine('welcome', new Date())
 
   return (
     <Screen edges={['top', 'bottom']} style={{ paddingHorizontal: space.lg }}>
@@ -23,6 +26,11 @@ export default function Welcome() {
         <Txt tone="quiet" style={{ maxWidth: 320 }}>
           Learn a language through the podcasts people there actually listen to, with subtitles and a guide at your side.
         </Txt>
+        {newYear ? (
+          <Txt tone="quiet" style={{ maxWidth: 320 }}>
+            {newYear}
+          </Txt>
+        ) : null}
         <Txt variant="small" tone="faint" style={{ maxWidth: 320 }}>
           {REAL_HOST_LINE}
         </Txt>
