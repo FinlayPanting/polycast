@@ -24,7 +24,8 @@ Target: public App Store launch before the On Air Fest pitch (aim 23 Oct 2026). 
 - On a real iPhone (22 Oct build): the Siri and Spotlight shortcuts (PC-1021-09; native Swift written without a Mac, first compiled by the TestFlight build), and that episode requests name Polycast in hosts' stats (PC-1019-04). The OPAWG list entry in `docs/OPAWG.md` is ready to send.
 - Lock-screen transcript test (PC-1020-L1): built on branch `build/PC-1020-L1`, waiting on the LiveLine extension's App ID and provisioning profile.
 - On a real iPhone (23 Oct build): the shortcuts now compile for the iOS 15.1 minimum (iOS 16 and up only, PC-1022-03); check "Play the newest <show>" learns a show followed after install; the new "You already know some …" step after picking a language (PC-1022-08) plays each word in the host's voice.
-- Waiting on Finlay, built on branches: CarPlay (`build/PC-1022-10`, Apple's CarPlay audio entitlement), Mistral Voxtral voices in the Lab (`build/PC-1022-09`, `MISTRAL_API_KEY`), Support this show (`build/PC-1018-09`, migration 0014), Plus-screen counter (`build/PC-1018-08`, migration 0013).
+- On a real iPhone (24 Oct build): links with odd characters still open the right screen (patched decode-uri-component, PC-1023-07); the player on a short screen (PC-1019-05; the iPhone Duo's outer display, if one's to hand). Builds are pinned to EAS's Xcode 26.6 image (`sdk-57`) until the layout adapts to any shape.
+- Waiting on Finlay, built on branches: CarPlay (`build/PC-1022-10`, Apple's CarPlay audio entitlement), Mistral Voxtral voices in the Lab (`build/PC-1022-09`, `MISTRAL_API_KEY`), Support this show (`build/PC-1018-09`, migration 0014), Plus-screen counter (`build/PC-1018-08`, migration 0013), Learning something else? (`build/PC-1023-02`, migration 0015).
 - One server test (Discover shelves) failed once in about a dozen runs and hasn't reproduced; watch for it.
 
 ## Preview without an iPhone

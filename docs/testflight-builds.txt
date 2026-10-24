@@ -9,3 +9,4 @@
 2026-10-21 build 6
 2026-10-22 build 7
 2026-10-23 build 8: Siri shortcuts marked iOS 16+ and refresh followed shows (PC-1022-03); 'You already know' onboarding step (PC-1022-08)
+2026-10-24 build 9: iPhone Duo (Xcode 26.6 pinned, player fits short screens, PC-1019-05); patched link decoder (PC-1023-07); Plus screen opens with your progress (PC-1023-03); New Year lines (PC-1023-04); video-first feeds as audio (PC-1023-09)
