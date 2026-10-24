@@ -130,6 +130,17 @@ export class FeedRetry {
 }
 export const SLOW_DOWN = 'Give it a moment, then try again.'
 
+/**
+ * How long a "You already know" answer is kept per language (PC-1023-01): an hour when it found words, five
+ * minutes when it didn't, so learners arriving while the starter episodes are still being prepared (launch
+ * morning) see the step as soon as one is ready, rather than an hour later.
+ */
+export const KNOWN_WORDS_TTL_MS = 60 * 60_000
+export const KNOWN_WORDS_EMPTY_TTL_MS = 5 * 60_000
+export function knownWordsFresh(body: { words: unknown[] }, at: number, now: number): boolean {
+  return now - at < (body.words.length ? KNOWN_WORDS_TTL_MS : KNOWN_WORDS_EMPTY_TTL_MS)
+}
+
 /** What GET /v1/known-words/:language returns (PC-1022-08); no episode when there are too few words. */
 export interface KnownWordsBody {
   episodeId?: string
@@ -563,7 +574,7 @@ export function createApi(deps: ApiDeps) {
    * "You already know these words" (PC-1022-08), shown right after picking a language: up to five
    * words from a starter episode (the newest ready episode of the first Polycast pick that has one)
    * that look like their meaning, each with the host saying it. Built from the episode's glossary,
-   * so no AI is used; kept for an hour per language.
+   * so no AI is used; kept for an hour per language (five minutes when there were too few words).
    */
   const knownCache = new Map<string, { at: number; body: KnownWordsBody }>()
   app.get('/v1/known-words/:language', async (c) => {
@@ -573,7 +584,7 @@ export function createApi(deps: ApiDeps) {
     const native = profile?.native_language ?? 'en'
     const key = `${language}:${native}`
     const hit = knownCache.get(key)
-    if (hit && Date.now() - hit.at < 60 * 60_000) return c.json(hit.body)
+    if (hit && knownWordsFresh(hit.body, hit.at, Date.now())) return c.json(hit.body)
     const candidates = await sql`
       select distinct on (k.position) e.id, e.title, e.audio_url, p.title as podcast_title, t.words, t.glossary
       from picks k join podcasts p on p.id = k.podcast_id and not p.removed

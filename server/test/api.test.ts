@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { createApi, KNOWN_WORDS_EMPTY_TTL_MS, KNOWN_WORDS_TTL_MS, knownWordsFresh, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
 import { ProviderError, type TextModel } from '../src/providers/types'
 import { OWN_KEYS_LIMITS } from '../src/ownKeys'
@@ -672,6 +672,48 @@ run('API and worker', () => {
     expect(body.words.map((w: any) => w.text).sort()).toEqual(['famiglia', 'importante', 'musica', 'ristorante', 'telefono'])
     expect(body.words.find((w: any) => w.text === 'importante')).toEqual({ text: 'importante', meaning: 'important', clip: { start: 0.88, end: 1.92 } })
     expect((await call(other, 'GET', '/v1/known-words/../x')).status).toBe(404)
+  })
+
+  it('keeps an empty "You already know" answer for five minutes, not an hour (PC-1023-01)', async () => {
+    expect(knownWordsFresh({ words: [] }, 0, KNOWN_WORDS_EMPTY_TTL_MS - 1)).toBe(true)
+    expect(knownWordsFresh({ words: [] }, 0, KNOWN_WORDS_EMPTY_TTL_MS)).toBe(false)
+    expect(knownWordsFresh({ words: [{}] }, 0, KNOWN_WORDS_EMPTY_TTL_MS)).toBe(true)
+    expect(knownWordsFresh({ words: [{}] }, 0, KNOWN_WORDS_TTL_MS)).toBe(false)
+
+    // Launch morning: one server, the starter episode still being prepared when the first learner arrives.
+    const app = api()
+    const get = async (user: string) => (await app.request('/v1/known-words/pt', { headers: { Authorization: `Bearer ${user}` } })).json()
+    const t0 = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(t0)
+    try {
+      expect(await get(await learner())).toEqual({ words: [] })
+      const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/pt-pick.xml', 'Café Brasil', 'pt') returning id`
+      await sql`insert into picks (language, podcast_id, position) values ('pt', ${p!.id}, 1)`
+      const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+        values (${p!.id}, 'pt-1', 'Episódio 1', now(), 900, 'https://a.example/pt1.mp3', 'pt', 'ready') returning id`
+      const text = 'a música é importante para a família no restaurante'
+      const words = text.split(' ').map((t, i) => ({ text: t, start: i, end: i + 0.8 }))
+      const glossary = {
+        música: { lemma: 'música', meaning: 'music' },
+        importante: { lemma: 'importante', meaning: 'important' },
+        família: { lemma: 'família', meaning: 'family' },
+        restaurante: { lemma: 'restaurante', meaning: 'restaurant' },
+      }
+      await sql`insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
+        values (${e!.id}, 'pt', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])}, ${sql.json(glossary)})`
+      clock.mockReturnValue(t0 + KNOWN_WORDS_EMPTY_TTL_MS - 1_000)
+      expect(await get(await learner())).toEqual({ words: [] }) // still the kept empty answer
+      clock.mockReturnValue(t0 + KNOWN_WORDS_EMPTY_TTL_MS + 1_000)
+      const ready = await get(await learner())
+      expect(ready.episodeId).toBe(e!.id)
+      expect(ready.words.length).toBeGreaterThanOrEqual(3)
+      // A found answer is kept for the hour, even once the episode stops being ready.
+      await sql`update episodes set status = 'failed' where id = ${e!.id}`
+      clock.mockReturnValue(t0 + KNOWN_WORDS_EMPTY_TTL_MS + 30 * 60_000)
+      expect((await get(await learner())).episodeId).toBe(e!.id)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('reads a slow feed once while it loads, not once per learner (PC-1022-05)', async () => {
