@@ -528,6 +528,14 @@
    "title": "Fits the iPhone Duo's outer screen",
    "description": "On a short, wide screen like the iPhone Duo's outer display, the player makes room for your guide instead of crowding the title and controls.",
    "tryIt": "Open any episode on the iPhone Duo's outer screen"
+  },
+  {
+   "id": "PC-1023-03",
+   "date": "2026-10-24",
+   "kind": "UX",
+   "title": "Plus starts with what's yours",
+   "description": "The Plus screen now opens with your own progress, like the words you've saved and the episodes you've finished with your guide.",
+   "tryIt": "Open Plus from the You tab"
   }
  ]
 }

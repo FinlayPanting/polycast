@@ -7,6 +7,10 @@ import { buy, plusOffer, restore } from '../lib/purchases'
 import { DEFAULT_ANNUAL, DEFAULT_MONTHLY, type PlanPrice, yearlyValueLine } from '../lib/planValue'
 import { RESTORE_MESSAGES, restoreErrorMessage } from '../lib/plusPending'
 import { useSession } from '../lib/session'
+import { countFinishedGuided } from '../lib/data'
+import { guideName, languageName } from '../lib/languages'
+import { PLUS_KEEP_GOING, plusOpener } from '../lib/plusOpener'
+import { countWords } from '../lib/words'
 import { useAsync } from '../lib/useAsync'
 import { space, usePalette } from '../theme'
 
@@ -19,7 +23,13 @@ const WHAT_YOU_GET = [
 /** Plus: €4.99 a month or €49 a year (spec: Plans; yearly raised from €39 on 19 Oct 2026), sold through the App Store. */
 export default function Plus() {
   const p = usePalette()
-  const { confirmPlus } = useSession()
+  const { confirmPlus, profile } = useSession()
+  const language = profile?.target_language ?? undefined
+  // What the learner already has, said first (PC-1023-03). If the counts can't be read, the screen is as before.
+  const { data: mine } = useAsync(async () => {
+    const [words, finished] = await Promise.all([language ? countWords(language).catch(() => undefined) : undefined, countFinishedGuided().catch(() => undefined)])
+    return plusOpener({ words, finished, languageName: languageName(language), guideName: guideName(profile?.guide_id) })
+  }, [language, profile?.guide_id])
   const { data: offer, error } = useAsync(plusOffer, [])
   const [busy, setBusy] = useState<string>()
   const [message, setMessage] = useState<string>()
@@ -53,6 +63,12 @@ export default function Plus() {
         <Button kind="quiet" label="Not now" onPress={() => router.back()} style={{ alignSelf: 'flex-end', paddingHorizontal: 0 }} />
         <Mark height={64} speaking />
         <Txt variant="title">Polycast Plus</Txt>
+        {mine ? (
+          <View style={{ gap: space.xs }}>
+            <Txt variant="bodyStrong">{mine}</Txt>
+            <Txt tone="quiet">{PLUS_KEEP_GOING}</Txt>
+          </View>
+        ) : null}
         <View style={{ gap: space.sm }}>
           {WHAT_YOU_GET.map((line) => (
             <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>

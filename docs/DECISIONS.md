@@ -424,3 +424,7 @@ Board item PC-1019-05. Every build profile now builds on EAS's `macos-tahoe-26.5
 ## An empty "You already know" answer is kept for five minutes (24 Oct 2026)
 
 Board item PC-1023-01. `GET /v1/known-words/:language` keeps an answer with words for an hour, as before, but an answer with too few words for only five minutes (`knownWordsFresh` in `server/src/api.ts`), so on launch morning, while the starter episodes are still being prepared, new learners get the step within minutes of one being ready. Simplest option picked: a shorter time for empty answers rather than not keeping them at all, so a language with no ready starter episode still costs at most one database query per five minutes.
+
+## The Plus screen starts with what you already have (24 Oct 2026)
+
+Board item PC-1023-03. Under "Polycast Plus" the screen now says what the learner already has ("You’ve saved 14 Italian words and finished 2 episodes with Mia.") and then "Plus keeps it going:" before the usual three lines (`plusOpener` in `app/src/lib/plusOpener.ts`). Simplest options picked: two counts read straight from the learner's own rows (saved words in the language being learned; guided listens finished, any language), each a count-only query; whichever is zero is left out, and with neither (a brand-new learner) or if the counts can't be read the screen is exactly as before. Prices, plans and the three lines are unchanged.
