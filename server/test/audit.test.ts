@@ -1,6 +1,7 @@
+import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain JavaScript script, no type declarations
-import { packagesInTree, triage } from '../../scripts/audit.mjs'
+import { packagesInTree, PATCHED, triage } from '../../scripts/audit.mjs'
 
 const advisory = (module_name: string, severity: string, paths: string[]) => ({ module_name, severity, vulnerable_versions: '<9', title: 't', url: 'u', findings: [{ version: '1', paths }] })
 
@@ -25,7 +26,7 @@ describe('the dependency audit in pnpm check', () => {
     expect(reported).toHaveLength(2)
   })
   it('copes with an empty report', () => {
-    expect(triage({})).toEqual({ blocking: [], reported: [] })
+    expect(triage({})).toEqual({ blocking: [], reported: [], patched: [] })
   })
 
   // Today's real `pnpm audit --prod` report from the build run (17 Oct): five advisories, two high,
@@ -62,5 +63,12 @@ describe('the dependency audit in pnpm check', () => {
     // Another version of the same package, not the one the server runs, doesn't block.
     const other = { advisories: { 9: { ...advisory('hono', 'high', []), findings: [{ version: '3.0.0', paths: [] }] } } }
     expect(triage(other, packagesInTree(serverTree)).blocking).toEqual([])
+  })
+
+  it('lists an advisory fixed by a patch as patched, only for the patched version (PC-1023-07)', () => {
+    const duc = (version: string) => ({ module_name: 'decode-uri-component', severity: 'moderate', vulnerable_versions: '<=0.4.2', title: 't', url: 'https://github.com/advisories/GHSA-vcc3-ghjq-m6fr', findings: [{ version, paths: [] }] })
+    expect(triage({ advisories: { 1: duc('0.2.2') } })).toMatchObject({ reported: [], patched: [expect.stringContaining('patches/decode-uri-component@0.2.2.patch')] })
+    expect(triage({ advisories: { 1: duc('0.4.1') } }).reported).toHaveLength(1)
+    for (const fix of Object.values(PATCHED) as { patch: string }[]) expect(existsSync(new URL(`../../${fix.patch}`, import.meta.url))).toBe(true)
   })
 })

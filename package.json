@@ -9,5 +9,10 @@
   },
   "devDependencies": {
     "typescript": "~5.8.3"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "decode-uri-component@0.2.2": "patches/decode-uri-component@0.2.2.patch"
+    }
   }
 }

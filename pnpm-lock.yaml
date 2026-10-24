@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  decode-uri-component@0.2.2:
+    hash: dshoynwine5dq3jlcsspuw6c5i
+    path: patches/decode-uri-component@0.2.2.patch
+
 importers:
 
   .:
@@ -6763,9 +6768,7 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -7712,7 +7715,7 @@ snapshots:
   decimal.js@10.6.0:
     optional: true
 
-  decode-uri-component@0.2.2: {}
+  decode-uri-component@0.2.2(patch_hash=dshoynwine5dq3jlcsspuw6c5i): {}
 
   dedent@1.7.2:
     optional: true
@@ -9903,7 +9906,7 @@ snapshots:
 
   query-string@7.1.3:
     dependencies:
-      decode-uri-component: 0.2.2
+      decode-uri-component: 0.2.2(patch_hash=dshoynwine5dq3jlcsspuw6c5i)
       filter-obj: 1.1.0
       split-on-first: 1.1.0
       strict-uri-encode: 2.0.0
