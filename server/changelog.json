@@ -520,6 +520,14 @@
    "title": "You already know some words",
    "description": "Right after picking a language, Polycast shows a few words from one of the first shows you could hear that you already know, like Italian “importante”, and the host says each one.",
    "tryIt": "Pick a language when you first set up Polycast, then tap a word"
+  },
+  {
+   "id": "PC-1019-05",
+   "date": "2026-10-24",
+   "kind": "UX",
+   "title": "Fits the iPhone Duo's outer screen",
+   "description": "On a short, wide screen like the iPhone Duo's outer display, the player makes room for your guide instead of crowding the title and controls.",
+   "tryIt": "Open any episode on the iPhone Duo's outer screen"
   }
  ]
 }

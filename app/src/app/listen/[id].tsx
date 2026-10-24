@@ -2,7 +2,7 @@ import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wor
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActionSheetIOS, Alert, AppState, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native'
+import { ActionSheetIOS, Alert, AppState, Modal, Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native'
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
@@ -17,6 +17,7 @@ import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
+import { playerArtSize } from '../../lib/screenShape'
 import { hopBackLabel } from '../../lib/hopBack'
 import { playerMenu, REPORT_FAILED, REPORT_THANKS } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
@@ -226,6 +227,7 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
 
 export default function Listen() {
   const p = usePalette()
+  const win = useWindowDimensions()
   const { id, guide, level: levelParam, from } = useLocalSearchParams<{ id: string; guide?: string; level?: string; from?: string }>()
   // The intensity chosen on the episode screen for this listen (PC-1017-F13).
   const chosenLevel = levelParam ? guidanceLevelOr(levelParam, 'standard') : undefined
@@ -329,6 +331,7 @@ export default function Listen() {
     if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: menu.options, cancelButtonIndex: menu.cancelIndex }, runMenu)
     else Alert.alert('More', undefined, [...menu.actions.map((_, i) => ({ text: menu.options[i]!, onPress: () => runMenu(i) })), { text: 'Cancel', style: 'cancel' as const }])
   }
+  const artSize = playerArtSize(win.width, win.height, Boolean(guideOn))
   const nextMode: Record<SubtitleMode, SubtitleMode> = { both: 'target', target: 'none', none: 'both' }
   const modeLabel: Record<SubtitleMode, string> = { both: 'Both languages', target: 'Target language only', none: 'Subtitles off' }
 
@@ -359,7 +362,7 @@ export default function Listen() {
         </Txt>
       ) : null}
 
-      <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
+      <View style={{ flex: 1, justifyContent: 'center', gap: space.lg, overflow: 'hidden' }}>
         {advert && !guideOn ? (
           <View style={{ alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg }}>
             <Txt tone="quiet">Advert break</Txt>
@@ -368,9 +371,9 @@ export default function Listen() {
             </Txt>
           </View>
         ) : null}
-        {segmentAt(data.transcript.segments, state.position) < 0 ? (
+        {segmentAt(data.transcript.segments, state.position) < 0 && artSize > 0 ? (
           <View style={{ alignItems: 'center' }}>
-            <Artwork uri={data.episode.image} size={guideOn ? 168 : 260} radius={22} />
+            <Artwork uri={data.episode.image} size={artSize} radius={22} />
           </View>
         ) : null}
         <Subtitles
