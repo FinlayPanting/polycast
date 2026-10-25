@@ -7,7 +7,7 @@ import type { Storage } from '../providers/types'
 import { fetchEffectsCatalog, roomSettings } from '../roomAudition'
 import { GUIDES, guideById } from '../voices'
 import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, type MomentVariant } from './moment'
-import { estimateVoiceUSD, GEMINI_TTS, TEXT_MODELS, voicePerHourUSD } from './prices'
+import { estimateVoiceUSD, GEMINI_TTS, MAI_TTS_MODEL, TEXT_MODELS, voicePerHourUSD } from './prices'
 import { getRun, labSpend, listRuns, pickRun, saveRun, type RunKind } from './runs'
 import { clientAddress, rateLimiter } from '../rateLimit'
 import { SOUND_PRESETS } from './sound'
@@ -42,6 +42,26 @@ export interface LabDeps {
  * password or not. Lab runs have no spending cap, so the password is worth guarding.
  */
 export const LAB_WRONG_TRIES = { perAddress: 10, windowMs: 15 * 60_000, delayMs: 750 }
+
+/**
+ * MAI-Voice-2.1's voices from OpenRouter's speech model list (`supported_voices`), launch languages
+ * and English first. Ids look like 'es-ES-Ximena:MAI-Voice-2.1'; anything else is dropped.
+ */
+export function parseMaiVoices(body: unknown, model = MAI_TTS_MODEL): { id: string; name: string }[] {
+  const models: any[] = Array.isArray((body as any)?.data) ? (body as any).data : []
+  const entry = models.find((m) => m?.id === model)
+  const raw: any[] = Array.isArray(entry?.supported_voices) ? entry.supported_voices : []
+  const ids = raw.map((v) => (typeof v === 'string' ? v : v?.id ?? v?.name)).filter((v): v is string => typeof v === 'string' && /^[\w.-]{1,80}(:[\w.-]{1,40})?$/.test(v))
+  const wanted = [...LAUNCH_LANGUAGES, 'en']
+  const rank = (id: string) => {
+    const i = wanted.indexOf(id.slice(0, 2).toLowerCase())
+    return i < 0 ? wanted.length : i
+  }
+  return [...new Set(ids)]
+    .filter((id) => rank(id) < wanted.length)
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .map((id) => ({ id, name: id.split(':')[0]! }))
+}
 
 /** Gemini's and Chirp 3 HD's shared voice names. */
 export const GOOGLE_VOICES = [
@@ -171,9 +191,22 @@ export function createLab(deps: LabDeps) {
     return voiceList
   }
 
+  /** MAI-Voice-2.1's voices (PC-1024-05), read from OpenRouter's public model list. */
+  let maiList: { at: number; voices: { id: string; name: string }[] } | undefined
+  async function maiVoices() {
+    if (!deps.keys.openrouter) return []
+    if (maiList && Date.now() - maiList.at < 10 * 60_000) return maiList.voices
+    const body = await f('https://openrouter.ai/api/v1/models?output_modalities=speech', { headers: { Authorization: `Bearer ${deps.keys.openrouter}` }, signal: AbortSignal.timeout(10_000) })
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({}))
+    maiList = { at: Date.now(), voices: parseMaiVoices(body) }
+    return maiList.voices
+  }
+
   app.get('/api/options', async (c) => {
-    const [eleven, catalog, spend, runs] = await Promise.all([
+    const [eleven, mai, catalog, spend, runs] = await Promise.all([
       elevenVoices(),
+      maiVoices(),
       deps.keys.elevenlabs ? fetchEffectsCatalog(deps.keys.elevenlabs, f) : Promise.resolve({ filters: [], environments: [] }),
       labSpend(deps.sql),
       listRuns(deps.sql, { limit: 1 }),
@@ -187,6 +220,7 @@ export function createLab(deps: LabDeps) {
         elevenlabs: { available: Boolean(deps.keys.elevenlabs), defaultModel: elevenModel, models: eleven.models.length ? eleven.models : [{ id: elevenModel, name: elevenModel }], voices: eleven.voices, perHourUSD: voicePerHourUSD('elevenlabs', elevenModel) },
         chirp: { available: Boolean(deps.keys.googleTts), voices: GOOGLE_VOICES, perHourUSD: voicePerHourUSD('chirp', '') },
         gemini: { available: Boolean(deps.keys.gemini), models: Object.keys(GEMINI_TTS), voices: GOOGLE_VOICES, perHourUSD: Object.fromEntries(Object.keys(GEMINI_TTS).map((m) => [m, voicePerHourUSD('gemini', m)])) },
+        mai: { available: Boolean(deps.keys.openrouter), defaultModel: MAI_TTS_MODEL, voices: mai, perHourUSD: voicePerHourUSD('mai', MAI_TTS_MODEL) },
       },
       textModels: TEXT_MODELS.map((m) => ({
         id: m.id,

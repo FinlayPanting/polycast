@@ -6,7 +6,7 @@ import { fadeWav, HANDOVER, joinWavs, LAB_RATE, lineChain, runFfmpeg, scaleWav, 
 import { cleanTake, takeHash, voiceAndStore, voiceLine } from '../src/lab/voice'
 import { episodeAudio, renderMoment, type EpisodeForLab } from '../src/lab/moment'
 import { compareScripts, firstMinutes, scriptPrompt } from '../src/lab/writing'
-import { createLab, LAB_WRONG_TRIES } from '../src/lab/routes'
+import { createLab, LAB_WRONG_TRIES, parseMaiVoices } from '../src/lab/routes'
 import { labSpend, listRuns, pickRun, saveRun } from '../src/lab/runs'
 import { wavDurationSec } from '../src/audio'
 import type { Storage } from '../src/providers/types'
@@ -135,6 +135,40 @@ describe('Voicing a line in the Lab', () => {
     expect(again).toMatchObject({ cached: true, costUSD: 0, url: first.url })
     expect(again.durationSec).toBeCloseTo(first.durationSec, 3)
     expect(calls.slice(before).some((c) => c.url.includes('text-to-speech'))).toBe(false)
+  })
+
+  it('voices a whole mixed line in one MAI-Voice call through OpenRouter and prices it per character (PC-1024-05)', async () => {
+    const tone = await toneMp3(0.6)
+    const calls: { url: string; body?: any; auth?: string }[] = []
+    const f = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), body: JSON.parse(String(init?.body)), auth: (init?.headers as any)?.Authorization })
+      return new Response(tone, { headers: { 'Content-Type': 'audio/mpeg' } })
+    }) as unknown as typeof fetch
+    const take = cleanTake({ provider: 'mai', voice: 'en-GB-Ada:MAI-Voice-2.1', speed: 1.1 })
+    expect(take).toMatchObject({ provider: 'mai', voice: 'en-GB-Ada:MAI-Voice-2.1' })
+    const line = { text: 'In Sweden, [[fika]] is a coffee break with something sweet.', nativeLanguage: 'en', targetLanguage: 'sv' }
+    const v = await voiceLine(take, line, { openrouter: 'ork' }, { fetchImpl: f })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ url: 'https://openrouter.ai/api/v1/audio/speech', auth: 'Bearer ork' })
+    expect(calls[0]!.body).toEqual({ model: 'microsoft/mai-voice-2.1', input: 'In Sweden, fika is a coffee break with something sweet.', voice: 'en-GB-Ada:MAI-Voice-2.1', response_format: 'mp3' })
+    expect(v.durationSec).toBeGreaterThan(0.5)
+    expect(v.costUSD).toBeCloseTo(v.chars * 22e-6, 12)
+    expect(voiceCostUSD('mai', 'microsoft/mai-voice-2.1', 1_000_000, 0)).toBeCloseTo(22, 9)
+    await expect(voiceLine(take, line, {})).rejects.toThrow(/OPENROUTER_API_KEY/)
+    // A colon is only allowed in MAI-Voice ids, and nothing else odd gets through.
+    expect(cleanTake({ provider: 'mai', voice: 'x:y:z' }).voice).not.toBe('x:y:z')
+    expect(cleanTake({ provider: 'chirp', voice: 'a:b' }).voice).not.toBe('a:b')
+  })
+
+  it('reads MAI-Voice-2.1’s voices from OpenRouter’s model list, launch languages first', () => {
+    const body = { data: [
+      { id: 'openai/gpt-4o-mini-tts', supported_voices: ['alloy'] },
+      { id: 'microsoft/mai-voice-2.1', supported_voices: ['ja-JP-Aoi:MAI-Voice-2.1', 'en-US-Harper:MAI-Voice-2.1', 'sv-SE-Sofie:MAI-Voice-2.1', 'es-ES-Ximena:MAI-Voice-2.1', 'bad id!', { id: 'fr-FR-Lea:MAI-Voice-2.1' }] },
+    ] }
+    expect(parseMaiVoices(body).map((v) => v.id)).toEqual(['es-ES-Ximena:MAI-Voice-2.1', 'fr-FR-Lea:MAI-Voice-2.1', 'sv-SE-Sofie:MAI-Voice-2.1', 'en-US-Harper:MAI-Voice-2.1'])
+    expect(parseMaiVoices(body)[0]!.name).toBe('es-ES-Ximena')
+    expect(parseMaiVoices('nope')).toEqual([])
+    expect(parseMaiVoices({ data: [] })).toEqual([])
   })
 
   it('says which key is missing', async () => {

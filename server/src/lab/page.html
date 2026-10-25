@@ -310,7 +310,7 @@ const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStar
 const LANG = { sv: 'Swedish', de: 'German', es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese', en: 'English' }
 const KIND = { warmup: 'Warm-up', listenFor: 'Listen for', spotlight: 'Spotlight', cultureNote: 'Culture note', quickQuestion: 'Quick question', chapterRecap: 'Recap', wrapUp: 'Wrap-up' }
 const LEVEL = { light: 'Light', standard: 'Standard', handsOn: 'Hands-on' }
-const PROVIDER = { elevenlabs: 'ElevenLabs', chirp: 'Chirp 3 HD', gemini: 'Gemini TTS' }
+const PROVIDER = { elevenlabs: 'ElevenLabs', chirp: 'Chirp 3 HD', gemini: 'Gemini TTS', mai: 'MAI-Voice-2.1' }
 const COLORS = ['#FF9C18', '#EE6FB8', '#7FD1A8', '#B3A7DD', '#FC8A7A', '#6EC3F4', '#F2C35B', '#C9C7CF']
 let token = ''
 let opts = null
@@ -378,16 +378,18 @@ function takeEditor(container, takes, onChange, { allowEffects = true, allowSoun
     const el = document.createElement('div')
     el.className = 'take'
     const p = opts.voices[t.provider]
-    const voices = t.provider === 'elevenlabs' ? p.voices.map((v) => [v.id, v.name + (v.labels?.accent ? ` · ${v.labels.accent}` : '') + (v.labels?.gender ? ` · ${v.labels.gender}` : '')]) : p.voices.map((v) => [v, v])
+    const voices = t.provider === 'elevenlabs' ? p.voices.map((v) => [v.id, v.name + (v.labels?.accent ? ` · ${v.labels.accent}` : '') + (v.labels?.gender ? ` · ${v.labels.gender}` : '')]) : t.provider === 'mai' ? p.voices.map((v) => [v.id, v.name]) : p.voices.map((v) => [v, v])
     const models = t.provider === 'elevenlabs' ? p.models.map((m) => [m.id, m.name]) : t.provider === 'gemini' ? p.models.map((m) => [m, m]) : []
     const fx = allowEffects && t.provider === 'elevenlabs' ? opts.elevenEffects : []
     el.innerHTML = `
       <div class="tag"><span class="dot" style="background:${COLORS[i % COLORS.length]}"></span><input type="text" value="${esc(t.label)}" data-f="label" style="min-height:34px;padding:5px 9px;font-weight:700"></div>
       <button class="x" type="button" aria-label="Remove">×</button>
       <label>Provider<select data-f="provider">${Object.entries(PROVIDER).map(([k, n]) => `<option value="${k}" ${k === t.provider ? 'selected' : ''} ${opts.voices[k].available ? '' : 'disabled'}>${n}${opts.voices[k].available ? '' : ' (no key)'}</option>`).join('')}</select></label>
-      <label>Voice<select data-f="voice">${voices.map(([v, n]) => `<option value="${esc(v)}" ${v === t.voice ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      ${voices.length || t.provider !== 'mai'
+        ? `<label>Voice<select data-f="voice">${voices.map(([v, n]) => `<option value="${esc(v)}" ${v === t.voice ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>`
+        : `<label>Voice id<input type="text" data-f="voice" value="${esc(t.voice || '')}" placeholder="e.g. es-ES-Ximena:MAI-Voice-2.1"></label>`}
       ${models.length ? `<label>Model<select data-f="model">${models.map(([v, n]) => `<option value="${esc(v)}" ${v === t.model ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''}
-      <label>Speed <span class="speedv">${(t.speed ?? 0.9).toFixed(2)}</span><input type="range" min="0.7" max="1.2" step="0.05" value="${t.speed ?? 0.9}" data-f="speed"></label>
+      ${t.provider === 'mai' ? '<div class="muted" style="font-size:12px">MAI-Voice plays at its own speed; the voice’s locale sets the accent</div>' : `<label>Speed <span class="speedv">${(t.speed ?? 0.9).toFixed(2)}</span><input type="range" min="0.7" max="1.2" step="0.05" value="${t.speed ?? 0.9}" data-f="speed"></label>`}
       ${allowSound ? `<label>Sound<select data-f="sound">${opts.sounds.map((s) => `<option value="${s.id}" ${s.id === (t.sound || 'dry') ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select></label>` : ''}
       ${fx.length ? `<label>ElevenLabs effect<select data-f="effects"><option value="">None</option>${fx.map((e, j) => `<option value="${j}" ${JSON.stringify(e.effects) === JSON.stringify(t.effects) ? 'selected' : ''}>${esc(e.note)}</option>`).join('')}</select></label>` : ''}
       <div class="muted" style="grid-column:1/-1;font-size:12px">${perHour(t)}</div>`
@@ -400,8 +402,8 @@ function takeEditor(container, takes, onChange, { allowEffects = true, allowSoun
         t.provider = e.target.value
         const np = opts.voices[t.provider]
         const g = opts.guides[i % opts.guides.length]
-        t.voice = t.provider === 'elevenlabs' ? g.elevenLabsVoiceId : g.googleVoice
-        t.model = t.provider === 'elevenlabs' ? np.defaultModel : t.provider === 'gemini' ? np.models[0] : undefined
+        t.voice = t.provider === 'elevenlabs' ? g.elevenLabsVoiceId : t.provider === 'mai' ? (np.voices[0]?.id ?? '') : g.googleVoice
+        t.model = t.provider === 'elevenlabs' || t.provider === 'mai' ? np.defaultModel : t.provider === 'gemini' ? np.models[0] : undefined
         t.effects = null
         takeEditor(container, takes, onChange, { allowEffects, allowSound })
       } else t[f] = e.target.value
@@ -469,7 +471,8 @@ $('#vProviders').addEventListener('click', () => {
   vTakes.splice(0, vTakes.length,
     { ...defaultTake(0), label: 'ElevenLabs' },
     { label: 'Chirp', provider: 'chirp', voice: g.googleVoice, speed: 0.9, sound: 'dry', effects: null },
-    { label: 'Gemini', provider: 'gemini', voice: g.googleVoice, model: opts.voices.gemini.models[0], speed: 0.9, sound: 'dry', effects: null })
+    { label: 'Gemini', provider: 'gemini', voice: g.googleVoice, model: opts.voices.gemini.models[0], speed: 0.9, sound: 'dry', effects: null },
+    ...(opts.voices.mai?.available ? [{ label: 'MAI-Voice', provider: 'mai', voice: opts.voices.mai.voices[0]?.id ?? '', model: opts.voices.mai.defaultModel, speed: 0.9, sound: 'dry', effects: null }] : []))
   takeEditor($('#vTakes'), vTakes, vChanged); vChanged()
 })
 $('#vRun').addEventListener('click', async () => {

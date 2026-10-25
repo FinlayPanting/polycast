@@ -7,7 +7,7 @@ import { googleChirpSpeech } from '../providers/googleTts'
 import { withRetry } from '../retry'
 import type { AudioEffects } from '../roomAudition'
 import { GUIDES } from '../voices'
-import { voiceCostUSD, type VoiceProvider } from './prices'
+import { MAI_TTS_MODEL, voiceCostUSD, type VoiceProvider } from './prices'
 import { isSoundPreset, joinWavs, LAB_RATE, LINE_GAP_SEC, runFfmpeg, fixWavSizes, silence, tidyLine, toMp3, type SoundPreset } from './sound'
 import { wavDurationSec } from '../audio'
 
@@ -40,6 +40,8 @@ export interface LabKeys {
   googleTts?: string
   gemini?: string
   anthropic?: string
+  /** OpenRouter, for Microsoft's MAI-Voice-2.1 (PC-1024-05), from OPENROUTER_API_KEY. */
+  openrouter?: string
 }
 
 export interface VoicedTake {
@@ -53,8 +55,10 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 
 /** Checks a take from the page: unknown fields dropped, numbers kept in range. */
 export function cleanTake(t: any): Take {
-  const provider: VoiceProvider = t?.provider === 'chirp' || t?.provider === 'gemini' ? t.provider : 'elevenlabs'
-  const voice = typeof t?.voice === 'string' && /^[\w.-]{1,80}$/.test(t.voice) ? t.voice : provider === 'elevenlabs' ? GUIDES[0]!.elevenLabsVoiceId : GUIDES[0]!.voice
+  const provider: VoiceProvider = t?.provider === 'chirp' || t?.provider === 'gemini' || t?.provider === 'mai' ? t.provider : 'elevenlabs'
+  // MAI-Voice ids look like 'es-ES-Ximena:MAI-Voice-2.1', so they may carry a colon.
+  const voiceOk = provider === 'mai' ? /^[\w.-]{1,80}(:[\w.-]{1,40})?$/ : /^[\w.-]{1,80}$/
+  const voice = typeof t?.voice === 'string' && voiceOk.test(t.voice) ? t.voice : provider === 'elevenlabs' ? GUIDES[0]!.elevenLabsVoiceId : GUIDES[0]!.voice
   const model = typeof t?.model === 'string' && /^[\w.-]{1,80}$/.test(t.model) ? t.model : undefined
   const speed = typeof t?.speed === 'number' && Number.isFinite(t.speed) ? clamp(t.speed, 0.7, 1.2) : undefined
   let effects: AudioEffects | null = null
@@ -95,16 +99,33 @@ async function elevenMp3(key: string, req: { text: string; voiceId: string; mode
   return audio
 }
 
+/**
+ * Microsoft MAI-Voice-2.1 through OpenRouter's speech endpoint (PC-1024-05), as MP3. OpenRouter
+ * answers with the audio itself. The voice's locale sets the accent, and speed is left at its
+ * default, since some of OpenRouter's speech providers refuse other values.
+ */
+export async function maiMp3(key: string, req: { text: string; voiceId: string; model?: string }, fetchImpl: typeof fetch): Promise<Uint8Array> {
+  const res = await fetchImpl('https://openrouter.ai/api/v1/audio/speech', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'Polycast Lab' },
+    body: JSON.stringify({ model: req.model ?? MAI_TTS_MODEL, input: req.text, voice: req.voiceId, response_format: 'mp3' }),
+  })
+  if (!res.ok) throw errorFromResponse('MAI-Voice (OpenRouter)', res.status, await res.text())
+  const audio = new Uint8Array(await res.arrayBuffer())
+  if (audio.byteLength < 2) throw new ProviderError('MAI-Voice reply had no audio', true)
+  return audio
+}
+
 const asWav = async (wav: Uint8Array) => ({ audio: wav, mimeType: 'audio/wav' })
 
 /**
  * Voices a line with a take, the way the pipeline does (server/src/pipeline/voice.ts): words in
- * [[ ]] are said in the target language, more slowly; ElevenLabs reads a mixed line in one go.
+ * [[ ]] are said in the target language, more slowly; ElevenLabs and MAI-Voice read a mixed line in one go.
  * Then the line gets the app's tidy-up and the take's sound setting.
  */
 export async function voiceLine(take: Take, line: LineRequest, keys: LabKeys, opts: { fetchImpl?: typeof fetch; elevenModel?: string; now?: Date } = {}): Promise<VoicedTake> {
   const fetchImpl = opts.fetchImpl ?? fetch
-  const mixed = take.provider === 'elevenlabs'
+  const mixed = take.provider === 'elevenlabs' || take.provider === 'mai'
   const runs = voiceSegments(line.text, { mixed })
   if (runs.length === 0) throw new Error('Nothing to say')
   const raw: Uint8Array[] = []
@@ -129,6 +150,11 @@ export async function voiceLine(take: Take, line: LineRequest, keys: LabKeys, op
           }, fetchImpl),
         ),
       )
+      continue
+    }
+    if (take.provider === 'mai') {
+      if (!keys.openrouter) throw new Error('MAI-Voice isn’t set up on the server (OPENROUTER_API_KEY).')
+      raw.push(await withRetry(() => maiMp3(keys.openrouter!, { text: run.text, voiceId: take.voice, model: take.model }, fetchImpl)))
       continue
     }
     let speech: SpeechSynth
