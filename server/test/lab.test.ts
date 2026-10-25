@@ -173,6 +173,10 @@ function fakeEpisode(): EpisodeForLab {
   return { id: '00000000-0000-0000-0000-000000000001', title: 'Avsnitt', podcastTitle: 'Podd', audioUrl: 'https://feed.test/ep.mp3', language: 'sv', nativeLanguage: 'en', transcript, plan, guideId: 'mia' }
 }
 
+// These render real audio with ffmpeg several times over: about 2 s alone, but past vitest's 5 s
+// default when the machine is busy (PC-1024-10), so they get more room. A real hang still fails.
+const FFMPEG_TEST_MS = 20_000
+
 describe('Guide moment preview', () => {
   it('plays the moment as the phone does: fade out, breath, guide, host clip, guide, pick up two seconds back', async () => {
     const storage = memoryStorage()
@@ -196,7 +200,7 @@ describe('Guide moment preview', () => {
     expect(r.costUSD).toBe(0)
     expect(r.mp3.byteLength).toBeGreaterThan(1000)
     expect(r.warnings.join(' ')).toMatch(/weren’t|wasn’t checked/)
-  })
+  }, FFMPEG_TEST_MS)
 
   it('re-voices with a rewritten script and charges only the voice', async () => {
     const storage = memoryStorage()
@@ -210,7 +214,7 @@ describe('Guide moment preview', () => {
     expect(calls.filter((c) => c.url.includes('text-to-speech')).map((c) => c.body.text)).toEqual(['Anna again:', 'Late!'])
     expect(r.costUSD).toBeCloseTo('Anna again:Late!'.length * 40e-6, 9)
     await expect(renderMoment(ep, episode, 'spotlight-1', { label: 'x', script: 'No voice' }, { keys: {}, storage, fetchImpl: f })).rejects.toThrow(/needs a voice/)
-  })
+  }, FFMPEG_TEST_MS)
 })
 
 describe('Writing tests', () => {

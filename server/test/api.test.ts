@@ -150,9 +150,12 @@ run('API and worker', () => {
   it('opens a show it read recently without re-reading the feed or asking Apple (PC-1017-F03)', async () => {
     const fetched: string[] = []
     let slow = false
+    // The slow feed answers only when the test lets it, so its re-read can't land in a later test (PC-1024-10).
+    let answerFeed = () => {}
+    const feedHeld = new Promise<void>((r) => (answerFeed = r))
     const spy: typeof fetch = async (input, init) => {
       fetched.push(String(input))
-      if (slow && String(input) === FEED_URL) await new Promise((r) => setTimeout(r, 10_000))
+      if (slow && String(input) === FEED_URL) await feedHeld
       return fakeFetch(input, init)
     }
     const quick = createApi({ sql, verify: async (t) => t, fetch: spy, lookupHost: publicHost })
@@ -171,6 +174,12 @@ run('API and worker', () => {
     expect((await open({ feedUrl: FEED_URL })).episodes).toHaveLength(2)
     expect(Date.now() - started).toBeLessThan(5_000)
     expect(fetched).toEqual([FEED_URL])
+
+    // The re-read finishes in the background for next time; wait for it here rather than in Discover's test.
+    answerFeed()
+    const caughtUp = async () => (await sql`select updated_at > now() - interval '1 minute' as fresh from podcasts where feed_url = ${FEED_URL}`)[0]!.fresh
+    for (let i = 0; i < 100 && !(await caughtUp()); i++) await new Promise((r) => setTimeout(r, 50))
+    expect(await caughtUp()).toBe(true)
   }, 20_000)
 
   it('times the freshness of a show and the wait for a slow feed', async () => {
@@ -214,7 +223,8 @@ run('API and worker', () => {
 
   it('shows Polycast picks, easy listening and the top chart on Discover', async () => {
     const someone = await learner()
-    const [p] = await sql`select id from podcasts limit 1`
+    // By its feed, not 'limit 1': which row comes first isn't promised once rows have been updated.
+    const [p] = await sql`select id from podcasts where feed_url = ${FEED_URL}`
     await sql`insert into picks (language, podcast_id, position) values ('sv', ${p!.id}, 1)`
     await sql`update episodes set difficulty = '{"band":"easier","label":"A2–B1, relaxed pace","wpm":120}' where status = 'ready'`
     const { shelves } = await (await call(someone, 'GET', '/v1/discover/sv')).json()
