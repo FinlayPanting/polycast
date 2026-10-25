@@ -448,3 +448,7 @@ Board item PC-1023-09. When an episode's main file is a video (`isVideo` in `pac
 ## The first-open count can't be pumped (25 Oct 2026)
 
 Board item PC-1024-03. `POST /events/first-open` now counts each internet address at most 10 times a day (`FIRST_OPEN_LIMITS` in `server/src/api.ts`, using the same in-memory limiter and address reading as the creators' removal form); further requests get a 429 and aren't counted. Nothing about the caller is stored: the address lives only in the server's memory for the day and is forgotten on restart. Simplest option picked: 10 rather than the form's 5, because many phones can share one address on a café's Wi-Fi or a mobile network, and a refused phone simply sends its first open again next time the app opens, so a real learner is still counted later.
+
+## VoiceOver reads each line in its own language (25 Oct 2026)
+
+Board item PC-1024-04. Subtitles (the current and previous line), the primer's gist and words (on the episode page and while it builds), saved words on Words and in review (the word and its example sentence) now carry `accessibilityLanguage` with the episode's or learner's language, and meanings and translations carry `en-GB` (`speechLanguage` in `app/src/lib/speechLanguage.ts`). Simplest option picked: the bare language code (`sv`, `pt`), so iOS uses whichever voice the learner has for that language rather than us choosing a country; mixed labels such as "Hear the host say …" stay untagged.

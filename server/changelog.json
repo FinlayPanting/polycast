@@ -552,6 +552,14 @@
    "title": "Video podcasts play as audio",
    "description": "When a show publishes episodes as video but also offers an audio version, Polycast now streams and downloads the audio, and video-only episodes wait for Wi-Fi before downloading on their own.",
    "tryIt": "Follow a video-first show and turn on Download new episodes"
+  },
+  {
+   "id": "PC-1024-04",
+   "date": "2026-10-25",
+   "kind": "UX",
+   "title": "VoiceOver speaks each line in its own language",
+   "description": "With VoiceOver on, subtitles, the primer's words and your saved words are read in the language they're in, and meanings and translations in English.",
+   "tryIt": "Turn on VoiceOver and swipe through the subtitles while you listen"
   }
  ]
 }

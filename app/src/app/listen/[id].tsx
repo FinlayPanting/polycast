@@ -382,6 +382,7 @@ export default function Listen() {
           position={state.position}
           mode={mode}
           oldFriends={oldFriends}
+          language={data.transcript.language}
           onLineMenu={(seg) => openLineMenu(seg.id)}
           onWord={(index) => {
             const w = data.transcript.words[index]
