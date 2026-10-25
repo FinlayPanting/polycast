@@ -21,6 +21,7 @@ import { setRemoteHandler } from './remote'
 import { LAST_PLAYED_KEY, miniPlayerView, openDecision, parseLastPlayed, sessionKey, type LastPlayed, type ListenParams, type MiniPlayerView } from './session'
 import { trackPlayerAudio } from './trackPlayerAudio'
 import { nowPlayingTrack } from './nowPlaying'
+import { keepStampFor } from '../lib/stamps'
 
 /**
  * The listen in progress, held above the screens (PC-1017-F04): swiping the full player away
@@ -272,6 +273,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const s = sessionRef.current
     if (s) void savePosition(s.user.id, params.id, state.position, true)
     if (last?.id === params.id) remember(undefined)
+    // A seasonal stamp for a guided episode finished while a season is on (PC-1024-07).
+    if (data) keepStampFor({ guided: data.guided, language: data.transcript.language })
   }, [state.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mini = useMemo(

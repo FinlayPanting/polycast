@@ -560,6 +560,14 @@
    "title": "VoiceOver speaks each line in its own language",
    "description": "With VoiceOver on, subtitles, the primer's words and your saved words are read in the language they're in, and meanings and translations in English.",
    "tryIt": "Turn on VoiceOver and swipe through the subtitles while you listen"
+  },
+  {
+   "id": "PC-1024-07",
+   "date": "2026-10-25",
+   "kind": "UX",
+   "title": "A stamp for the All Saints' weekend",
+   "description": "Finish an episode with your guide between 28 October and 2 November and you'll keep a small stamp in You, named in your language.",
+   "tryIt": "From 28 October, finish a guided episode, then look in You"
   }
  ]
 }

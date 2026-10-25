@@ -452,3 +452,7 @@ Board item PC-1024-03. `POST /events/first-open` now counts each internet addres
 ## VoiceOver reads each line in its own language (25 Oct 2026)
 
 Board item PC-1024-04. Subtitles (the current and previous line), the primer's gist and words (on the episode page and while it builds), saved words on Words and in review (the word and its example sentence) now carry `accessibilityLanguage` with the episode's or learner's language, and meanings and translations carry `en-GB` (`speechLanguage` in `app/src/lib/speechLanguage.ts`). Simplest option picked: the bare language code (`sv`, `pt`), so iOS uses whichever voice the learner has for that language rather than us choosing a country; mixed labels such as "Hear the host say …" stay untagged.
+
+## Seasonal stamps (25 Oct 2026)
+
+Board item PC-1024-07. Finishing a guided episode while a season is on (the All Saints' pick, 28 October to 2 November in the learner's own time zone) keeps that season's stamp, named in the episode's language: Todos los Santos, Toussaint, Allerheiligen, Ognissanti, Finados, Allhelgona (`stamp` on each season and `seasonalStamp`/`addStamp` in `packages/core/src/seasonal.ts`). Stamps show in a Stamps section in You, which only appears once there is one. Simplest options picked: kept on this phone (AsyncStorage, like Listen later), so no new table; one stamp per season whatever the language; subtitles-only listens don't earn one; no notification, count or streak, and nothing is lost by missing a season. A future season gets a stamp by adding `stamp` to its entry.
