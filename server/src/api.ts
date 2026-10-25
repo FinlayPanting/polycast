@@ -81,6 +81,8 @@ function changelogEntries(): ChangelogEntry[] {
 
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
+/** First opens counted per internet address per day (PC-1024-03); generous enough for a shared Wi-Fi or mobile network. */
+export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10 }
 
 /**
  * Fair-use limits per signed-in learner, per minute. Each of these calls reaches outside services
@@ -208,7 +210,11 @@ export function createApi(deps: ApiDeps) {
   })
 
   // The app says this once per install, before sign-in. Nothing identifies the phone.
+  // Each address is counted a few times a day at most (held in memory, never stored), so a loop
+  // can't pump the funnel. A refused phone simply tries again on its next open.
+  const firstOpenLimit = rateLimiter(FIRST_OPEN_LIMITS.perAddressPerDay, 24 * 60 * 60_000)
   app.post('/events/first-open', async (c) => {
+    if (!firstOpenLimit.hit(clientAddress((n) => c.req.header(n)))) return c.json({ error: 'Already counted today.' }, 429)
     await countFirstOpen(sql)
     return c.json({ ok: true })
   })
