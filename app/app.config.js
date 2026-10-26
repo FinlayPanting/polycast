@@ -20,12 +20,14 @@ module.exports = ({ config }) => {
       usesAppleSignIn: false,
       infoPlist: { ...config.ios.infoPlist, UIBackgroundModes: ['audio'] },
     },
-    plugins: config.plugins.filter((p) => !['expo-apple-authentication', 'expo-notifications'].includes(pluginName(p))),
+    // The Home Screen widget (PC-1025-08) needs an App Group, which a free account can't register.
+    plugins: config.plugins.filter((p) => !['expo-apple-authentication', 'expo-notifications', '@bacons/apple-targets'].includes(pluginName(p))),
   }
   // Some packages add these on their own; a free account can't sign an app that asks for them.
   return withEntitlementsPlist(personal, (c) => {
     delete c.modResults['aps-environment']
     delete c.modResults['com.apple.developer.applesignin']
+    delete c.modResults['com.apple.security.application-groups']
     return c
   })
 }

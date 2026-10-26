@@ -25,6 +25,11 @@
           "remote-notification"
         ],
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.finlaypanting.polycast"
+        ]
       }
     },
     "android": {
@@ -160,7 +165,8 @@
           }
         }
       ],
-      "./plugins/withAppShortcuts"
+      "./plugins/withAppShortcuts",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

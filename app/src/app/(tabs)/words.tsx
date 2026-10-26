@@ -1,12 +1,13 @@
 import { isDue, isKnown } from '@polycast/core'
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { FlatList, View } from 'react-native'
 import { Button, Screen, Tag, Txt } from '../../components/ui'
 import { languageName } from '../../lib/languages'
 import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
 import { listWords } from '../../lib/words'
+import { publishWidgetWords } from '../../lib/wordWidget'
 import { space, usePalette } from '../../theme'
 import { ENGLISH_SPEECH, speechLanguage } from '../../lib/speechLanguage'
 
@@ -18,6 +19,10 @@ export default function Words() {
   const { data, reload } = useAsync(() => listWords(language), [language])
   const speech = speechLanguage(language)
   useFocusEffect(useCallback(() => void reload(), [reload]))
+  // Keep the Home Screen widget's words in step with the bank (PC-1025-08).
+  useEffect(() => {
+    if (data) publishWidgetWords(data)
+  }, [data])
   const now = new Date().toISOString()
   const due = (data ?? []).filter((w) => isDue(w.review, now))
   const free = profile?.plan !== 'plus'

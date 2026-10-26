@@ -20,7 +20,8 @@ import { reportFirstOpen } from '../lib/firstOpen'
 import { routeForNotification } from '../lib/notificationRoute'
 import { useShortcuts } from '../lib/shortcuts'
 import { tidyDownloads } from '../lib/episodeAudio'
-import { savedWordEpisodes } from '../lib/words'
+import { listWords, savedWordEpisodes } from '../lib/words'
+import { publishWidgetWords } from '../lib/wordWidget'
 import { configurePurchases } from '../lib/purchases'
 import { SessionProvider, useSession } from '../lib/session'
 import { BottomBar } from '../components/BottomBar'
@@ -70,6 +71,14 @@ function Routes() {
       .catch(() => {})
   }, [session?.user.id])
 
+  // The Home Screen widget gets this language's recent words once a launch (PC-1025-08).
+  useEffect(() => {
+    if (!session || !profile?.target_language || config.demo) return
+    listWords(profile.target_language)
+      .then(publishWidgetWords)
+      .catch(() => {})
+  }, [session?.user.id, profile?.target_language])
+
   if (!ready) return null
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
@@ -95,6 +104,7 @@ function Routes() {
         <Stack.Screen name="tip" options={{ presentation: 'modal' }} />
         <Stack.Screen name="keys" />
         <Stack.Screen name="whats-new" />
+        <Stack.Screen name="word" options={{ presentation: 'modal' }} />
       </Stack.Protected>
     </Stack>
     {signedIn && onboarded ? <BottomBar /> : null}
