@@ -57,9 +57,9 @@ export async function syncFeed(
   const recent = feed.episodes.filter((e) => e.durationSec && e.durationSec > 0).slice(0, EPISODES_KEPT)
   for (const e of recent) {
     await sql`
-      insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, image, language, description)
-      values (${podcastId}, ${e.guid}, ${e.title}, ${e.published ?? null}, ${e.durationSec!}, ${e.audioUrl}, ${e.image ?? null}, ${p!.language ?? 'und'}, ${cleanDescription(e.description) ?? null})
-      on conflict (podcast_id, guid) do update set title = excluded.title, audio_url = excluded.audio_url, image = excluded.image, description = excluded.description,
+      insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, video, image, language, description)
+      values (${podcastId}, ${e.guid}, ${e.title}, ${e.published ?? null}, ${e.durationSec!}, ${e.audioUrl}, ${e.video}, ${e.image ?? null}, ${p!.language ?? 'und'}, ${cleanDescription(e.description) ?? null})
+      on conflict (podcast_id, guid) do update set title = excluded.title, audio_url = excluded.audio_url, video = excluded.video, image = excluded.image, description = excluded.description,
         duration_sec = case when episodes.status = 'none' then excluded.duration_sec else episodes.duration_sec end`
   }
   return { podcastId, feed }

@@ -87,6 +87,8 @@ run('API and worker', () => {
     expect(opened.podcast.description).toBe('Vardagssvenska, lugnt och roligt.') // for the show page (PC-1017-T1)
     expect(opened.episodes.map((e: any) => e.title)).toEqual(['Tåget', 'Fikan'])
     const episodeId = opened.episodes[0].id
+    // The feed's declared type is saved when it's read (PC-1025-01).
+    expect((await sql`select video from episodes where id = ${episodeId}`)[0]!.video).toBe(false)
 
     // Not ready yet: the player refuses, the prepare call queues it on her free episode.
     expect((await call(anna, 'POST', `/v1/episodes/${episodeId}/listen`)).status).toBe(409)
@@ -625,6 +627,11 @@ run('API and worker', () => {
     await sql`update episodes set audio_url = 'https://cdn.example.com/n.mp4' where podcast_id = ${shows[12]!} and guid = 'new'`
     const twelve = (await (await post({ podcastIds: [shows[12]] })).json()).shows[0]
     expect(twelve.episodes[0]).toMatchObject({ title: 'New 12', video: true })
+    // The feed's own answer wins over the address when it was saved (PC-1025-01).
+    await sql`update episodes set video = false where podcast_id = ${shows[12]!} and guid = 'new'`
+    expect((await (await post({ podcastIds: [shows[12]] })).json()).shows[0].episodes[0].video).toBeUndefined()
+    await sql`update episodes set audio_url = 'https://cdn.example.com/stream?id=12', video = true where podcast_id = ${shows[12]!} and guid = 'new'`
+    expect((await (await post({ podcastIds: [shows[12]] })).json()).shows[0].episodes[0].video).toBe(true)
     // Only the stale feed is re-read, in the background.
     await new Promise((r) => setTimeout(r, 50))
     expect(feedReads).toBe(1)

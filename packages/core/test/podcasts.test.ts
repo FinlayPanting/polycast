@@ -191,6 +191,19 @@ describe('video-first feeds play as audio (PC-1023-09)', () => {
     expect(parseFeed(feedWith(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/>`)).episodes[0]!.audioUrl).toBe('https://cdn.example.com/ep.mp4')
   })
 
+  it("records whether the file it keeps is a video, by the feed's declared type (PC-1025-01)", () => {
+    const ep = (item: string) => parseFeed(feedWith(item)).episodes[0]!
+    // An audio file named .mp4 is audio, so it can download over mobile data.
+    expect(ep(`<enclosure url="https://cdn.example.com/ep.mp4" type="audio/mp4"/>`).video).toBe(false)
+    // A video with no file ending is a video, so it waits for Wi-Fi.
+    expect(ep(`<enclosure url="https://cdn.example.com/stream?id=7" type="video/mp4"/>`).video).toBe(true)
+    // A video-first episode with an audio version keeps the audio, which isn't a video.
+    expect(ep(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/><podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/ep.mp3"/></podcast:alternateEnclosure>`).video).toBe(false)
+    // No type: the extension decides, as before.
+    expect(ep(`<enclosure url="https://cdn.example.com/ep.mp3"/>`).video).toBe(false)
+    expect(ep(`<enclosure url="https://cdn.example.com/ep.mov"/>`).video).toBe(true)
+  })
+
   it('tells video from audio by type, then by extension', () => {
     expect(isVideo('https://x/ep.mp4', 'video/mp4')).toBe(true)
     expect(isVideo('https://x/ep.mp4', 'audio/mp4')).toBe(false)

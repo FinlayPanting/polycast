@@ -13,6 +13,8 @@ export interface FeedEpisode {
   published?: string
   durationSec?: number
   audioUrl: string
+  /** Whether audioUrl is a video, by the feed's own declared type when it gives one (PC-1025-01). */
+  video: boolean
   description?: string
   image?: string
   /** Podcasting 2.0 <podcast:transcript> links the publisher provides. */
@@ -103,7 +105,9 @@ export function parseFeed(xml: string): Feed {
       if (!mainUrl) return undefined
       const mainType: string | undefined = enclosure?.['@type'] ?? atomAudio?.['@type']
       // Video-first feeds (PC-1023-09): when the main file is a video, take the feed's audio version if it lists one.
-      const audioUrl = isVideo(mainUrl, mainType) ? (alternateAudio(item['podcast:alternateEnclosure']) ?? mainUrl) : mainUrl
+      const mainIsVideo = isVideo(mainUrl, mainType)
+      const altAudio = mainIsVideo ? alternateAudio(item['podcast:alternateEnclosure']) : undefined
+      const audioUrl = altAudio ?? mainUrl
       const transcripts: FeedTranscriptLink[] = (item['podcast:transcript'] ?? [])
         .filter((t: any) => t?.['@url'])
         .map((t: any) => ({ url: t['@url'], type: t['@type'] ?? '', language: t['@language'] }))
@@ -113,6 +117,7 @@ export function parseFeed(xml: string): Feed {
         published: isoDate(text(item.pubDate) ?? text(item.published) ?? text(item.updated)),
         durationSec: parseDuration(text(item['itunes:duration'])),
         audioUrl,
+        video: mainIsVideo && !altAudio,
         description: text(item['itunes:summary']) ?? text(item.description) ?? text(item.summary),
         image: item['itunes:image']?.['@href'] ?? channelImage,
         transcripts,
