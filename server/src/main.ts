@@ -6,6 +6,7 @@ import { serve } from '@hono/node-server'
 import { downloadEpisode, ffmpegAacEncoder, ffmpegFingerprint, ffmpegLoudness } from './audio'
 import { createApi, supabaseVerifier } from './api'
 import { connect, forgetOldRemovalRequests, releaseJob } from './db'
+import { forgetOldFeedback, type FeedbackStorage } from './feedback'
 import { ELEVEN_TTS_MODEL, elevenLabsSpeech, resolveElevenModel, scribeTranscriber } from './providers/elevenlabs'
 import { chooseTtsProvider, withFallbackSpeech } from './providers/speechChoice'
 import { elevenVoiceFor } from './voices'
@@ -46,6 +47,28 @@ function supabaseStorage(url: string, serviceKey: string, bucket = 'guide-audio'
       const publicUrl = `${url}/storage/v1/object/public/${bucket}/${path}`
       const res = await fetch(publicUrl, { method: 'HEAD' })
       return res.ok ? publicUrl : undefined
+    },
+  }
+}
+
+/** The private 'feedback' bucket for 'Tell Finlay' screenshots (PC-1025-05). */
+function supabaseFeedbackStorage(url: string, serviceKey: string, bucket = 'feedback'): FeedbackStorage {
+  return {
+    async put(path, bytes, contentType) {
+      const res = await fetch(`${url}/storage/v1/object/${bucket}/${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': contentType, 'x-upsert': 'true' },
+        body: bytes,
+      })
+      if (!res.ok) throw new Error(`Feedback upload failed: ${res.status} ${await res.text()}`)
+    },
+    async remove(paths) {
+      const res = await fetch(`${url}/storage/v1/object/${bucket}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefixes: paths }),
+      })
+      if (!res.ok) throw new Error(`Feedback delete failed: ${res.status} ${await res.text()}`)
     },
   }
 }
@@ -112,7 +135,8 @@ async function main() {
         elevenModel: process.env.ELEVENLABS_TTS_MODEL || undefined,
       }
     : undefined
-  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, text: geminiText(gemini), translateText, ownKeysSecret, ownKeysCalibration, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN, lab })
+  const feedbackStorage = supabaseFeedbackStorage(supabaseUrl, need('SUPABASE_SERVICE_ROLE_KEY'))
+  const api = createApi({ sql, verify: supabaseVerifier(supabaseUrl), fetch, podcastIndex, alert, feedbackStorage, text: geminiText(gemini), translateText, ownKeysSecret, ownKeysCalibration, revenueCatSecret: process.env.REVENUECAT_WEBHOOK_SECRET, funnelToken: process.env.FUNNEL_TOKEN, lab })
   const port = Number(process.env.PORT ?? 8787)
   serve({ fetch: api.fetch, port })
   console.log(`Polycast API on :${port}`)
@@ -199,6 +223,9 @@ async function main() {
       try {
         const n = await forgetOldRemovalRequests(sql)
         if (n) console.log(`Deleted ${n} removal requests handled over 12 months ago`)
+        // 'Tell Finlay' notes and their screenshots go after 90 days (PC-1025-05).
+        const f = await forgetOldFeedback(sql, feedbackStorage)
+        if (f) console.log(`Deleted ${f} feedback notes over 90 days old`)
       } catch (e) {
         console.error('removal request clean-up failed', e)
       }

@@ -224,6 +224,13 @@ export default function You() {
           <Button kind="secondary" label={ownKeys ? 'Manage your keys' : 'Use your own API keys'} onPress={() => router.push('/keys')} style={{ alignSelf: 'flex-start' }} />
         </Section>
 
+        <Section title="Tell Finlay">
+          <Txt variant="small" tone="quiet">
+            Something confusing, broken or lovely? Send Finlay a quick note, with a screenshot of the screen you were just on if you like.
+          </Txt>
+          <Button kind="secondary" label="Tell Finlay" onPress={() => router.push('/feedback')} style={{ alignSelf: 'flex-start' }} />
+        </Section>
+
         <Section title="Support Polycast">
           <Txt variant="small" tone="quiet">
             Enjoying it? A one-off tip helps keep Polycast free for everyone. It doesn’t unlock anything.

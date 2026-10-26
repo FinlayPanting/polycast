@@ -143,6 +143,8 @@ export const api = {
   /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
   primer: (episodeId: string) => call<{ primer: Primer | null; guideId?: string | null }>('GET', `/v1/episodes/${episodeId}/primer`),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
+  /** 'Tell Finlay' (PC-1025-05). */
+  sendFeedback: (body: { message: string; screen?: string; screenshot?: string; appVersion?: string; language?: string }) => call<{ ok: true }>('POST', '/v1/feedback', body),
 }
 
 /** A refusal from the server, with its plain-English message, if this error is one. */

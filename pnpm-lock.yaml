@@ -133,6 +133,9 @@ importers:
       react-native-track-player:
         specifier: 4.1.2
         version: 4.1.2(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      react-native-view-shot:
+        specifier: 6.1.1
+        version: 6.1.1(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       react-native-web:
         specifier: ~0.21.0
         version: 0.21.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -4206,6 +4209,19 @@ packages:
       shaka-player:
         optional: true
 
+  react-native-view-shot@6.1.1:
+    resolution: {integrity: sha512-eMoNXNgADlcMT5mbquHqueE55bUuJA6vpUj650ZiresuorgdRrhDCfaxI2QGL6TN1UT+76EgQMjDO6Vx/H0ZLA==}
+    engines: {node: '>=20.19.4', npm: '>=10'}
+    peerDependencies:
+      html2canvas-pro: ^2.0.0
+      react: '>=18.0.0'
+      react-native: '>=0.80.0'
+    peerDependenciesMeta:
+      html2canvas-pro:
+        optional: true
+      react-native:
+        optional: true
+
   react-native-web@0.21.4:
     resolution: {integrity: sha512-77B6KlalB4osNIck91TNFixPkYPsTbuNEvw8P7IV+4v4/5wZSBRKZnw0Zhx6YjuauDTz71gc8IW+fVhcBMjr5A==}
     peerDependencies:
@@ -6768,7 +6784,9 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -10004,6 +10022,12 @@ snapshots:
   react-native-track-player@4.1.2(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3):
     dependencies:
       react: 19.2.3
+      react-native: 0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
+
+  react-native-view-shot@6.1.1(react-native@0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+    optionalDependencies:
       react-native: 0.86.3(@babel/core@7.29.7)(@react-native/jest-preset@0.86.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
 
   react-native-web@0.21.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3):

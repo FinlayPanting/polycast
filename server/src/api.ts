@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, isTipProduct, isVideo, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
+import { checkFeedback, cohortAlert, FEEDBACK_LIMITS, isTipProduct, isVideo, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -13,6 +13,7 @@ import { translateTexts } from './translations'
 import type { TextModel } from './providers/types'
 import { SpendCapReached, type SpendGuard } from './budget'
 import { countFirstOpen, funnelText, weeklyFunnel } from './funnel'
+import { forgetFeedbackScreenshots, saveFeedback, type FeedbackStorage } from './feedback'
 import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
@@ -42,6 +43,8 @@ export interface ApiDeps {
   podcastIndex?: { key: string; secret: string }
   /** Where Finlay's alerts go (free-cohort thresholds, spending cap). */
   alert?: (kind: string, message: string) => Promise<void>
+  /** The private bucket for 'Tell Finlay' screenshots (PC-1025-05). Unset: notes are kept without them. */
+  feedbackStorage?: FeedbackStorage
   /** Shared secret RevenueCat sends with subscription events. */
   revenueCatSecret?: string
   /** Lets the morning email read the weekly funnel (counts only). Unset: the funnel isn't served. */
@@ -321,9 +324,26 @@ export function createApi(deps: ApiDeps) {
 
   /** Deletes the learner's account and everything tied to it (spec: Privacy; App Store requirement). */
   app.delete('/v1/account', async (c) => {
-    // Profiles, saved words and listens cascade from the auth user. Shared catalogue data stays.
+    // Profiles, saved words, listens and 'Tell Finlay' notes cascade from the auth user. Shared catalogue data stays.
+    // A note's screenshot lives in storage, so it goes first (PC-1025-05).
+    await forgetFeedbackScreenshots(sql, deps.feedbackStorage, c.get('userId'))
     await sql`delete from auth.users where id = ${c.get('userId')}`
     return c.json({ ok: true })
+  })
+
+  // 'Tell Finlay' (PC-1025-05): a short note from You, with the screen it's about and, if the learner
+  // chose, a screenshot of it. Finlay gets a ping; the note is kept 90 days.
+  const feedbackLimit = rateLimiter(FEEDBACK_LIMITS.perHour, 60 * 60_000)
+  app.post('/v1/feedback', async (c) => {
+    const userId = c.get('userId')
+    const check = checkFeedback(await c.req.json().catch(() => ({})))
+    if (!check.ok) return c.json({ error: check.error }, 400)
+    if (!feedbackLimit.hit(userId)) return c.json({ error: 'Thanks, that’s plenty for now. Please send the rest in an hour.' }, 429)
+    const id = await saveFeedback(sql, deps.feedbackStorage, userId, check.note)
+    const n = check.note
+    const about = [n.screen, n.language, n.appVersion && `v${n.appVersion}`, n.screenshot && 'with a screenshot'].filter(Boolean).join(', ')
+    await deps.alert?.('feedback', `${about ? `(${about}) ` : ''}${n.message.slice(0, 300)}`).catch((e) => console.error('alert failed', e))
+    return c.json({ ok: true, id })
   })
 
   // 'That looks wrong' (PC-1018-04): a learner flags a subtitle line. Nothing about them is kept.

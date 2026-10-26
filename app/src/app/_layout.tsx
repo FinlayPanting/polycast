@@ -23,6 +23,7 @@ import { tidyDownloads } from '../lib/episodeAudio'
 import { savedWordEpisodes } from '../lib/words'
 import { configurePurchases } from '../lib/purchases'
 import { SessionProvider, useSession } from '../lib/session'
+import { screenRoot } from '../lib/lastScreen'
 import { BottomBar } from '../components/BottomBar'
 import { PlayerProvider } from '../player/PlayerProvider'
 import { usePalette } from '../theme'
@@ -73,6 +74,8 @@ function Routes() {
   if (!ready) return null
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
+    {/* Wrapped so 'Tell Finlay' can picture the screen the learner was on (PC-1025-05). */}
+    <View ref={screenRoot} collapsable={false} style={{ flex: 1, backgroundColor: p.bg }}>
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="welcome" />
@@ -95,8 +98,10 @@ function Routes() {
         <Stack.Screen name="tip" options={{ presentation: 'modal' }} />
         <Stack.Screen name="keys" />
         <Stack.Screen name="whats-new" />
+        <Stack.Screen name="feedback" options={{ presentation: 'modal' }} />
       </Stack.Protected>
     </Stack>
+    </View>
     {signedIn && onboarded ? <BottomBar /> : null}
     </View>
   )

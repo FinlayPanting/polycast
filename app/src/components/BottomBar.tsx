@@ -5,6 +5,9 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePlayer } from '../player/PlayerProvider'
 import { activeTab, barVisible, TABS, type TabId } from '../lib/bottomBar'
+import { pictureScreen } from '../lib/lastScreen'
+import { shouldPicture } from '../lib/lastScreenCore'
+import { screenName } from '@polycast/core'
 import { font, MIN_TAP, space, usePalette } from '../theme'
 import { Artwork, Txt } from './ui'
 
@@ -22,8 +25,10 @@ export function BottomBar() {
   lastTab.current = current
   if (!barVisible(segments, Platform.OS)) return null
 
-  const go = (tab: TabId) => {
+  const go = async (tab: TabId) => {
     const href = TABS.find((t) => t.id === tab)!.href
+    // Heading into You: picture the screen being left first, in case the learner wants to tell Finlay about it (PC-1025-05).
+    if (shouldPicture(tab, current, segments[0] === '(tabs)')) await pictureScreen(screenName(segments))
     // From a screen pushed over the tabs (a show, an episode, search), go back down to the tabs first.
     if (segments[0] !== '(tabs)' && router.canDismiss()) router.dismissAll()
     router.navigate(href as any)
@@ -42,7 +47,7 @@ export function BottomBar() {
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
               accessibilityLabel={t.title}
-              onPress={() => go(t.id)}
+              onPress={() => void go(t.id)}
               style={({ pressed }) => ({ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 49, paddingTop: 6, gap: 2, opacity: pressed ? 0.6 : 1 })}
             >
               <SymbolView name={t.icon as SFSymbol} tintColor={colour} size={24} />
