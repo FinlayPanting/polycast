@@ -1,0 +1,18 @@
+{
+  "referenceName": "Launch week: first podcast with Mia",
+  "badge": "Challenge",
+  "eventName": "Your first podcast with Mia",
+  "shortDescription": "A real show, with Mia at the pauses",
+  "longDescription": "Pick a real podcast in Spanish, French, German, Italian, Portuguese or Swedish. Mia steps in at the pauses. Free to try.",
+  "purpose": "Attract new users",
+  "priority": "High",
+  "eventDeepLink": "",
+  "durationDays": 7,
+  "promoteDaysBefore": 7,
+  "media": {
+    "eventCard": "event-card-1920x1080.png",
+    "eventDetails": "event-details-1080x1920.png",
+    "productPageHeader": "product-page-header-3840x1646.png",
+    "universalHeader": "universal-header-5244x2950.png"
+  }
+}
