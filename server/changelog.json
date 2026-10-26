@@ -568,6 +568,14 @@
    "title": "A stamp for the All Saints' weekend",
    "description": "Finish an episode with your guide between 28 October and 2 November and you'll keep a small stamp in You, named in your language.",
    "tryIt": "From 28 October, finish a guided episode, then look in You"
+  },
+  {
+   "id": "PC-1025-06",
+   "date": "2026-10-26",
+   "kind": "UX",
+   "title": "Night owl: Mia says goodnight",
+   "description": "Finish a guided episode after 11 pm and Mia (or Leo) signs off with a goodnight in your language, like Sov gott or Sogni d’oro.",
+   "tryIt": "Finish a guided episode late in the evening"
   }
  ]
 }
