@@ -71,6 +71,21 @@ run('weekly funnel', () => {
     await sql`delete from first_opens where day <> '2026-10-06'`
   })
 
+  it('counts a whole IPv6 block as one address, and stops at an overall daily ceiling (PC-1025-03)', async () => {
+    const { FIRST_OPEN_LIMITS } = await import('../src/api')
+    const a = api()
+    const from = (ip: string) => a.request('/events/first-open', { method: 'POST', headers: { 'X-Real-IP': ip } })
+    const statuses: number[] = []
+    for (let i = 1; i <= 50; i++) statuses.push((await from(`2001:db8:5:6::${i.toString(16)}`)).status)
+    expect(statuses.filter((s) => s === 200)).toHaveLength(FIRST_OPEN_LIMITS.perAddressPerDay)
+    expect((await from('2001:db8:5:7::1')).status).toBe(200) // the next block along is someone else
+    // However many addresses join in, the day's count has a ceiling.
+    let accepted = FIRST_OPEN_LIMITS.perAddressPerDay + 1
+    for (let i = 0; accepted < FIRST_OPEN_LIMITS.overallPerDay; i++) if ((await from(`10.${(i >> 16) & 255}.${(i >> 8) & 255}.${i & 255}`)).status === 200) accepted++
+    expect((await from('198.51.100.99')).status).toBe(429)
+    await sql`delete from first_opens where day <> '2026-10-06'`
+  })
+
   it('serves the funnel only with the token', async () => {
     expect((await api().request('/admin/funnel?week=2026-10-05')).status).toBe(401)
     const res = await api().request('/admin/funnel?week=2026-10-05', { headers: { Authorization: 'Bearer t0ken' } })

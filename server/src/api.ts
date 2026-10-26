@@ -17,7 +17,7 @@ import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { feedTranscriptLink } from './worker'
-import { clientAddress, rateLimiter } from './rateLimit'
+import { addressKey, clientAddress, rateLimiter } from './rateLimit'
 import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -82,7 +82,7 @@ function changelogEntries(): ChangelogEntry[] {
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
 /** First opens counted per internet address per day (PC-1024-03); generous enough for a shared Wi-Fi or mobile network. */
-export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10 }
+export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10, overallPerDay: 5000 }
 
 /**
  * Fair-use limits per signed-in learner, per minute. Each of these calls reaches outside services
@@ -202,7 +202,7 @@ export function createApi(deps: ApiDeps) {
     if (!podcastTitle || !contact) return c.json({ error: 'Please give the show’s name and a way to reach you.' }, 400)
     if (podcastTitle.length > REMOVAL_LIMITS.title || contact.length > REMOVAL_LIMITS.contact || (message?.length ?? 0) > REMOVAL_LIMITS.message)
       return c.json({ error: `Please keep the show’s name and contact under ${REMOVAL_LIMITS.title} characters, and the message under ${REMOVAL_LIMITS.message}.` }, 400)
-    if (!removalPerAddress.hit(clientAddress((n) => c.req.header(n))) || !removalOverall.hit('all'))
+    if (!removalPerAddress.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !removalOverall.hit('all'))
       return c.json({ error: 'We’ve had a few requests from you already. Please try again in an hour.' }, 429)
     await sql`insert into removal_requests (podcast_title, contact, message) values (${podcastTitle}, ${contact}, ${message})`
     await deps.alert?.('removal', `Removal request for "${podcastTitle}" from ${contact}`)
@@ -212,9 +212,11 @@ export function createApi(deps: ApiDeps) {
   // The app says this once per install, before sign-in. Nothing identifies the phone.
   // Each address is counted a few times a day at most (held in memory, never stored), so a loop
   // can't pump the funnel. A refused phone simply tries again on its next open.
+  // IPv6 callers are counted by their /64 block, and there's an overall daily ceiling, like the removal form's (PC-1025-03).
   const firstOpenLimit = rateLimiter(FIRST_OPEN_LIMITS.perAddressPerDay, 24 * 60 * 60_000)
+  const firstOpenOverall = rateLimiter(FIRST_OPEN_LIMITS.overallPerDay, 24 * 60 * 60_000)
   app.post('/events/first-open', async (c) => {
-    if (!firstOpenLimit.hit(clientAddress((n) => c.req.header(n)))) return c.json({ error: 'Already counted today.' }, 429)
+    if (!firstOpenLimit.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !firstOpenOverall.hit('all')) return c.json({ error: 'Already counted today.' }, 429)
     await countFirstOpen(sql)
     return c.json({ ok: true })
   })
