@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { forYou, freshVoices, keepShowsInLanguage, topChart } from '../src/catalogue'
+import { forYou, freshVoices, keepShowsInLanguage, syncFeed, topChart } from '../src/catalogue'
 import { discoverShelves } from '../src/discover'
 import type { Sql } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
@@ -174,5 +174,42 @@ run('For you shelf from a learner\'s interests', () => {
   it('leads Discover with For you when the learner picked interests', async () => {
     const shelves = await discoverShelves(sql, fakeApple({ 'pi:Music': ['de-51'], de: ['de-52'] }), 'de', creds, ['music'])
     expect(shelves[0]).toMatchObject({ id: 'for-you', title: 'For you', shows: [{ title: 'PI de-51', why: 'Because you love music' }] })
+  })
+})
+
+run('Episodes with no ID in video-first feeds (PC-1025-02)', () => {
+  let sql: Sql
+  let drop: () => Promise<void>
+  beforeAll(async () => {
+    ;({ sql, drop } = await freshDatabase())
+  })
+  afterAll(async () => drop?.())
+
+  const FEED = 'https://feeds.example.com/video-first.xml'
+  const rss = (item: string) =>
+    `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel><title>Vídeo</title><language>es</language><item><title>Uno</title><itunes:duration>600</itunes:duration>${item}</item></channel></rss>`
+  const video = `<enclosure url="https://cdn.example.com/uno.mp4" type="video/mp4"/>`
+  const withAudio = `${video}<podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/uno.mp3"/></podcast:alternateEnclosure>`
+  const serving = (xml: string): typeof fetch => async () => new Response(xml)
+  const episodes = async (podcastId: string) => sql`select id, guid, audio_url from episodes where podcast_id = ${podcastId}`
+
+  it('adds no second copy when the show adds an audio version, and the learner keeps the episode they had', async () => {
+    const { podcastId } = await syncFeed(sql, serving(rss(video)), FEED, undefined, NET)
+    const [first] = await episodes(podcastId)
+    await syncFeed(sql, serving(rss(withAudio)), FEED, undefined, NET)
+    const after = await episodes(podcastId)
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ id: first!.id, guid: 'https://cdn.example.com/uno.mp4', audio_url: 'https://cdn.example.com/uno.mp3' })
+  })
+
+  it('gives a copy saved under its audio address since 23 Oct its original ID back, keeping the same episode', async () => {
+    const FEED2 = 'https://feeds.example.com/video-first-2.xml'
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values (${FEED2}, 'Vídeo 2', 'es') returning id`
+    const [saved] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language)
+      values (${p!.id}, 'https://cdn.example.com/uno.mp3', 'Uno', 600, 'https://cdn.example.com/uno.mp3', 'es') returning id`
+    await syncFeed(sql, serving(rss(withAudio)), FEED2, undefined, NET)
+    const after = await episodes(p!.id)
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ id: saved!.id, guid: 'https://cdn.example.com/uno.mp4' })
   })
 })

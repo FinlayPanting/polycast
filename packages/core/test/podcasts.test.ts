@@ -191,6 +191,20 @@ describe('video-first feeds play as audio (PC-1023-09)', () => {
     expect(parseFeed(feedWith(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/>`)).episodes[0]!.audioUrl).toBe('https://cdn.example.com/ep.mp4')
   })
 
+  it('keeps the same ID for an episode with none when its show adds an audio version (PC-1025-02)', () => {
+    const noGuid = (item: string) =>
+      `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel><title>Show</title><item><title>Ep</title>${item}</item></channel></rss>`
+    const before = parseFeed(noGuid(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/>`)).episodes[0]!
+    const after = parseFeed(noGuid(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/><podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/ep.mp3"/></podcast:alternateEnclosure>`)).episodes[0]!
+    expect(after.audioUrl).toBe('https://cdn.example.com/ep.mp3')
+    expect(after.guid).toBe(before.guid)
+    expect(after.guid).toBe('https://cdn.example.com/ep.mp4')
+    expect(after.formerGuid).toBe('https://cdn.example.com/ep.mp3')
+    expect(before.formerGuid).toBeUndefined()
+    // An episode with its own ID never needs renaming.
+    expect(parseFeed(feedWith(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/><podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/ep.mp3"/></podcast:alternateEnclosure>`)).episodes[0]!.formerGuid).toBeUndefined()
+  })
+
   it('tells video from audio by type, then by extension', () => {
     expect(isVideo('https://x/ep.mp4', 'video/mp4')).toBe(true)
     expect(isVideo('https://x/ep.mp4', 'audio/mp4')).toBe(false)

@@ -8,6 +8,11 @@ export interface FeedTranscriptLink {
 
 export interface FeedEpisode {
   guid: string
+  /**
+   * For an episode with no ID whose audio version is played instead of its video: the ID the 23 Oct reader gave it
+   * (the audio address), so a copy saved then can be renamed rather than added again (PC-1025-02).
+   */
+  formerGuid?: string
   title: string
   /** ISO date, or undefined if the feed's date can't be read. */
   published?: string
@@ -108,7 +113,9 @@ export function parseFeed(xml: string): Feed {
         .filter((t: any) => t?.['@url'])
         .map((t: any) => ({ url: t['@url'], type: t['@type'] ?? '', language: t['@language'] }))
       return {
-        guid: text(item.guid) ?? text(item.id) ?? audioUrl,
+        // With no ID, the episode is known by its original file, which stays put when a show adds an audio version (PC-1025-02).
+        guid: text(item.guid) ?? text(item.id) ?? mainUrl,
+        ...(!text(item.guid) && !text(item.id) && audioUrl !== mainUrl ? { formerGuid: audioUrl } : {}),
         title: text(item.title) ?? 'Untitled episode',
         published: isoDate(text(item.pubDate) ?? text(item.published) ?? text(item.updated)),
         durationSec: parseDuration(text(item['itunes:duration'])),

@@ -56,6 +56,11 @@ export async function syncFeed(
   const podcastId = p!.id as string
   const recent = feed.episodes.filter((e) => e.durationSec && e.durationSec > 0).slice(0, EPISODES_KEPT)
   for (const e of recent) {
+    if (e.formerGuid) {
+      // A copy saved between 23 and 26 Oct under its audio address takes back its original ID, keeping the learner's progress (PC-1025-02).
+      await sql`update episodes set guid = ${e.guid} where podcast_id = ${podcastId} and guid = ${e.formerGuid}
+        and not exists (select 1 from episodes x where x.podcast_id = ${podcastId} and x.guid = ${e.guid})`
+    }
     await sql`
       insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, image, language, description)
       values (${podcastId}, ${e.guid}, ${e.title}, ${e.published ?? null}, ${e.durationSec!}, ${e.audioUrl}, ${e.image ?? null}, ${p!.language ?? 'und'}, ${cleanDescription(e.description) ?? null})
