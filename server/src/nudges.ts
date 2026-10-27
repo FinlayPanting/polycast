@@ -52,6 +52,93 @@ export function nudgeText(n: Pick<Nudge, 'podcastTitle' | 'episodeTitle' | 'guid
   return { title: n.podcastTitle, body: `${g}: ${what} ready when you are. I’ll be there at the pauses.` }
 }
 
+/**
+ * One nudge if the first listen hasn't happened (PC-1026-09): a day after signing up, a learner who has
+ * notifications on but hasn't started a guided episode hears once from their guide, naming the episode to
+ * start with and how long it is. Never again: it uses `last_nudged_at`, so it goes only to someone who has
+ * never had a nudge, and claims it before sending.
+ */
+export const FIRST_LISTEN_AFTER_HOURS = 24
+/** Past this, a quiet account is left alone: the nudge is for the day after, not a month later. */
+export const FIRST_LISTEN_WITHIN_DAYS = 7
+
+export function minutesLabel(durationSec: number): string {
+  const m = Math.max(1, Math.round(durationSec / 60))
+  return `${m} min`
+}
+
+export function firstListenText(n: { guideName: string; podcastTitle: string; episodeTitle: string; durationSec: number }): { title: string; body: string } {
+  return { title: n.podcastTitle, body: `${n.guideName}: “${n.episodeTitle}” (${minutesLabel(n.durationSec)}) is a good one to start with. It’s ready when you are.` }
+}
+
+export interface FirstListenNudge {
+  userId: string
+  pushToken: string
+  guideName: string
+  podcastTitle: string
+  episodeId: string
+  episodeTitle: string
+  durationSec: number
+}
+
+/**
+ * Learners due the first-listen nudge, each with the episode to start with: the most recent one they asked
+ * to get ready, if it's ready; otherwise the newest ready episode of the first Polycast pick in their language.
+ */
+export async function dueFirstListenNudges(sql: Sql): Promise<FirstListenNudge[]> {
+  const rows = await sql`
+    select pr.id as user_id, pr.push_token, pr.guide_id, ep.id as episode_id, ep.title as episode_title, ep.duration_sec, ep.podcast_title
+    from profiles pr
+    cross join lateral (
+      select * from (
+        (select e.id, e.title, e.duration_sec, p.title as podcast_title, 0 as rank, j.created_at as at
+          from prep_jobs j join episodes e on e.id = j.episode_id join podcasts p on p.id = e.podcast_id and not p.removed
+          where j.requested_by = pr.id and e.status = 'ready'
+          order by j.created_at desc limit 1)
+        union all
+        (select e.id, e.title, e.duration_sec, p.title, 1, null
+          from picks k join podcasts p on p.id = k.podcast_id and not p.removed
+          join episodes e on e.podcast_id = p.id and e.status = 'ready'
+          where k.language = pr.target_language
+          order by k.position, e.published desc nulls last limit 1)
+      ) c order by rank limit 1
+    ) ep
+    where pr.push_token is not null
+      and pr.last_nudged_at is null
+      and pr.target_language is not null
+      and pr.created_at < now() - make_interval(hours => ${FIRST_LISTEN_AFTER_HOURS})
+      and pr.created_at > now() - make_interval(days => ${FIRST_LISTEN_WITHIN_DAYS})
+      and not exists (select 1 from listens l where l.user_id = pr.id and l.guided)`
+  return rows.map((r) => ({
+    userId: r.user_id,
+    pushToken: r.push_token,
+    guideName: guideNameFor(r.guide_id),
+    podcastTitle: r.podcast_title,
+    episodeId: r.episode_id,
+    episodeTitle: r.episode_title,
+    durationSec: Number(r.duration_sec ?? 0),
+  }))
+}
+
+/** Sends the first-listen nudges that are due, each claimed first so nobody gets two. Returns how many went out. */
+export async function sendFirstListenNudges(sql: Sql, push: Push, now = new Date()): Promise<number> {
+  const hour = now.getUTCHours()
+  if (hour < NUDGE_HOURS_UTC[0] || hour >= NUDGE_HOURS_UTC[1]) return 0
+  let sent = 0
+  for (const n of await dueFirstListenNudges(sql)) {
+    const [claimed] = await sql`update profiles set last_nudged_at = now() where id = ${n.userId} and last_nudged_at is null returning id`
+    if (!claimed) continue
+    const { title, body } = firstListenText(n)
+    try {
+      await push(n.pushToken, title, body, { episodeId: n.episodeId })
+      sent++
+    } catch (e) {
+      console.error('first-listen nudge failed', e)
+    }
+  }
+  return sent
+}
+
 /** The "your episode is ready" push's title (sent from main.ts). */
 export const READY_PUSH_TITLE = 'Your episode is ready'
 
@@ -67,6 +154,7 @@ export function allNotificationLines(): string[] {
         const t = nudgeText({ podcastTitle: 'Svenska Samtal', episodeTitle: 'Fika på jobbet', guideName, kind, isNewest })
         lines.add(t.title).add(t.body)
       }
+  for (const guideName of ['Mia', 'Leo']) for (const durationSec of [45, 720, 3600]) lines.add(firstListenText({ guideName, podcastTitle: 'Svenska Samtal', episodeTitle: 'Fika på jobbet', durationSec }).body)
   return [...lines]
 }
 

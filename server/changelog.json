@@ -592,6 +592,14 @@
    "title": "Two panes on the open iPhone Duo",
    "description": "With the Duo open, the player shows subtitles on one side and your guide's notes so far, the words to listen for and the words you've saved on the other. Folded, nothing changes.",
    "tryIt": "Play a guided episode with your iPhone Duo open"
+  },
+  {
+   "id": "PC-1026-09",
+   "date": "2026-10-27",
+   "kind": "Growth",
+   "title": "A gentle hello on day two",
+   "description": "If you've signed up but haven't started an episode with your guide a day later, they'll send one notification naming a good first episode and how long it is. Just once.",
+   "tryIt": "Allow notifications, then wait a day before your first guided listen"
   }
  ]
 }
