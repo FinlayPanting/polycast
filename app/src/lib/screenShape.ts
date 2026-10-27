@@ -21,3 +21,32 @@ export function playerArtSize(width: number, height: number, guideOn: boolean): 
   if (!isShortScreen(width, height)) return guideOn ? 168 : 260
   return guideOn ? 0 : 140
 }
+
+/** Widest the Plus screen's text column gets (PC-1026-02), so it reads as a column on a wide open display. */
+export const PLUS_TEXT_MAX = 600
+/** Widest the Plus screen's buy buttons get (PC-1026-02), so buying looks deliberate rather than stretched. */
+export const PLUS_BUTTON_MAX = 400
+
+export type PlusLayout = {
+  /** Width of the centred text column; the full width on a phone. */
+  columnWidth: number
+  /** Width of the buy buttons. */
+  buttonWidth: number
+  /** Short, folded screens get the small print and links in one tight footer. */
+  compactFooter: boolean
+}
+
+/**
+ * The Plus screen on any shape (PC-1026-02), after RevenueCat's iPhone Duo paywall guidance: on the wide open
+ * display the text keeps to about 600 points and the buttons to about 400, centred; on the short folded screen
+ * the footer is compact. A tall phone (narrower than both limits) is laid out exactly as before.
+ */
+export function plusLayout(width: number, height: number, padding = 24): PlusLayout {
+  const inner = Math.max(0, (width > 0 ? width : 0) - padding * 2)
+  const columnWidth = Math.min(inner, PLUS_TEXT_MAX)
+  return {
+    columnWidth,
+    buttonWidth: Math.min(columnWidth, PLUS_BUTTON_MAX),
+    compactFooter: isShortScreen(width, height),
+  }
+}

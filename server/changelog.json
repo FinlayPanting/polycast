@@ -576,6 +576,14 @@
    "title": "Night owl: Mia says goodnight",
    "description": "Finish a guided episode after 11 pm and Mia (or Leo) signs off with a goodnight in your language, like Sov gott or Sogni d’oro.",
    "tryIt": "Finish a guided episode late in the evening"
+  },
+  {
+   "id": "PC-1026-02",
+   "date": "2026-10-27",
+   "kind": "UX",
+   "title": "Plus fits the iPhone Duo",
+   "description": "On a wide screen the Plus page keeps to a readable column with sensibly sized buttons, the folded screen gets a compact footer, and Not now stays put while you scroll.",
+   "tryIt": "Open Plus from You on an iPhone Duo, folded and open"
   }
  ]
 }
