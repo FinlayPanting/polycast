@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain JavaScript script, no type declarations
-import { packagesInTree, PATCHED, triage } from '../../scripts/audit.mjs'
+import { appReach, BUILD_TOOLS, packagesInTree, PATCHED, triage } from '../../scripts/audit.mjs'
 
 const advisory = (module_name: string, severity: string, paths: string[]) => ({ module_name, severity, vulnerable_versions: '<9', title: 't', url: 'u', findings: [{ version: '1', paths }] })
 
@@ -70,5 +70,48 @@ describe('the dependency audit in pnpm check', () => {
     expect(triage({ advisories: { 1: duc('0.2.2') } })).toMatchObject({ reported: [], patched: [expect.stringContaining('patches/decode-uri-component@0.2.2.patch')] })
     expect(triage({ advisories: { 1: duc('0.4.1') } }).reported).toHaveLength(1)
     for (const fix of Object.values(PATCHED) as { patch: string }[]) expect(existsSync(new URL(`../../${fix.patch}`, import.meta.url))).toBe(true)
+  })
+})
+
+describe('the audit says which warnings ship (PC-1026-10)', () => {
+  // Paths from the real `pnpm audit --prod` report of 27 Oct 2026.
+  const zod = ['. > zod@3.25.76', 'app > expo@57.0.28 > @expo/cli@57.0.29 > zod@3.25.76', 'app > expo-audio@57.0.5 > expo@57.0.28 > @expo/cli@57.0.29 > zod@3.25.76']
+  const forge = [
+    '. > node-forge@1.4.0',
+    'app > expo@57.0.28 > @expo/cli@57.0.29 > @expo/code-signing-certificates@0.0.6 > node-forge@1.4.0',
+    'app > expo@57.0.28 > @expo/cli@57.0.29 > node-forge@1.4.0',
+    'app > expo-updates@57.0.26 > @expo/code-signing-certificates@0.0.6 > node-forge@1.4.0',
+  ]
+  const uuid = ['. > uuid@7.0.3', 'app > expo@57.0.28 > @expo/config@57.0.10 > @expo/config-plugins@57.0.10 > xcode@3.0.1 > uuid@7.0.3']
+
+  it('labels advisories that come only through Expo’s command-line tool and config plugins as build tool only', () => {
+    expect(appReach(zod)).toBe('build tool only')
+    expect(appReach(forge)).toBe('build tool only')
+    expect(appReach(uuid)).toBe('build tool only')
+    expect(BUILD_TOOLS).toContain('@expo/cli')
+  })
+
+  it('says an advisory ships when any path reaches it without a build tool', () => {
+    expect(appReach([...zod, 'app > expo-router@57.0.26 > zod@3.25.76'])).toBe('ships in the app')
+    expect(appReach(['app > react-native@0.86.3 > braces@3.0.2'])).toBe('ships in the app')
+  })
+
+  it('doesn’t guess without paths', () => {
+    expect(appReach([])).toBe('reach unknown')
+    expect(appReach(['. > zod@3.25.76'])).toBe('reach unknown')
+    expect(appReach(undefined)).toBe('reach unknown')
+  })
+
+  it('puts the label at the start of each reported line, with server for moderate server advisories', () => {
+    const adv = (module_name: string, severity: string, paths: string[]) => ({ module_name, severity, vulnerable_versions: '<9', title: 't', url: 'u', findings: [{ version: '1', paths }] })
+    const { reported, blocking } = triage({
+      advisories: {
+        1: adv('zod', 'high', zod),
+        2: adv('braces', 'high', ['app > react-native@0.86.3 > braces@3.0.2']),
+        3: adv('fast-xml-parser', 'moderate', ['server > @polycast/core > fast-xml-parser@4.5.0']),
+      },
+    })
+    expect(blocking).toEqual([])
+    expect(reported).toEqual([expect.stringMatching(/^build tool only: high zod/), expect.stringMatching(/^ships in the app: high braces/), expect.stringMatching(/^server: moderate fast-xml-parser/)])
   })
 })
