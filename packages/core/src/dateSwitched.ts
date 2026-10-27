@@ -1,4 +1,4 @@
-import { SEASONAL_LINES, SEASONS } from './seasonal'
+import { isYearly, SEASONAL_LINES, SEASONS } from './seasonal'
 
 /**
  * Features that switch themselves on by date or time (PC-1026-05). Apple's 16 Oct 2026 guidelines (2.5.19)
@@ -28,9 +28,9 @@ export function dayMonth(date: string): string {
   return `${Number(m[2])} ${MONTHS[Number(m[1]) - 1] ?? m[1]}`
 }
 
-/** "28 Oct to 2 Nov", from a season's first and last day. */
+/** "28 Oct to 2 Nov every year", from a season's first and last day (no "every year" for a one-off). */
 export function dayRange(from: string, to: string): string {
-  return `${dayMonth(from)} to ${dayMonth(to)}`
+  return `${dayMonth(from)} to ${dayMonth(to)}${isYearly({ from, to }) ? ' every year' : ''}`
 }
 
 const hour = (h: number) => (h === 0 ? 'midnight' : h === 12 ? 'noon' : h < 12 ? `${h} am` : `${h - 12} pm`)

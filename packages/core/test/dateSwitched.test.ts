@@ -8,6 +8,7 @@ describe('App Review notes name every date-switched feature (PC-1026-05)', () =>
     expect(dayMonth('2026-10-28')).toBe('28 Oct')
     expect(dayMonth('01-18')).toBe('18 Jan')
     expect(dayRange('2026-12-26', '2027-01-18')).toBe('26 Dec to 18 Jan')
+    expect(dayRange('12-26', '01-18')).toBe('26 Dec to 18 Jan every year')
   })
 
   it('lists the All Saints’ mood and stamp, the New Year lines and the 11 pm goodnight, each with how to see it', () => {
