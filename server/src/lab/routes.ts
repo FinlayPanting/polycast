@@ -10,10 +10,12 @@ import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, ty
 import { estimateVoiceUSD, GEMINI_TTS, MISTRAL_TTS_MODEL, TEXT_MODELS, voicePerHourUSD } from './prices'
 import { getRun, labSpend, listRuns, pickRun, saveRun, type RunKind } from './runs'
 import { clientAddress, rateLimiter } from '../rateLimit'
-import { SOUND_PRESETS } from './sound'
+import { cutEpisode, SOUND_PRESETS, toMp3 } from './sound'
 import { cleanTake, voiceAndStore, type LabKeys, type Take } from './voice'
 import { comparePlans, compareScripts, estimatePlanUSD, estimateScriptUSD } from './writing'
 import { splitScript } from '../pipeline/voice'
+import { showNamesFor } from '../worker'
+import { compareTranscription, estimateTranscribeUSD, TRANSCRIBE_LABEL, transcribePerHourUSD, VOXTRAL_TRANSCRIBE_MODEL } from './transcribe'
 
 /**
  * The Lab (PC-1021-L1): a password-protected page on the server for testing what Mia and Leo sound
@@ -219,6 +221,10 @@ export function createLab(deps: LabDeps) {
         available: m.provider === 'anthropic' ? Boolean(deps.keys.anthropic) : Boolean(deps.keys.gemini),
         perMillionUSD: { in: m.price(1000).in * 1e6, out: m.price(1000).out * 1e6 },
       })),
+      transcribe: {
+        scribe: { label: TRANSCRIBE_LABEL.scribe, available: Boolean(deps.keys.elevenlabs), perHourUSD: transcribePerHourUSD('scribe') },
+        voxtral: { label: TRANSCRIBE_LABEL.voxtral, model: VOXTRAL_TRANSCRIBE_MODEL, available: Boolean(deps.keys.mistral), perHourUSD: transcribePerHourUSD('voxtral') },
+      },
       sounds: Object.entries(SOUND_PRESETS).map(([id, s]) => ({ id, label: s.label, note: s.note })),
       elevenEffects: roomSettings(catalog).filter((s) => s.effects).map((s) => ({ label: s.label, note: s.note, effects: s.effects })),
       spend: spend ?? null,
@@ -381,6 +387,28 @@ export function createLab(deps: LabDeps) {
       const saved = results.map(({ plan: _plan, ...r }) => r)
       const runId = await saveRun(deps.sql, { kind: 'plan', title: `${ep.podcastTitle}: ${ep.title} · ${minutes ? `first ${minutes} min` : 'whole episode'}`, config: { episodeId: ep.id, guide: ep.guideId, models, minutes }, results: saved, costUSD: cost, by: by(c) })
       return c.json({ runId, results: saved, costUSD: cost })
+    } catch (e) {
+      return fail(c, e)
+    }
+  })
+
+  // Transcription audition (PC-1026-04): the start of an episode through Scribe and Voxtral, side by side.
+  app.post('/api/transcribe', async (c) => {
+    try {
+      const body = await c.req.json()
+      const ep = await episodeFor(body)
+      const minutes = Math.max(1, Math.min(15, Math.round(Number(body.minutes ?? 5)) || 5))
+      const length = ep.transcript.segments.at(-1)?.end ?? minutes * 60
+      const seconds = Math.min(minutes * 60, Math.max(1, length))
+      if (body.estimate) return c.json({ ...estimateTranscribeUSD(seconds), note: 'The first run on an episode downloads it, which can take a minute.' })
+      const episode = await episodeAudio(ep, { download: deps.download, fingerprint: deps.fingerprint, fetchImpl: f })
+      const mp3 = await toMp3(await cutEpisode(episode.audio, 0, seconds))
+      const [row] = await deps.sql`select podcast_id from episodes where id = ${ep.id}`
+      const names = row ? await showNamesFor(deps.sql, row.podcast_id).catch(() => undefined) : undefined
+      const results = await compareTranscription(ep, { mp3, seconds }, names, deps.keys, { fetchImpl: f })
+      const cost = results.reduce((a, r) => a + r.costUSD, 0)
+      // Not saved as a run: lab_runs only takes the five kinds in migration 0012 (see docs/DECISIONS.md).
+      return c.json({ results, costUSD: cost, seconds, language: ep.language })
     } catch (e) {
       return fail(c, e)
     }

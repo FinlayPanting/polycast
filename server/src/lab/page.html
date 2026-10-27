@@ -164,6 +164,7 @@ audio { width: 100%; height: 40px; }
     <button role="tab" data-tab="room">In the room</button>
     <button role="tab" data-tab="scripts">Scripts</button>
     <button role="tab" data-tab="plans">Lesson plans</button>
+    <button role="tab" data-tab="transcribe">Transcribe</button>
     <button role="tab" data-tab="history">History</button>
   </nav>
 </header>
@@ -286,6 +287,21 @@ audio { width: 100%; height: 40px; }
     <span class="estimate" id="lEst"></span>
   </div>
   <div id="lOut" style="margin-top:20px"></div>
+</section>
+
+<!-- TRANSCRIBE -->
+<section id="transcribe">
+  <h2>Transcribe</h2>
+  <p class="lede">The start of one episode through Scribe (what episodes use now) and Mistral's Voxtral, side by side: how far they agree, which of the show's names each spelt right, the language each heard, and what each costs an hour. The clip is cut in memory and never kept.</p>
+  <div class="row">
+    <label style="flex:3 1 260px">Episode<select id="tEpisode"></select></label>
+    <label style="flex:1 1 140px">How much<select id="tMinutes"><option value="2">First 2 minutes</option><option value="5" selected>First 5 minutes</option><option value="10">First 10 minutes</option><option value="15">First 15 minutes</option></select></label>
+  </div>
+  <div class="actions">
+    <button class="btn go" id="tRun" type="button">Transcribe with both</button>
+    <span class="estimate" id="tEst"></span>
+  </div>
+  <div id="tOut" style="margin-top:20px"></div>
 </section>
 
 <!-- HISTORY -->
@@ -430,6 +446,7 @@ function refreshEstimates() {
   if (tab === 'room') estimate('r', estRoom)
   if (tab === 'scripts') estimate('s', estScripts)
   if (tab === 'plans') estimate('l', estPlans)
+  if (tab === 'transcribe') estimate('t', estTranscribe)
 }
 
 /* Picks */
@@ -744,6 +761,35 @@ $('#sRun').addEventListener('click', async () => {
   } catch (e) { toast(e.message) } finally { busy(btn, false) }
 })
 
+/* ---------- Transcribe (PC-1026-04) ---------- */
+function tBody() { return { episodeId: $('#tEpisode').value, minutes: Number($('#tMinutes').value) } }
+async function estTranscribe() {
+  if (!$('#tEpisode').value) return
+  try { const r = await api('/transcribe', { ...tBody(), estimate: true }); $('#tEst').innerHTML = `About <b>${usd(r.totalUSD)}</b>` } catch (e) { $('#tEst').textContent = e.message }
+}
+$('#tEpisode').addEventListener('change', () => estimate('t', estTranscribe))
+$('#tMinutes').addEventListener('change', () => estimate('t', estTranscribe))
+$('#tRun').addEventListener('click', async () => {
+  if (!$('#tEpisode').value) return toast('Pick an episode first')
+  const btn = $('#tRun')
+  busy(btn, true, 'Transcribing (a minute or two)…')
+  try {
+    const r = await api('/transcribe', tBody())
+    const out = $('#tOut')
+    out.innerHTML = `<div class="actions" style="margin:0 0 12px"><span class="muted">Cost <b>${usd(r.costUSD)}</b> for ${clock(r.seconds)} of audio${r.results[0]?.agreement != null ? ` · the two agree on <b>${Math.round(r.results[0].agreement * 100)}%</b> of words` : ''}</span></div><div class="cols"></div>`
+    r.results.forEach((x) => {
+      const c = document.createElement('div')
+      c.className = 'card result'
+      const lang = x.detectedLanguage ? `heard as <b>${esc(LANG[x.detectedLanguage] || x.detectedLanguage)}</b>${x.detectedLanguage.slice(0, 2) !== r.language ? ' <span class="warnline">not the episode’s language</span>' : ''}` : ''
+      c.innerHTML = `<div class="head"><span class="name">${esc(x.label)}</span><span class="meta">${usd(x.costUSD)}${x.seconds != null ? ` · ${x.seconds}s` : ''}</span></div>
+        <div class="muted">About ${usd(x.perHourUSD)} an hour${lang ? ' · ' + lang : ''}</div>
+        ${x.ok ? `<div class="stats"><span class="chip"><b>${x.words}</b> words</span>${(x.names || []).map((n) => `<span class="chip">${n.found ? '✓' : '✗'} ${esc(n.name)}</span>`).join('')}</div>
+        <div class="doc"><p>${esc(x.text)}</p></div>` : `<div class="err">${esc(x.error)}</div>`}`
+      $('.cols', out).append(c)
+    })
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+
 /* ---------- Lesson plans ---------- */
 const lChosen = new Set(['gemini-3.8-flash', 'claude-haiku-5-5'])
 function lBody() { return { episodeId: $('#lEpisode').value, models: [...lChosen], minutes: Number($('#lMinutes').value) } }
@@ -851,6 +897,7 @@ async function boot() {
   modelBoxes($('.lModels'), lChosen, () => estimate('l', estPlans))
   picker.episodes = (await api('/episodes')).episodes
   $('#lEpisode').innerHTML = picker.episodes.map((e) => `<option value="${e.id}">${esc(LANG[e.language] || e.language)} · ${esc(e.podcast_title)}: ${esc(e.title)}</option>`).join('') || '<option value="">No prepared episodes yet</option>'
+  $('#tEpisode').innerHTML = $('#lEpisode').innerHTML
   buildPicker()
   renderRoomSounds()
   openTab(store.get('labTab') || 'voices')
