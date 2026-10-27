@@ -52,6 +52,24 @@ export function nudgeText(n: Pick<Nudge, 'podcastTitle' | 'episodeTitle' | 'guid
   return { title: n.podcastTitle, body: `${g}: ${what} ready when you are. I’ll be there at the pauses.` }
 }
 
+/** The "your episode is ready" push's title (sent from main.ts). */
+export const READY_PUSH_TITLE = 'Your episode is ready'
+
+/**
+ * Every notification line the server can send, written out with sample shows and episodes, for the kindness
+ * check (PC-1026-07): a new kind of nudge must be added here, and the test reads each one.
+ */
+export function allNotificationLines(): string[] {
+  const lines = new Set<string>([READY_PUSH_TITLE])
+  for (const guideName of ['Mia', 'Leo'])
+    for (const kind of ['prepare', 'ready', 'readyGuideBack'] as const)
+      for (const isNewest of [true, false]) {
+        const t = nudgeText({ podcastTitle: 'Svenska Samtal', episodeTitle: 'Fika på jobbet', guideName, kind, isNewest })
+        lines.add(t.title).add(t.body)
+      }
+  return [...lines]
+}
+
 export interface NudgeCandidate {
   newest: { id: string; title: string; durationSec: number; status: string }
   /** The newest already-prepared episode of the same show this learner hasn't started, if any. */
