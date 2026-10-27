@@ -584,6 +584,14 @@
    "title": "Plus fits the iPhone Duo",
    "description": "On a wide screen the Plus page keeps to a readable column with sensibly sized buttons, the folded screen gets a compact footer, and Not now stays put while you scroll.",
    "tryIt": "Open Plus from You on an iPhone Duo, folded and open"
+  },
+  {
+   "id": "PC-1026-03",
+   "date": "2026-10-27",
+   "kind": "Feature",
+   "title": "Two panes on the open iPhone Duo",
+   "description": "With the Duo open, the player shows subtitles on one side and your guide's notes so far, the words to listen for and the words you've saved on the other. Folded, nothing changes.",
+   "tryIt": "Play a guided episode with your iPhone Duo open"
   }
  ]
 }
