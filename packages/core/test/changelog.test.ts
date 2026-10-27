@@ -61,7 +61,8 @@ describe('Notes for App Review from the change log (PC-1022-06)', () => {
     expect(text).toContain('New and changed:\n- Title C: What C does.')
     expect(text).toContain('Fixes and refinements:\n- Title B: What B does.')
     expect(reviewNotes(log)).toContain('- Title A: What A does. (Try it: Open Discover.)')
-    expect(reviewNotes(log, '2026-10-23')).toBe('No changes since the last approved version.')
+    expect(reviewNotes(log, '2026-10-23')).toMatch(/^No changes since the last approved version./)
+    expect(reviewNotes(log, '2026-10-23', undefined, '')).toBe('No changes since the last approved version.')
   })
 
   it('always fits the box and never leaves a change out', () => {

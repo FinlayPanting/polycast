@@ -1,3 +1,5 @@
+import { dateSwitchedNotes } from './dateSwitched'
+
 /**
  * What's new (PC-1019-F02): a change log of what each overnight build changed, served by the server
  * from server/changelog.json so it updates with every push, without a new App Store build.
@@ -90,9 +92,12 @@ export const REVIEW_NOTES_MAX = 4000
  * Every entry is always named; when the full lines don't fit the box, fixes and then everything are
  * cut to their titles rather than any being left out.
  */
-export function reviewNotes(entries: readonly ChangelogEntry[], sinceDate?: string, max = REVIEW_NOTES_MAX): string {
+export function reviewNotes(entries: readonly ChangelogEntry[], sinceDate?: string, max = REVIEW_NOTES_MAX, dated: string = dateSwitchedNotes()): string {
+  // Features that switch on by date or time are always named in full (2.5.19, PC-1026-05); the change
+  // lines are shortened first to make room for them.
+  const tail = dated ? `\n\n${dated}` : ''
   const fresh = entries.filter((e) => !sinceDate || e.date > sinceDate)
-  if (!fresh.length) return 'No changes since the last approved version.'
+  if (!fresh.length) return `No changes since the last approved version.${tail}`
   const features = fresh.filter((e) => !FIX_KINDS.has(e.kind))
   const fixes = fresh.filter((e) => FIX_KINDS.has(e.kind))
   const full = (e: ChangelogEntry) => `- ${e.title}: ${e.description}${e.tryIt ? ` (Try it: ${e.tryIt}.)` : ''}`.replace(/\.\.\)$/, '.)')
@@ -103,7 +108,7 @@ export function reviewNotes(entries: readonly ChangelogEntry[], sinceDate?: stri
   const render = (f: (e: ChangelogEntry) => string, g: (e: ChangelogEntry) => string) =>
     [head, '', ...(features.length ? ['New and changed:', ...features.map(f), ''] : []), ...(fixes.length ? ['Fixes and refinements:', ...fixes.map(g)] : [])]
       .join('\n')
-      .trim()
+      .trim() + tail
   for (const text of [render(full, full), render(full, short), render(short, short)]) if (text.length <= max) return text
   return render(short, short)
 }

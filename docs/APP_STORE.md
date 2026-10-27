@@ -79,6 +79,8 @@ Before each submission, `app/src/lib/releaseBuild.test.ts` confirms the store bu
 
 Apple's 16 Oct 2026 guidelines (2.3.1(a)) ask for every new feature and change to be described in Notes for Review, including anything delivered by over-the-air update since the last approved version (2.5.19 forbids undocumented features). Before each submission, run `node scripts/review-notes.mjs` and paste what it prints below the standing notes above. It lists every `server/changelog.json` entry since `lastApproved` in `docs/app-review.json` (all of them until the first approval), always within the box's 4,000 characters: if the full lines don't fit, fixes and then everything are cut to their titles, never left out. After Apple approves a version, set `lastApproved` to the newest changelog date that version included.
 
+The notes always end with every feature that switches itself on by date or time (seasonal mood picks and stamps, the New Year lines, the 11 pm goodnight), when it shows and how a reviewer can see it today by changing the iPhone's date or time (PC-1026-05, 27 Oct 2026). The list is built from `packages/core/src/seasonal.ts` and `NIGHT_OWL` in `packages/core/src/dateSwitched.ts`, so a new season is included on its own; a new kind of date- or time-switched feature must be added to `dateSwitchedFeatures`.
+
 ## Launch week: an in-app event and the Asset Library header (PC-1025-09, 26 Oct 2026)
 
 Ready to load into App Store Connect once the app record exists (PC-1012-04). The event's text is in `docs/app-store/launch-event.json` (a test checks Apple's character limits) and the art is in `docs/app-store/`, drawn by `python3 scripts/launch-event-art.py` from the brand colours and the mark, so it can be redrawn if either changes.
