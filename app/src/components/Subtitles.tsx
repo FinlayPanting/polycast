@@ -1,6 +1,7 @@
 import { segmentAt, type Segment, type Word } from '@polycast/core'
 import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { ENGLISH_SPEECH, speechLanguage } from '../lib/speechLanguage'
 import { space, type, usePalette } from '../theme'
 
 export type SubtitleMode = 'target' | 'both' | 'none'
@@ -17,6 +18,7 @@ export function Subtitles({
   oldFriends,
   onWord,
   onLineMenu,
+  language,
 }: {
   segments: Segment[]
   words: Word[]
@@ -27,9 +29,12 @@ export function Subtitles({
   onWord: (wordIndex: number) => void
   /** Long press on the line: its menu, with 'That looks wrong' (PC-1018-04). */
   onLineMenu?: (segment: Segment) => void
+  /** The episode's language, so VoiceOver reads each line in its own accent (PC-1024-04). */
+  language?: string | null
 }) {
   const p = usePalette()
   const [peek, setPeek] = useState(false)
+  const lang = speechLanguage(language)
   const i = segmentAt(segments, position)
   const seg = i >= 0 ? segments[i] : undefined
   const prev = i > 0 ? segments[i - 1] : undefined
@@ -46,13 +51,14 @@ export function Subtitles({
   return (
     <Pressable onPress={() => peek && setPeek(false)} onLongPress={seg && onLineMenu ? () => onLineMenu(seg) : undefined} accessible={false} style={{ gap: space.md, paddingHorizontal: space.lg }}>
       {prev ? (
-        <Text style={[type.translation, { color: p.faint }]} numberOfLines={2}>
+        <Text accessibilityLanguage={lang} style={[type.translation, { color: p.faint }]} numberOfLines={2}>
           {prev.text}
         </Text>
       ) : null}
       <Text
         accessibilityRole="text"
         accessibilityLabel={seg?.text}
+        accessibilityLanguage={lang}
         accessibilityActions={seg && onLineMenu ? [{ name: 'report', label: 'That line looks wrong' }] : undefined}
         onAccessibilityAction={(e) => e.nativeEvent.actionName === 'report' && seg && onLineMenu?.(seg)}
         style={[type.subtitle, { color: p.text }]}>
@@ -72,7 +78,7 @@ export function Subtitles({
           )
         })}
       </Text>
-      {mode === 'both' && seg?.translation ? <Text style={[type.translation, { color: p.quiet }]}>{seg.translation}</Text> : null}
+      {mode === 'both' && seg?.translation ? <Text accessibilityLanguage={ENGLISH_SPEECH} style={[type.translation, { color: p.quiet }]}>{seg.translation}</Text> : null}
       {!seg ? <View style={{ height: type.subtitle.lineHeight }} /> : null}
     </Pressable>
   )

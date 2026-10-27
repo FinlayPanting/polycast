@@ -85,3 +85,10 @@ export async function savePosition(userId: string, episodeId: string, sec: numbe
   if (finished) patch.finished_at = new Date().toISOString()
   await supabase.from('listens').update(patch).eq('user_id', userId).eq('episode_id', episodeId)
 }
+
+/** Guided listens finished, any language (the Plus screen's opening line, PC-1023-03). */
+export async function countFinishedGuided(): Promise<number | undefined> {
+  if (config.demo) return 2
+  const { count, error } = await supabase.from('listens').select('episode_id', { count: 'exact', head: true }).eq('guided', true).not('finished_at', 'is', null)
+  return error ? undefined : (count ?? 0)
+}

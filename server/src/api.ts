@@ -2,9 +2,9 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, isTipProduct, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry } from '@polycast/core'
+import { cohortAlert, isTipProduct, isVideo, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
-import type { LookupHost } from './safeFetch'
+import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
 import { forgetUserKeys, OWN_KEYS_LIMITS, OWN_KEYS_MESSAGES, plausibleKey, storeJobKeys, testElevenLabsKey, testGeminiKey } from './ownKeys'
 import { discoverShelves } from './discover'
@@ -17,7 +17,7 @@ import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { feedTranscriptLink } from './worker'
-import { clientAddress, rateLimiter } from './rateLimit'
+import { addressKey, clientAddress, rateLimiter } from './rateLimit'
 import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -81,6 +81,8 @@ function changelogEntries(): ChangelogEntry[] {
 
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
+/** First opens counted per internet address per day (PC-1024-03); generous enough for a shared Wi-Fi or mobile network. */
+export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10, overallPerDay: 5000 }
 
 /**
  * Fair-use limits per signed-in learner, per minute. Each of these calls reaches outside services
@@ -100,23 +102,55 @@ export const NEW_EPISODES_LIMITS = { perMinute: 20, shows: 200, days: 14, perSho
  * Feeds that failed to load wait before the background refresh tries them again (PC-1021-04): an
  * hour after the first failure, doubling each time up to a day, so a dead feed can't keep its
  * place at the front of the queue and hold up the learner's other shows. Kept in memory: a restart
- * simply gives every feed another go.
+ * simply gives every feed another go. A feed being read counts as waiting too (PC-1022-05), so
+ * learners opening the Library while a slow feed loads don't each start another fetch of it.
  */
 export class FeedRetry {
   private waits = new Map<string, { until: number; failures: number }>()
-  constructor(private firstWaitMs = 60 * 60_000, private maxWaitMs = 24 * 60 * 60_000) {}
+  /** Feeds being read right now, by when the read started (PC-1022-05). */
+  private reading = new Map<string, number>()
+  constructor(private firstWaitMs = 60 * 60_000, private maxWaitMs = 24 * 60 * 60_000, private readingMs = 2 * FEED_TIMEOUT_MS) {}
+  /** True while a feed is being read, or while it waits after failing. */
   waiting(id: string, nowMs: number): boolean {
+    const started = this.reading.get(id)
+    if (started !== undefined && nowMs - started < this.readingMs) return true
     return (this.waits.get(id)?.until ?? 0) > nowMs
   }
+  /** Marks a feed as being read before the read starts, so a slow one is fetched once, not once per learner. */
+  start(id: string, nowMs: number): void {
+    this.reading.set(id, nowMs)
+  }
   failed(id: string, nowMs: number): void {
+    this.reading.delete(id)
     const failures = (this.waits.get(id)?.failures ?? 0) + 1
     this.waits.set(id, { failures, until: nowMs + Math.min(this.maxWaitMs, this.firstWaitMs * 2 ** (failures - 1)) })
   }
   ok(id: string): void {
+    this.reading.delete(id)
     this.waits.delete(id)
   }
 }
 export const SLOW_DOWN = 'Give it a moment, then try again.'
+
+/**
+ * How long a "You already know" answer is kept per language (PC-1023-01): an hour when it found words, five
+ * minutes when it didn't, so learners arriving while the starter episodes are still being prepared (launch
+ * morning) see the step as soon as one is ready, rather than an hour later.
+ */
+export const KNOWN_WORDS_TTL_MS = 60 * 60_000
+export const KNOWN_WORDS_EMPTY_TTL_MS = 5 * 60_000
+export function knownWordsFresh(body: { words: unknown[] }, at: number, now: number): boolean {
+  return now - at < (body.words.length ? KNOWN_WORDS_TTL_MS : KNOWN_WORDS_EMPTY_TTL_MS)
+}
+
+/** What GET /v1/known-words/:language returns (PC-1022-08); no episode when there are too few words. */
+export interface KnownWordsBody {
+  episodeId?: string
+  episodeTitle?: string
+  podcastTitle?: string
+  audioUrl?: string
+  words: KnownWord[]
+}
 
 /**
  * Mood picks a learner can ask for each day (one small Gemini call each, about a tenth of a cent).
@@ -168,7 +202,7 @@ export function createApi(deps: ApiDeps) {
     if (!podcastTitle || !contact) return c.json({ error: 'Please give the show’s name and a way to reach you.' }, 400)
     if (podcastTitle.length > REMOVAL_LIMITS.title || contact.length > REMOVAL_LIMITS.contact || (message?.length ?? 0) > REMOVAL_LIMITS.message)
       return c.json({ error: `Please keep the show’s name and contact under ${REMOVAL_LIMITS.title} characters, and the message under ${REMOVAL_LIMITS.message}.` }, 400)
-    if (!removalPerAddress.hit(clientAddress((n) => c.req.header(n))) || !removalOverall.hit('all'))
+    if (!removalPerAddress.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !removalOverall.hit('all'))
       return c.json({ error: 'We’ve had a few requests from you already. Please try again in an hour.' }, 429)
     await sql`insert into removal_requests (podcast_title, contact, message) values (${podcastTitle}, ${contact}, ${message})`
     await deps.alert?.('removal', `Removal request for "${podcastTitle}" from ${contact}`)
@@ -176,7 +210,13 @@ export function createApi(deps: ApiDeps) {
   })
 
   // The app says this once per install, before sign-in. Nothing identifies the phone.
+  // Each address is counted a few times a day at most (held in memory, never stored), so a loop
+  // can't pump the funnel. A refused phone simply tries again on its next open.
+  // IPv6 callers are counted by their /64 block, and there's an overall daily ceiling, like the removal form's (PC-1025-03).
+  const firstOpenLimit = rateLimiter(FIRST_OPEN_LIMITS.perAddressPerDay, 24 * 60 * 60_000)
+  const firstOpenOverall = rateLimiter(FIRST_OPEN_LIMITS.overallPerDay, 24 * 60 * 60_000)
   app.post('/events/first-open', async (c) => {
+    if (!firstOpenLimit.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !firstOpenOverall.hit('all')) return c.json({ error: 'Already counted today.' }, 429)
     await countFirstOpen(sql)
     return c.json({ ok: true })
   })
@@ -218,7 +258,7 @@ export function createApi(deps: ApiDeps) {
       : sql`(plus_period_start is null or plus_period_start < now() - interval '27 days')`
 
   app.post('/webhooks/revenuecat', async (c) => {
-    if (!deps.revenueCatSecret || c.req.header('Authorization') !== `Bearer ${deps.revenueCatSecret}`) return c.json({ error: 'unauthorised' }, 401)
+    if (!deps.revenueCatSecret || !safeEqual(c.req.header('Authorization') ?? '', `Bearer ${deps.revenueCatSecret}`)) return c.json({ error: 'unauthorised' }, 401)
     const { event } = await c.req.json()
     // Restore purchases on a new phone or a fresh account: RevenueCat moves the subscription from
     // the old account to the one signed in now. Plus moves with it, along with the month's hours
@@ -300,7 +340,7 @@ export function createApi(deps: ApiDeps) {
 
   app.get('/v1/discover/:language', async (c) => {
     const [profile] = await sql`select interests from profiles where id = ${c.get('userId')}`
-    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? []) })
+    return c.json({ shelves: await discoverShelves(sql, deps.fetch, c.req.param('language'), deps.podcastIndex, profile?.interests ?? [], { lookupHost: deps.lookupHost }) })
   })
 
   /** "Tell Mia what you're in the mood for": three shows or prepared episodes with a line on why. */
@@ -318,7 +358,7 @@ export function createApi(deps: ApiDeps) {
     const plus = profile?.plan === 'plus'
     if (!(plus ? moodPlus : moodFree).hit(userId)) return c.json({ error: plus ? MOOD_MESSAGES.plusUsed : MOOD_MESSAGES.freeUsed }, 429)
     try {
-      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard }, language, mood, nativeLanguage)
+      const picks = await recommendByMood({ sql, fetch: deps.fetch, text: deps.text, podcastIndex: deps.podcastIndex, guard: deps.guard, lookupHost: deps.lookupHost }, language, mood, nativeLanguage)
       return c.json({ mood, picks })
     } catch (e) {
       if (e instanceof SpendCapReached) return c.json({ error: MOOD_MESSAGES.paused }, 503)
@@ -414,7 +454,7 @@ export function createApi(deps: ApiDeps) {
     const episodes = podcasts.length
       ? await sql`
           select * from (
-            select e.id, e.podcast_id, e.title, e.published, e.duration_sec, e.image, e.status,
+            select e.id, e.podcast_id, e.title, e.published, e.duration_sec, e.image, e.status, e.audio_url,
               row_number() over (partition by e.podcast_id order by e.published desc) as n
             from episodes e
             where e.podcast_id = any(${podcasts.map((p) => p.id)}::uuid[])
@@ -428,6 +468,7 @@ export function createApi(deps: ApiDeps) {
       .sort((a, b) => new Date(a.updated_at ?? 0).getTime() - new Date(b.updated_at ?? 0).getTime())
       .slice(0, NEW_EPISODES_LIMITS.refreshPerCall)
     for (const p of stale) {
+      feedRetry.start(p.id, now.getTime())
       syncFeed(sql, deps.fetch, p.feed_url, undefined, { lookupHost: deps.lookupHost }).then(
         () => feedRetry.ok(p.id),
         () => feedRetry.failed(p.id, Date.now()),
@@ -438,7 +479,7 @@ export function createApi(deps: ApiDeps) {
         podcast: { id: p.id, title: p.title, artwork: p.artwork },
         episodes: episodes
           .filter((e) => e.podcast_id === p.id)
-          .map((e) => ({ id: e.id, title: e.title, published: e.published, duration_sec: e.duration_sec, image: e.image, status: e.status })),
+          .map((e) => ({ id: e.id, title: e.title, published: e.published, duration_sec: e.duration_sec, image: e.image, status: e.status, ...(isVideo(e.audio_url) ? { video: true } : {}) })),
       })),
     })
   })
@@ -537,6 +578,41 @@ export function createApi(deps: ApiDeps) {
    * The Episode Primer (PC-1017-P1, P4): the warm-up shown before pressing play, for everyone
    * learning the episode, guided or not. Small, so the episode screen can ask for it every time.
    */
+  /**
+   * "You already know these words" (PC-1022-08), shown right after picking a language: up to five
+   * words from a starter episode (the newest ready episode of the first Polycast pick that has one)
+   * that look like their meaning, each with the host saying it. Built from the episode's glossary,
+   * so no AI is used; kept for an hour per language (five minutes when there were too few words).
+   */
+  const knownCache = new Map<string, { at: number; body: KnownWordsBody }>()
+  app.get('/v1/known-words/:language', async (c) => {
+    const language = c.req.param('language')
+    if (!/^[a-z]{2}$/.test(language)) return c.json({ error: 'Not found' }, 404)
+    const [profile] = await sql`select native_language from profiles where id = ${c.get('userId')}`
+    const native = profile?.native_language ?? 'en'
+    const key = `${language}:${native}`
+    const hit = knownCache.get(key)
+    if (hit && knownWordsFresh(hit.body, hit.at, Date.now())) return c.json(hit.body)
+    const candidates = await sql`
+      select distinct on (k.position) e.id, e.title, e.audio_url, p.title as podcast_title, t.words, t.glossary
+      from picks k join podcasts p on p.id = k.podcast_id and not p.removed
+      join episodes e on e.podcast_id = p.id and e.status = 'ready'
+      join transcripts t on t.episode_id = e.id and t.native_language = ${native}
+      where k.language = ${language}
+      order by k.position, e.published desc
+      limit 3`
+    let body: KnownWordsBody = { words: [] }
+    for (const ep of candidates) {
+      const words = knownWords(ep.words, ep.glossary ?? undefined, language)
+      if (words.length >= 3) {
+        body = { episodeId: ep.id, episodeTitle: ep.title, podcastTitle: ep.podcast_title, audioUrl: ep.audio_url, words }
+        break
+      }
+    }
+    knownCache.set(key, { at: Date.now(), body })
+    return c.json(body)
+  })
+
   app.get('/v1/episodes/:id/primer', async (c) => {
     const episodeId = c.req.param('id')
     const [episode] = await sql`select e.status from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${episodeId} and not p.removed`

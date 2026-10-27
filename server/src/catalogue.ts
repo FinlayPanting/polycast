@@ -4,6 +4,8 @@ import {
   feedDescriptionFromHead,
   CHART_COUNTRY,
   feedLanguageFromHead,
+  FRESH_VOICES,
+  freshVoiceWhy,
   interestQueries,
   interleaveCharts,
   itunesLookupManyUrl,
@@ -13,6 +15,7 @@ import {
   parseFeed,
   parseItunesResults,
   parsePodcastIndexTrending,
+  sameShowTitle,
   podcastIndexTrendingUrl,
   TOP_CHART_COUNTRIES,
   type Feed,
@@ -21,7 +24,7 @@ import {
 } from '@polycast/core'
 import { createHash } from 'node:crypto'
 import type { Sql } from './db'
-import { POLYCAST_UA, safeFetch, type LookupHost } from './safeFetch'
+import { POLYCAST_UA, safeFetch, safeOpen, type LookupHost } from './safeFetch'
 
 export type Fetch = typeof fetch
 
@@ -53,6 +56,11 @@ export async function syncFeed(
   const podcastId = p!.id as string
   const recent = feed.episodes.filter((e) => e.durationSec && e.durationSec > 0).slice(0, EPISODES_KEPT)
   for (const e of recent) {
+    if (e.formerGuid) {
+      // A copy saved between 23 and 26 Oct under its audio address takes back its original ID, keeping the learner's progress (PC-1025-02).
+      await sql`update episodes set guid = ${e.guid} where podcast_id = ${podcastId} and guid = ${e.formerGuid}
+        and not exists (select 1 from episodes x where x.podcast_id = ${podcastId} and x.guid = ${e.guid})`
+    }
     await sql`
       insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, image, language, description)
       values (${podcastId}, ${e.guid}, ${e.title}, ${e.published ?? null}, ${e.durationSec!}, ${e.audioUrl}, ${e.image ?? null}, ${p!.language ?? 'und'}, ${cleanDescription(e.description) ?? null})
@@ -107,9 +115,17 @@ const FEED_HEAD_BYTES = 64 * 1024
 const FEED_CHECK_CONCURRENCY = 8
 const FEED_CHECK_TIMEOUT_MS = 8000
 
-/** Reads just the start of a feed and returns the language its channel declares, and its description. */
-async function feedHead(f: Fetch, feedUrl: string): Promise<{ language?: string; description?: string } | undefined> {
-  const res = await f(feedUrl, { headers: { 'User-Agent': 'Polycast/1.0 (+https://polycast.app)' }, signal: AbortSignal.timeout(FEED_CHECK_TIMEOUT_MS) })
+/** How the server reaches feeds: the address check can be swapped in tests. */
+export interface NetOpts {
+  lookupHost?: LookupHost
+}
+
+/**
+ * Reads just the start of a feed and returns the language its channel declares, and its description.
+ * Through the safe fetch (PC-1022-01): a feed that is, or redirects to, a private address is never read.
+ */
+async function feedHead(f: Fetch, feedUrl: string, net: NetOpts = {}): Promise<{ language?: string; description?: string } | undefined> {
+  const { res } = await safeOpen(feedUrl, { fetch: f, lookupHost: net.lookupHost, headers: POLYCAST_UA, timeoutMs: FEED_CHECK_TIMEOUT_MS })
   if (!res.ok || !res.body) return undefined
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -145,7 +161,7 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
  * in English-language shows, so each show's feed is checked (from the database when known).
  * Shows whose feed can't be found or doesn't declare a language are left out.
  */
-export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSummary[], language: string): Promise<PodcastSummary[]> {
+export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSummary[], language: string, net: NetOpts = {}): Promise<PodcastSummary[]> {
   if (shows.length === 0) return []
   const feeds = new Map<string, string>()
   for (let i = 0; i < shows.length; i += 150) {
@@ -163,7 +179,7 @@ export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSumm
   const heads = await mapLimit(shows, FEED_CHECK_CONCURRENCY, async (s) => {
     const feedUrl = feeds.get(s.appleId)
     if (!feedUrl) return undefined
-    return known.get(feedUrl) ?? (await feedHead(f, feedUrl).catch(() => undefined))
+    return known.get(feedUrl) ?? (await feedHead(f, feedUrl, net).catch(() => undefined))
   })
   return shows
     .map((s, i) => ({ s, head: heads[i] }))
@@ -172,7 +188,7 @@ export async function keepShowsInLanguage(sql: Sql, f: Fetch, shows: PodcastSumm
 }
 
 /** The Top charts shelf: Apple's charts for the language's countries, only shows in that language. */
-export function topChart(sql: Sql, f: Fetch, language: string): Promise<PodcastSummary[]> {
+export function topChart(sql: Sql, f: Fetch, language: string, net: NetOpts = {}): Promise<PodcastSummary[]> {
   const countries = TOP_CHART_COUNTRIES[language]
   if (!countries?.length) return Promise.resolve([])
   // A new cache key (v2), so charts cached before shows carried their description aren't served.
@@ -184,7 +200,29 @@ export function topChart(sql: Sql, f: Fetch, language: string): Promise<PodcastS
         return parseAppleChart(await res.json(), country)
       }),
     )
-    return (await keepShowsInLanguage(sql, f, interleaveCharts(charts), language)).slice(0, 50)
+    return (await keepShowsInLanguage(sql, f, interleaveCharts(charts), language, net)).slice(0, 50)
+  })
+}
+
+/**
+ * Fresh voices (PC-1023-05): Spotify's RADAR 2026 shows for the language, each found in Apple's catalogue
+ * by its exact title in its own country, then kept only when its public feed is in the language. Refreshed
+ * once a day like the charts; a show that can't be found is simply left out.
+ */
+export function freshVoices(sql: Sql, f: Fetch, language: string, net: NetOpts = {}): Promise<(PodcastSummary & { why: string })[]> {
+  const list = FRESH_VOICES[language]
+  if (!list?.length) return Promise.resolve([])
+  return cachedChart(sql, language, 'fresh-voices:radar-2026', async () => {
+    const found = await mapLimit(list, 4, async (v) => {
+      const res = await f(itunesSearchUrl(v.title, v.country, 10)).catch(() => undefined)
+      if (!res?.ok) return undefined
+      const hit = parseItunesResults(await res.json()).find((r) => sameShowTitle(r.title, v.title))
+      return hit ? { ...hit, why: freshVoiceWhy(v.country) } : undefined
+    })
+    const shows = found.filter((s): s is PodcastSummary & { why: string } => Boolean(s))
+    const kept = await keepShowsInLanguage(sql, f, shows, language, net)
+    const why = new Map(shows.map((s) => [s.appleId, s.why]))
+    return kept.map((s) => ({ ...s, why: why.get(s.appleId) ?? freshVoiceWhy('') }))
   })
 }
 
@@ -202,7 +240,7 @@ export function categoryChart(sql: Sql, f: Fetch, language: string, category: st
 export type ForYouShow = (PodcastSummary | TrendingPodcast) & { why: string }
 
 /** Apple search in each of the language's chart countries, keeping only shows in the language. */
-function searchInLanguage(sql: Sql, f: Fetch, language: string, term: string): Promise<PodcastSummary[]> {
+function searchInLanguage(sql: Sql, f: Fetch, language: string, term: string, net: NetOpts = {}): Promise<PodcastSummary[]> {
   const countries = TOP_CHART_COUNTRIES[language]
   if (!countries?.length) return Promise.resolve([])
   return cachedChart(sql, language, `search:${term}`, async () => {
@@ -213,7 +251,7 @@ function searchInLanguage(sql: Sql, f: Fetch, language: string, term: string): P
         return parseItunesResults(await res.json())
       }),
     )
-    return (await keepShowsInLanguage(sql, f, interleaveCharts(results), language)).slice(0, 30)
+    return (await keepShowsInLanguage(sql, f, interleaveCharts(results), language, net)).slice(0, 30)
   })
 }
 
@@ -222,13 +260,13 @@ function searchInLanguage(sql: Sql, f: Fetch, language: string, term: string): P
  * from each interest are alternated so one doesn't crowd out the rest. Lookups are cached daily
  * and free (no AI is used).
  */
-export async function forYou(sql: Sql, f: Fetch, language: string, interests: string[], creds: { key: string; secret: string } | undefined, max = 30): Promise<ForYouShow[]> {
+export async function forYou(sql: Sql, f: Fetch, language: string, interests: string[], creds: { key: string; secret: string } | undefined, max = 30, net: NetOpts = {}): Promise<ForYouShow[]> {
   const queries = interestQueries(interests)
   if (!queries.length) return []
   const lists = await Promise.all(
     queries.map(async (q): Promise<ForYouShow[]> => {
       const shows: (PodcastSummary | TrendingPodcast)[] = await ('search' in q.source
-        ? searchInLanguage(sql, f, language, q.source.search)
+        ? searchInLanguage(sql, f, language, q.source.search, net)
         : categoryChart(sql, f, language, q.source.categories.join(','), creds)
       ).catch(() => [])
       return shows.map((s) => ({ ...s, why: q.why }))

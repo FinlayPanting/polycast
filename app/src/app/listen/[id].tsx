@@ -2,7 +2,7 @@ import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wor
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActionSheetIOS, Alert, AppState, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native'
+import { ActionSheetIOS, Alert, AppState, Modal, Platform, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native'
 import { GuideCard } from '../../components/GuideCard'
 import { Mark } from '../../components/Mark'
 import { Scrubber } from '../../components/Scrubber'
@@ -17,6 +17,9 @@ import { loadLesson, readyPayload, saveLesson } from '../../lib/offline'
 import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
+import { playerArtSize } from '../../lib/screenShape'
+import { isTwoPane } from '../../lib/sidePane'
+import { SidePane } from '../../components/SidePane'
 import { hopBackLabel } from '../../lib/hopBack'
 import { playerMenu, REPORT_FAILED, REPORT_THANKS } from '../../lib/playerMenu'
 import { shareableLines, shareMessage, type ShareableLine } from '../../lib/shareLine'
@@ -226,6 +229,7 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
 
 export default function Listen() {
   const p = usePalette()
+  const win = useWindowDimensions()
   const { id, guide, level: levelParam, from } = useLocalSearchParams<{ id: string; guide?: string; level?: string; from?: string }>()
   // The intensity chosen on the episode screen for this listen (PC-1017-F13).
   const chosenLevel = levelParam ? guidanceLevelOr(levelParam, 'standard') : undefined
@@ -329,6 +333,9 @@ export default function Listen() {
     if (Platform.OS === 'ios') ActionSheetIOS.showActionSheetWithOptions({ options: menu.options, cancelButtonIndex: menu.cancelIndex }, runMenu)
     else Alert.alert('More', undefined, [...menu.actions.map((_, i) => ({ text: menu.options[i]!, onPress: () => runMenu(i) })), { text: 'Cancel', style: 'cancel' as const }])
   }
+  const artSize = playerArtSize(win.width, win.height, Boolean(guideOn))
+  // The open iPhone Duo (PC-1026-03): subtitles on one side, the guide's notes and words on the other.
+  const twoPane = isTwoPane(win.width, win.height)
   const nextMode: Record<SubtitleMode, SubtitleMode> = { both: 'target', target: 'none', none: 'both' }
   const modeLabel: Record<SubtitleMode, string> = { both: 'Both languages', target: 'Target language only', none: 'Subtitles off' }
 
@@ -359,35 +366,51 @@ export default function Listen() {
         </Txt>
       ) : null}
 
-      <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
-        {advert && !guideOn ? (
-          <View style={{ alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg }}>
-            <Txt tone="quiet">Advert break</Txt>
-            <Txt variant="small" tone="faint" style={{ textAlign: 'center' }}>
-              {guideName(voicedGuideId(data?.guideId, profile?.guide_id))} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
-            </Txt>
-          </View>
+      <View style={{ flex: 1, flexDirection: twoPane ? 'row' : 'column' }}>
+        <View style={{ flex: 1, justifyContent: 'center', gap: space.lg, overflow: 'hidden' }}>
+          {advert && !guideOn ? (
+            <View style={{ alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg }}>
+              <Txt tone="quiet">Advert break</Txt>
+              <Txt variant="small" tone="faint" style={{ textAlign: 'center' }}>
+                {guideName(voicedGuideId(data?.guideId, profile?.guide_id))} waits it out. The lesson picks up after, in {clock(advert.end - state.position)}.
+              </Txt>
+            </View>
+          ) : null}
+          {segmentAt(data.transcript.segments, state.position) < 0 && artSize > 0 ? (
+            <View style={{ alignItems: 'center' }}>
+              <Artwork uri={data.episode.image} size={artSize} radius={22} />
+            </View>
+          ) : null}
+          <Subtitles
+            segments={data.transcript.segments}
+            words={data.transcript.words}
+            position={state.position}
+            mode={mode}
+            oldFriends={oldFriends}
+            language={data.transcript.language}
+            onLineMenu={(seg) => openLineMenu(seg.id)}
+            onWord={(index) => {
+              const w = data.transcript.words[index]
+              if (!w) return
+              const form = normalizeToken(w.text, data.transcript.language)
+              const g = data.transcript.glossary?.[form]
+              setTapped({ index, form: w.text.replace(/[.,!?;:"“”»«]+$/u, ''), lemma: g?.lemma ?? form, meaning: g?.meaning })
+            }}
+          />
+        </View>
+        {twoPane ? (
+          <SidePane
+            plan={data.plan ?? undefined}
+            level={data.guidanceLevel ?? 'standard'}
+            guided={Boolean(data.guided)}
+            position={state.position}
+            guideName={guideName(voicedGuideId(data?.guideId, profile?.guide_id))}
+            saved={saved}
+            glossary={data.transcript.glossary}
+            language={data.transcript.language}
+            clipText={clipText}
+          />
         ) : null}
-        {segmentAt(data.transcript.segments, state.position) < 0 ? (
-          <View style={{ alignItems: 'center' }}>
-            <Artwork uri={data.episode.image} size={guideOn ? 168 : 260} radius={22} />
-          </View>
-        ) : null}
-        <Subtitles
-          segments={data.transcript.segments}
-          words={data.transcript.words}
-          position={state.position}
-          mode={mode}
-          oldFriends={oldFriends}
-          onLineMenu={(seg) => openLineMenu(seg.id)}
-          onWord={(index) => {
-            const w = data.transcript.words[index]
-            if (!w) return
-            const form = normalizeToken(w.text, data.transcript.language)
-            const g = data.transcript.glossary?.[form]
-            setTapped({ index, form: w.text.replace(/[.,!?;:"“”»«]+$/u, ''), lemma: g?.lemma ?? form, meaning: g?.meaning })
-          }}
-        />
       </View>
 
       <View style={{ paddingHorizontal: space.lg, gap: space.md }}>

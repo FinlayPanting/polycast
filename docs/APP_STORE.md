@@ -74,3 +74,32 @@ How Mia is kept safe:
 • Every AI request goes through Polycast's server, counts against the learner's allowance and a daily spending cap, and no AI keys are built into the app."
 
 Before each submission, `app/src/lib/releaseBuild.test.ts` confirms the store build can't reach demo mode or test-only tools: the production build profile and the update workflow never set `EXPO_PUBLIC_DEMO`, and the playback-log button only appears in the personal-team test build.
+
+## Notes for Review from the change log (PC-1022-06, 23 Oct 2026)
+
+Apple's 16 Oct 2026 guidelines (2.3.1(a)) ask for every new feature and change to be described in Notes for Review, including anything delivered by over-the-air update since the last approved version (2.5.19 forbids undocumented features). Before each submission, run `node scripts/review-notes.mjs` and paste what it prints below the standing notes above. It lists every `server/changelog.json` entry since `lastApproved` in `docs/app-review.json` (all of them until the first approval), always within the box's 4,000 characters: if the full lines don't fit, fixes and then everything are cut to their titles, never left out. After Apple approves a version, set `lastApproved` to the newest changelog date that version included.
+
+## Launch week: an in-app event and the Asset Library header (PC-1025-09, 26 Oct 2026)
+
+Ready to load into App Store Connect once the app record exists (PC-1012-04). The event's text is in `docs/app-store/launch-event.json` (a test checks Apple's character limits) and the art is in `docs/app-store/`, drawn by `python3 scripts/launch-event-art.py` from the brand colours and the mark, so it can be redrawn if either changes.
+
+**In-app event** (App Store Connect → the app → In-App Events → +)
+
+- Reference name: Launch week: first podcast with Mia
+- Badge: Challenge (the learner has a week to hear their first guided episode, which the free plan covers)
+- Event name (30): Your first podcast with Mia
+- Short description (50): A real show, with Mia at the pauses
+- Long description (120): Pick a real podcast in Spanish, French, German, Italian, Portuguese or Swedish. Mia steps in at the pauses. Free to try.
+- Event card (16:9): `event-card-1920x1080.png`. Event details page (9:16): `event-details-1080x1920.png`. Both keep the lower third quiet, because the App Store lays the event's name and description over it.
+- Purpose: Attract new users. Priority: High. Deep link: leave empty, so a tap opens the app on Discover.
+- Dates: start on the day Polycast goes live and run 7 days; publish it up to 7 days before, so it shows as "upcoming" on the product page.
+- Localisations: English (UK) and English (US) use the same text.
+
+**Product page header and search results** (App Store Connect → Asset Library → +)
+
+- Product page header (21:9): `product-page-header-3840x1646.png`.
+- Universal asset (16:9, works as both the header and the search results asset): `universal-header-5244x2950.png`. Use this one with "Use header asset in search results" if you'd rather have one asset everywhere; the art is the same.
+- Headers and search assets show to people on iOS 27 or later; the screenshots stay as they are for everyone else. Check each asset's preview in Dark Mode before submitting.
+- Assets go through review on their own and can be swapped on the live listing later without a new build.
+
+Simplest options picked: the art shows what Polycast does rather than saying it (a Swedish subtitle line with its translation, Mia's note on it, and the mark in the six launch languages' colours), so it needs no translation and the App Store's own text sits over it cleanly; one design across all four sizes.

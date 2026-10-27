@@ -8,6 +8,11 @@ export interface FeedTranscriptLink {
 
 export interface FeedEpisode {
   guid: string
+  /**
+   * For an episode with no ID whose audio version is played instead of its video: the ID the 23 Oct reader gave it
+   * (the audio address), so a copy saved then can be renamed rather than added again (PC-1025-02).
+   */
+  formerGuid?: string
   title: string
   /** ISO date, or undefined if the feed's date can't be read. */
   published?: string
@@ -33,7 +38,7 @@ const parser = new XMLParser({
   attributeNamePrefix: '@',
   textNodeName: '#text',
   removeNSPrefix: false,
-  isArray: (name) => ['item', 'entry', 'podcast:transcript', 'link'].includes(name),
+  isArray: (name) => ['item', 'entry', 'podcast:transcript', 'link', 'podcast:alternateEnclosure', 'podcast:source'].includes(name),
 })
 
 function text(v: unknown): string | undefined {
@@ -59,6 +64,32 @@ function isoDate(raw: string | undefined): string | undefined {
   return Number.isNaN(t) ? undefined : new Date(t).toISOString()
 }
 
+const VIDEO_EXTENSIONS = /\.(mp4|m4v|mov|webm|mkv|3gp)$/i
+
+/**
+ * Whether an episode's file is a video (PC-1023-09): by its declared type when there is one, otherwise by the
+ * address's extension. Audio-only MP4s are usually .m4a; an .mp4 with no type is taken as video.
+ */
+export function isVideo(url: string, type?: string): boolean {
+  if (type && /^(audio|video)\//i.test(type)) return /^video\//i.test(type)
+  try {
+    return VIDEO_EXTENSIONS.test(new URL(url).pathname)
+  } catch {
+    return VIDEO_EXTENSIONS.test(url.split(/[?#]/)[0] ?? '')
+  }
+}
+
+/** The best audio file among <podcast:alternateEnclosure> entries: the default one first, then the first listed. */
+function alternateAudio(alternates: any[] | undefined): string | undefined {
+  const audio = (alternates ?? []).filter((a) => typeof a?.['@type'] === 'string' && /^audio\//i.test(a['@type']))
+  audio.sort((a, b) => Number(b?.['@default'] === 'true') - Number(a?.['@default'] === 'true'))
+  for (const a of audio) {
+    const uri = (a['podcast:source'] ?? []).map((src: any) => src?.['@uri']).find((u: unknown) => typeof u === 'string' && /^https?:\/\//i.test(u))
+    if (uri) return uri
+  }
+  return undefined
+}
+
 /** Parses an RSS or Atom podcast feed. Throws if the document is not a feed. */
 export function parseFeed(xml: string): Feed {
   const start = xml.trimStart()
@@ -73,13 +104,18 @@ export function parseFeed(xml: string): Feed {
     .map((item): FeedEpisode | undefined => {
       const enclosure = item.enclosure
       const atomAudio = Array.isArray(item.link) ? item.link.find((l: any) => l?.['@rel'] === 'enclosure') : undefined
-      const audioUrl = enclosure?.['@url'] ?? atomAudio?.['@href']
-      if (!audioUrl) return undefined
+      const mainUrl: string | undefined = enclosure?.['@url'] ?? atomAudio?.['@href']
+      if (!mainUrl) return undefined
+      const mainType: string | undefined = enclosure?.['@type'] ?? atomAudio?.['@type']
+      // Video-first feeds (PC-1023-09): when the main file is a video, take the feed's audio version if it lists one.
+      const audioUrl = isVideo(mainUrl, mainType) ? (alternateAudio(item['podcast:alternateEnclosure']) ?? mainUrl) : mainUrl
       const transcripts: FeedTranscriptLink[] = (item['podcast:transcript'] ?? [])
         .filter((t: any) => t?.['@url'])
         .map((t: any) => ({ url: t['@url'], type: t['@type'] ?? '', language: t['@language'] }))
       return {
-        guid: text(item.guid) ?? text(item.id) ?? audioUrl,
+        // With no ID, the episode is known by its original file, which stays put when a show adds an audio version (PC-1025-02).
+        guid: text(item.guid) ?? text(item.id) ?? mainUrl,
+        ...(!text(item.guid) && !text(item.id) && audioUrl !== mainUrl ? { formerGuid: audioUrl } : {}),
         title: text(item.title) ?? 'Untitled episode',
         published: isoDate(text(item.pubDate) ?? text(item.published) ?? text(item.updated)),
         durationSec: parseDuration(text(item['itunes:duration'])),

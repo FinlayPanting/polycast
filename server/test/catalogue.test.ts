@@ -1,17 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { forYou, topChart } from '../src/catalogue'
+import { forYou, freshVoices, keepShowsInLanguage, syncFeed, topChart } from '../src/catalogue'
 import { discoverShelves } from '../src/discover'
 import type { Sql } from '../src/db'
 import { freshDatabase, PG_TEST_URL } from './pg'
 
 const run = PG_TEST_URL ? describe : describe.skip
+/** Feed hosts in these tests count as public addresses; internal.example is a private one. */
+const NET = { lookupHost: async (h: string) => (h === 'internal.example' ? ['10.0.0.5'] : ['93.184.216.34']) }
 
 const feed = (lang: string | null) =>
   `<?xml version="1.0"?><rss><channel><title>Show</title>${lang ? `<language>${lang}</language>` : ''}<description>&lt;p&gt;A show in ${lang}.&lt;/p&gt;</description><item><title>Ep</title><language>sv</language></item></channel></rss>`
 
 /** Apple charts per country, lookups for any ids, and a feed per show whose language is in its id. */
 function fakeApple(charts: Record<string, string[]>, calls: string[] = []): typeof fetch {
-  return async (input) => {
+  return async (input, init) => {
     const url = String(input)
     calls.push(url)
     const chart = url.match(/marketingtools\.apple\.com\/api\/v2\/(\w+)\//)
@@ -32,9 +34,15 @@ function fakeApple(charts: Record<string, string[]>, calls: string[] = []): type
     if (f) {
       const id = f[1]!
       if (id.startsWith('down')) return new Response('gone', { status: 500 })
+      if (id.startsWith('redir')) {
+        // A plain fetch follows the redirect on its own, as Node's does.
+        if (init?.redirect !== 'manual') return (calls.push('https://internal.example/sv.xml'), new Response(feed('sv')))
+        return new Response(null, { status: 302, headers: { location: 'https://internal.example/sv.xml' } })
+      }
       const lang = id.startsWith('none') ? null : id.split('-')[0]!
       return new Response(feed(lang === 'es' ? 'es-MX' : lang))
     }
+    if (url.includes('internal.example')) return new Response(feed('sv'))
     return new Response('not found', { status: 404 })
   }
 }
@@ -47,8 +55,50 @@ run('Top charts only show the target language', () => {
   })
   afterAll(async () => drop?.())
 
+  it('checks feed languages through the safe fetch: a feed redirecting to a private address is never read (PC-1022-01)', async () => {
+    const calls: string[] = []
+    const shows = [{ appleId: 'redir-1', title: 'Sneaky', author: 'X', artwork: null, genres: [] }, { appleId: 'sv-2', title: 'Fine', author: 'Y', artwork: null, genres: [] }] as any
+    const kept = await keepShowsInLanguage(sql, fakeApple({}, calls), shows, 'sv', NET)
+    expect(kept.map((s) => s.appleId)).toEqual(['sv-2'])
+    expect(calls.some((u) => u.includes('internal.example'))).toBe(false)
+    expect(calls).toContain('https://feeds.example.com/redir-1.xml')
+  })
+
+  it('finds Fresh voices by exact title in their country and keeps only feeds in the language (PC-1023-05)', async () => {
+    const calls: string[] = []
+    const byTitle: Record<string, { collectionId: string; collectionName: string }[]> = {
+      'STONKS! avec Arthur Perticoz': [{ collectionId: 'fr-71', collectionName: 'Stonks avec Arthur Perticoz' }],
+      'Star System': [{ collectionId: 'fr-72', collectionName: 'Star System Academy' }], // not the same show
+      'Tunnel par Anna Toumazoff': [{ collectionId: 'en-73', collectionName: 'Tunnel par Anna Toumazoff' }], // feed in English
+    }
+    const base = fakeApple({}, calls)
+    const f: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.includes('itunes.apple.com/search')) {
+        calls.push(url)
+        const term = new URL(url).searchParams.get('term')!
+        return Response.json({ results: (byTitle[term] ?? []).map((r) => ({ ...r, artistName: 'Host', feedUrl: `https://feeds.example.com/${r.collectionId}.xml` })) })
+      }
+      return base(input, init)
+    }
+    const shows = await freshVoices(sql, f, 'fr', NET)
+    expect(shows.map((s) => s.appleId)).toEqual(['fr-71'])
+    expect(shows[0]).toMatchObject({ title: 'Stonks avec Arthur Perticoz', why: 'New voice from France', feedUrl: 'https://feeds.example.com/fr-71.xml' })
+    expect(calls.filter((u) => u.includes('/search')).every((u) => new URL(u).searchParams.get('country') === 'fr')).toBe(true)
+    // Kept for the day like the charts: no second round of searches.
+    const before = calls.length
+    expect((await freshVoices(sql, f, 'fr', NET)).map((s) => s.appleId)).toEqual(['fr-71'])
+    expect(calls.length).toBe(before)
+    // Spotify named no Swedish shows.
+    expect(await freshVoices(sql, f, 'sv', NET)).toEqual([])
+    const shelves = await discoverShelves(sql, f, 'fr', undefined, [], NET)
+    const ids = shelves.map((s) => s.id)
+    expect(ids).toContain('fresh')
+    expect(shelves.find((s) => s.id === 'fresh')!.title).toBe('Fresh voices')
+  })
+
   it("keeps Swedish shows and drops English ones from Sweden's chart", async () => {
-    const top = await topChart(sql, fakeApple({ se: ['sv-1', 'en-2', 'sv-3', 'none-4', 'nofeed-5', 'down-6'] }), 'sv')
+    const top = await topChart(sql, fakeApple({ se: ['sv-1', 'en-2', 'sv-3', 'none-4', 'nofeed-5', 'down-6'] }), 'sv', NET)
     expect(top.map((s) => s.appleId)).toEqual(['sv-1', 'sv-3'])
     expect(top[0]!.feedUrl).toBe('https://feeds.example.com/sv-1.xml')
     expect(top[0]!.artwork).toBe('https://img/600x600bb.jpg')
@@ -58,33 +108,33 @@ run('Top charts only show the target language', () => {
 
   it("merges Spain's and Mexico's charts for Spanish, keeping each show once", async () => {
     const calls: string[] = []
-    const top = await topChart(sql, fakeApple({ es: ['es-1', 'en-2', 'es-3'], mx: ['es-9', 'es-1', 'en-8'] }, calls), 'es')
+    const top = await topChart(sql, fakeApple({ es: ['es-1', 'en-2', 'es-3'], mx: ['es-9', 'es-1', 'en-8'] }, calls), 'es', NET)
     expect(top.map((s) => s.appleId)).toEqual(['es-1', 'es-9', 'es-3'])
     expect(calls.some((u) => u.includes('/api/v2/mx/'))).toBe(true)
   })
 
   it("draws on Brazil's chart for Portuguese", async () => {
-    const top = await topChart(sql, fakeApple({ pt: ['pt-1'], br: ['pt-2', 'en-3'] }), 'pt')
+    const top = await topChart(sql, fakeApple({ pt: ['pt-1'], br: ['pt-2', 'en-3'] }), 'pt', NET)
     expect(top.map((s) => s.appleId)).toEqual(['pt-1', 'pt-2'])
   })
 
   it('trusts a language already saved for a show instead of fetching its feed', async () => {
     await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/en-7.xml', 'Known', 'de')`
     const calls: string[] = []
-    const top = await topChart(sql, fakeApple({ de: ['en-7', 'de-8'] }, calls), 'de')
+    const top = await topChart(sql, fakeApple({ de: ['en-7', 'de-8'] }, calls), 'de', NET)
     expect(top.map((s) => s.appleId)).toEqual(['en-7', 'de-8'])
     expect(calls).not.toContain('https://feeds.example.com/en-7.xml')
   })
 
   it('serves the checked chart from the cache for a day', async () => {
     const calls: string[] = []
-    const top = await topChart(sql, fakeApple({ se: ['en-1'] }, calls), 'sv')
+    const top = await topChart(sql, fakeApple({ se: ['en-1'] }, calls), 'sv', NET)
     expect(top.map((s) => s.appleId)).toEqual(['sv-1', 'sv-3'])
     expect(calls).toEqual([])
   })
 
   it('has no top chart for a language without a country', async () => {
-    expect(await topChart(sql, fakeApple({}), 'xx')).toEqual([])
+    expect(await topChart(sql, fakeApple({}), 'xx', NET)).toEqual([])
   })
 })
 
@@ -103,7 +153,7 @@ run('For you shelf from a learner\'s interests', () => {
       'pi:Soccer': ['sv-21'],
       'search:se': ['sv-31', 'en-32'],
     })
-    const shows = await forYou(sql, f, 'sv', ['comedy', 'sport/f1', 'sport/football'], creds)
+    const shows = await forYou(sql, f, 'sv', ['comedy', 'sport/f1', 'sport/football'], creds, 30, NET)
     // In the order the learner picked: comedy, then sport narrowed to Formula One and football.
     expect(shows.map((s) => s.title)).toEqual(['PI sv-11', 'Show sv-31', 'PI sv-21', 'PI sv-13'])
     expect(shows.map((s) => s.why)).toEqual(['Because you like a laugh', 'Because you follow Formula One', 'Because you follow football', 'Because you like a laugh'])
@@ -111,12 +161,12 @@ run('For you shelf from a learner\'s interests', () => {
 
   it('searches Mexico as well as Spain for Spanish', async () => {
     const calls: string[] = []
-    const shows = await forYou(sql, fakeApple({ 'search:es': ['es-41'], 'search:mx': ['es-42', 'en-43'] }, calls), 'es', ['sport/f1'], creds)
+    const shows = await forYou(sql, fakeApple({ 'search:es': ['es-41'], 'search:mx': ['es-42', 'en-43'] }, calls), 'es', ['sport/f1'], creds, 30, NET)
     expect(shows.map((s) => s.title)).toEqual(['Show es-41', 'Show es-42'])
   })
 
   it('is empty with no interests, and Discover then has no For you shelf', async () => {
-    expect(await forYou(sql, fakeApple({}), 'sv', [], creds)).toEqual([])
+    expect(await forYou(sql, fakeApple({}), 'sv', [], creds, 30, NET)).toEqual([])
     const shelves = await discoverShelves(sql, fakeApple({ 'pi:Music': ['de-51'] }), 'de', creds, [])
     expect(shelves.map((s) => s.id)).not.toContain('for-you')
   })
@@ -124,5 +174,42 @@ run('For you shelf from a learner\'s interests', () => {
   it('leads Discover with For you when the learner picked interests', async () => {
     const shelves = await discoverShelves(sql, fakeApple({ 'pi:Music': ['de-51'], de: ['de-52'] }), 'de', creds, ['music'])
     expect(shelves[0]).toMatchObject({ id: 'for-you', title: 'For you', shows: [{ title: 'PI de-51', why: 'Because you love music' }] })
+  })
+})
+
+run('Episodes with no ID in video-first feeds (PC-1025-02)', () => {
+  let sql: Sql
+  let drop: () => Promise<void>
+  beforeAll(async () => {
+    ;({ sql, drop } = await freshDatabase())
+  })
+  afterAll(async () => drop?.())
+
+  const FEED = 'https://feeds.example.com/video-first.xml'
+  const rss = (item: string) =>
+    `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel><title>Vídeo</title><language>es</language><item><title>Uno</title><itunes:duration>600</itunes:duration>${item}</item></channel></rss>`
+  const video = `<enclosure url="https://cdn.example.com/uno.mp4" type="video/mp4"/>`
+  const withAudio = `${video}<podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/uno.mp3"/></podcast:alternateEnclosure>`
+  const serving = (xml: string): typeof fetch => async () => new Response(xml)
+  const episodes = async (podcastId: string) => sql`select id, guid, audio_url from episodes where podcast_id = ${podcastId}`
+
+  it('adds no second copy when the show adds an audio version, and the learner keeps the episode they had', async () => {
+    const { podcastId } = await syncFeed(sql, serving(rss(video)), FEED, undefined, NET)
+    const [first] = await episodes(podcastId)
+    await syncFeed(sql, serving(rss(withAudio)), FEED, undefined, NET)
+    const after = await episodes(podcastId)
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ id: first!.id, guid: 'https://cdn.example.com/uno.mp4', audio_url: 'https://cdn.example.com/uno.mp3' })
+  })
+
+  it('gives a copy saved under its audio address since 23 Oct its original ID back, keeping the same episode', async () => {
+    const FEED2 = 'https://feeds.example.com/video-first-2.xml'
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values (${FEED2}, 'Vídeo 2', 'es') returning id`
+    const [saved] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language)
+      values (${p!.id}, 'https://cdn.example.com/uno.mp3', 'Uno', 600, 'https://cdn.example.com/uno.mp3', 'es') returning id`
+    await syncFeed(sql, serving(rss(withAudio)), FEED2, undefined, NET)
+    const after = await episodes(p!.id)
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ id: saved!.id, guid: 'https://cdn.example.com/uno.mp4' })
   })
 })

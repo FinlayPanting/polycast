@@ -5,12 +5,15 @@ import Foundation
 // or play the newest episode of a followed show. Copied into the app target by
 // plugins/withAppShortcuts.js (App Shortcuts must live in the app itself). Each shortcut opens
 // Polycast and leaves a note the app reads (modules/polycast-shortcuts); nothing else runs here.
+// App Intents exist from iOS 16; the app still runs on iOS 15.1, so everything here is marked
+// iOS 16 and up (PC-1022-03) and earlier phones simply have no shortcuts.
 
 enum PolycastShortcutStore {
   static let showsKey = "polycast.shortcuts.shows"
   static let pendingKey = "polycast.shortcuts.pending"
   static let shortcutRan = Notification.Name("PolycastShortcut")
 
+  @available(iOS 16.0, *)
   static func shows() -> [ShowEntity] {
     let raw = UserDefaults.standard.array(forKey: showsKey) as? [[String: String]] ?? []
     return raw.compactMap { d in
@@ -25,6 +28,7 @@ enum PolycastShortcutStore {
   }
 }
 
+@available(iOS 16.0, *)
 struct ShowEntity: AppEntity {
   static let typeDisplayRepresentation: TypeDisplayRepresentation = "Show"
   static let defaultQuery = ShowQuery()
@@ -37,6 +41,7 @@ struct ShowEntity: AppEntity {
   }
 }
 
+@available(iOS 16.0, *)
 struct ShowQuery: EntityQuery {
   func entities(for identifiers: [String]) async throws -> [ShowEntity] {
     PolycastShortcutStore.shows().filter { identifiers.contains($0.id) }
@@ -47,6 +52,7 @@ struct ShowQuery: EntityQuery {
   }
 }
 
+@available(iOS 16.0, *)
 struct CarryOnListeningIntent: AppIntent {
   static let title: LocalizedStringResource = "Carry on listening"
   static let description = IntentDescription("Picks up your last Polycast lesson where you left off.")
@@ -59,6 +65,7 @@ struct CarryOnListeningIntent: AppIntent {
   }
 }
 
+@available(iOS 16.0, *)
 struct PlayNewestEpisodeIntent: AppIntent {
   static let title: LocalizedStringResource = "Play the newest episode"
   static let description = IntentDescription("Opens the newest episode of a show you follow.")
@@ -74,6 +81,7 @@ struct PlayNewestEpisodeIntent: AppIntent {
   }
 }
 
+@available(iOS 16.0, *)
 struct PolycastAppShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
@@ -91,5 +99,16 @@ struct PolycastAppShortcuts: AppShortcutsProvider {
         "Play the newest episode in \(.applicationName)",
       ]
     )
+  }
+}
+
+/// Tells Siri the followed shows changed, so "Play the newest <show>" learns shows followed after
+/// install (PC-1022-03). Called by name from modules/polycast-shortcuts, which can't see this type.
+@objc(PolycastShortcutsRefresher)
+public class PolycastShortcutsRefresher: NSObject {
+  @objc public static func refresh() {
+    if #available(iOS 16.0, *) {
+      PolycastAppShortcuts.updateAppShortcutParameters()
+    }
   }
 }

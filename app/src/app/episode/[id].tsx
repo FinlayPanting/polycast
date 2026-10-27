@@ -250,7 +250,7 @@ export default function Episode() {
         </View>
 
         {primer ? (
-          <Primer primer={primer.primer} audioUrl={primer.audioUrl} languageName={languageName(profile?.target_language)} onSkip={listenNow} durationSec={ep.duration_sec} onJump={listenFrom} />
+          <Primer primer={primer.primer} audioUrl={primer.audioUrl} languageName={languageName(profile?.target_language)} language={profile?.target_language} onSkip={listenNow} durationSec={ep.duration_sec} onJump={listenFrom} />
         ) : null}
 
         {ep.status === 'ready' ? (
@@ -300,7 +300,7 @@ export default function Episode() {
                 </Txt>
               ) : null}
             </View>
-            {earlyPrimer ? <PrimerBuilding primer={earlyPrimer} guide={guideName(profile?.guide_id)} /> : null}
+            {earlyPrimer ? <PrimerBuilding primer={earlyPrimer} guide={guideName(profile?.guide_id)} language={profile?.target_language} /> : null}
           </View>
         ) : (
           <View style={{ gap: space.md }}>

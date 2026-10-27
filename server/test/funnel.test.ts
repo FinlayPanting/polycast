@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi, lastMonday } from '../src/api'
+import { createApi, FIRST_OPEN_LIMITS, lastMonday } from '../src/api'
 import type { Sql } from '../src/db'
 import { funnelText, weeklyFunnel } from '../src/funnel'
 import { freshDatabase, PG_TEST_URL } from './pg'
@@ -56,6 +56,34 @@ run('weekly funnel', () => {
       finishedGuided: 1, usedFreeEpisode: 1, startedPlus: 1, cameBack: 1,
     })
     expect(funnelText(f)).toContain('Picked a language: 2 (67%)')
+  })
+
+  it('counts first opens a few times a day per address at most, so the funnel cannot be pumped', async () => {
+    const a = api()
+    const before = Number((await sql`select coalesce(sum(opens), 0)::int as n from first_opens`)[0]!.n)
+    const from = (ip: string) => a.request('/events/first-open', { method: 'POST', headers: { 'X-Real-IP': ip } })
+    for (let i = 0; i < FIRST_OPEN_LIMITS.perAddressPerDay; i++) expect((await from('203.0.113.7')).status).toBe(200)
+    expect((await from('203.0.113.7')).status).toBe(429)
+    expect((await from('203.0.113.7')).status).toBe(429)
+    expect((await from('198.51.100.2')).status).toBe(200) // another address is still counted
+    const after = Number((await sql`select coalesce(sum(opens), 0)::int as n from first_opens`)[0]!.n)
+    expect(after - before).toBe(FIRST_OPEN_LIMITS.perAddressPerDay + 1)
+    await sql`delete from first_opens where day <> '2026-10-06'`
+  })
+
+  it('counts a whole IPv6 block as one address, and stops at an overall daily ceiling (PC-1025-03)', async () => {
+    const { FIRST_OPEN_LIMITS } = await import('../src/api')
+    const a = api()
+    const from = (ip: string) => a.request('/events/first-open', { method: 'POST', headers: { 'X-Real-IP': ip } })
+    const statuses: number[] = []
+    for (let i = 1; i <= 50; i++) statuses.push((await from(`2001:db8:5:6::${i.toString(16)}`)).status)
+    expect(statuses.filter((s) => s === 200)).toHaveLength(FIRST_OPEN_LIMITS.perAddressPerDay)
+    expect((await from('2001:db8:5:7::1')).status).toBe(200) // the next block along is someone else
+    // However many addresses join in, the day's count has a ceiling.
+    let accepted = FIRST_OPEN_LIMITS.perAddressPerDay + 1
+    for (let i = 0; accepted < FIRST_OPEN_LIMITS.overallPerDay; i++) if ((await from(`10.${(i >> 16) & 255}.${(i >> 8) & 255}.${i & 255}`)).status === 200) accepted++
+    expect((await from('198.51.100.99')).status).toBe(429)
+    await sql`delete from first_opens where day <> '2026-10-06'`
   })
 
   it('serves the funnel only with the token', async () => {

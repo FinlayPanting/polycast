@@ -6,7 +6,7 @@ import { fadeWav, HANDOVER, joinWavs, LAB_RATE, lineChain, runFfmpeg, scaleWav, 
 import { cleanTake, takeHash, voiceAndStore, voiceLine } from '../src/lab/voice'
 import { episodeAudio, renderMoment, type EpisodeForLab } from '../src/lab/moment'
 import { compareScripts, firstMinutes, scriptPrompt } from '../src/lab/writing'
-import { createLab, parseMistralVoices } from '../src/lab/routes'
+import { createLab, LAB_WRONG_TRIES, parseMistralVoices } from '../src/lab/routes'
 import { labSpend, listRuns, pickRun, saveRun } from '../src/lab/runs'
 import { wavDurationSec } from '../src/audio'
 import type { Storage } from '../src/providers/types'
@@ -199,6 +199,10 @@ function fakeEpisode(): EpisodeForLab {
   return { id: '00000000-0000-0000-0000-000000000001', title: 'Avsnitt', podcastTitle: 'Podd', audioUrl: 'https://feed.test/ep.mp3', language: 'sv', nativeLanguage: 'en', transcript, plan, guideId: 'mia' }
 }
 
+// These render real audio with ffmpeg several times over: about 2 s alone, but past vitest's 5 s
+// default when the machine is busy (PC-1024-10), so they get more room. A real hang still fails.
+const FFMPEG_TEST_MS = 20_000
+
 describe('Guide moment preview', () => {
   it('plays the moment as the phone does: fade out, breath, guide, host clip, guide, pick up two seconds back', async () => {
     const storage = memoryStorage()
@@ -222,7 +226,7 @@ describe('Guide moment preview', () => {
     expect(r.costUSD).toBe(0)
     expect(r.mp3.byteLength).toBeGreaterThan(1000)
     expect(r.warnings.join(' ')).toMatch(/weren’t|wasn’t checked/)
-  })
+  }, FFMPEG_TEST_MS)
 
   it('re-voices with a rewritten script and charges only the voice', async () => {
     const storage = memoryStorage()
@@ -236,7 +240,7 @@ describe('Guide moment preview', () => {
     expect(calls.filter((c) => c.url.includes('text-to-speech')).map((c) => c.body.text)).toEqual(['Anna again:', 'Late!'])
     expect(r.costUSD).toBeCloseTo('Anna again:Late!'.length * 40e-6, 9)
     await expect(renderMoment(ep, episode, 'spotlight-1', { label: 'x', script: 'No voice' }, { keys: {}, storage, fetchImpl: f })).rejects.toThrow(/needs a voice/)
-  })
+  }, FFMPEG_TEST_MS)
 })
 
 describe('Writing tests', () => {
@@ -269,7 +273,7 @@ describe('Lab routes', () => {
   const sql = (() => {
     throw new Error('no database in this test')
   }) as unknown as Sql
-  const lab = (storage = memoryStorage(), f?: typeof fetch) => createLab({ sql, token: 'secret', keys: { elevenlabs: 'k' }, storage, download: async () => new Uint8Array(), fetch: f })
+  const lab = (storage = memoryStorage(), f?: typeof fetch) => createLab({ sql, token: 'secret', keys: { elevenlabs: 'k' }, storage, download: async () => new Uint8Array(), fetch: f, wrongPasswordDelayMs: 0 })
 
   it('serves the page to anyone, the API only with the password', async () => {
     const app = lab()
@@ -279,6 +283,17 @@ describe('Lab routes', () => {
     expect((await app.request('/api/runs')).status).toBe(401)
     expect((await app.request('/api/runs', { headers: { Authorization: 'Bearer wrong' } })).status).toBe(401)
     expect((await app.request('/api/render/x?token=secret')).status).toBe(404)
+  })
+
+  it('takes the password in the address only for audio previews, and turns away repeated wrong guesses (PC-1022-02)', async () => {
+    const app = lab()
+    expect((await app.request('/api/runs?token=secret')).status).toBe(401)
+    const from = (ip: string, token: string) => app.request('/api/render/x', { headers: { Authorization: `Bearer ${token}`, 'X-Real-IP': ip } })
+    for (let i = 0; i < LAB_WRONG_TRIES.perAddress; i++) expect((await from('203.0.113.9', `guess${i}`)).status).toBe(401)
+    expect((await from('203.0.113.9', 'guess-last')).status).toBe(401)
+    // Locked out now, even with the right password; other addresses are unaffected.
+    expect((await from('203.0.113.9', 'secret')).status).toBe(429)
+    expect((await from('198.51.100.7', 'secret')).status).toBe(404)
   })
 
   it('estimates a voice run before spending anything', async () => {

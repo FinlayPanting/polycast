@@ -37,6 +37,13 @@ describe('Library: new episodes from followed shows', () => {
     expect(out[0]).toMatchObject({ podcastTitle: 'Show a', image: 'art-a', ready: true })
   })
 
+  it('carries the video-only flag through (PC-1023-09)', () => {
+    const s = show('a', [['a1', '2026-10-19T08:00:00Z']])
+    s.episodes[0]!.video = true
+    expect(newEpisodes([s], now)[0]).toMatchObject({ episodeId: 'a1', video: true })
+    expect(newEpisodes([show('b', [['b1', '2026-10-19T08:00:00Z']])], now)[0]!.video).toBeUndefined()
+  })
+
   it('leaves out episodes already started, and caps the list', () => {
     const shows = [show('a', [['a1', '2026-10-19T08:00:00Z'], ['a2', '2026-10-18T08:00:00Z'], ['a3', '2026-10-17T08:00:00Z']])]
     expect(newEpisodes(shows, now, new Set(['a1'])).map((e) => e.episodeId)).toEqual(['a2', 'a3'])

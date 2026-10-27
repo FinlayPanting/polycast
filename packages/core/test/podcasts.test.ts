@@ -7,6 +7,7 @@ import {
   chartGenre,
   chartTag,
   parseDuration,
+  isVideo,
   parseFeed,
   parseItunesResults,
   parsePodcastIndexTrending,
@@ -160,5 +161,56 @@ describe('Top charts in the target language', () => {
     expect(feedLanguageFromHead('<rss><channel><title>X</title><item><language>sv</language></item>')).toBeUndefined()
     expect(feedLanguageFromHead('<rss><channel><title>X</title>')).toBeUndefined()
     expect(feedLanguageFromHead('not a feed')).toBeUndefined()
+  })
+})
+
+describe('video-first feeds play as audio (PC-1023-09)', () => {
+  const feedWith = (item: string) =>
+    `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel><title>Show</title><language>es</language><item><guid>g</guid><title>Ep</title><itunes:duration>600</itunes:duration>${item}</item></channel></rss>`
+
+  it("takes the feed's audio version when the main file is a video", () => {
+    const feed = parseFeed(
+      feedWith(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4" length="900000000"/>
+        <podcast:alternateEnclosure type="video/mp4" height="1080"><podcast:source uri="https://cdn.example.com/ep-1080.mp4"/></podcast:alternateEnclosure>
+        <podcast:alternateEnclosure type="audio/mpeg" length="9000000"><podcast:source uri="https://cdn.example.com/ep.mp3"/></podcast:alternateEnclosure>`),
+    )
+    expect(feed.episodes[0]!.audioUrl).toBe('https://cdn.example.com/ep.mp3')
+  })
+
+  it('prefers the default audio version, and its first web address', () => {
+    const feed = parseFeed(
+      feedWith(`<enclosure url="https://cdn.example.com/ep.mov" type="video/quicktime"/>
+        <podcast:alternateEnclosure type="audio/aac"><podcast:source uri="https://cdn.example.com/ep.aac"/></podcast:alternateEnclosure>
+        <podcast:alternateEnclosure type="audio/mpeg" default="true"><podcast:source uri="ipfs://abc"/><podcast:source uri="https://cdn.example.com/ep-default.mp3"/></podcast:alternateEnclosure>`),
+    )
+    expect(feed.episodes[0]!.audioUrl).toBe('https://cdn.example.com/ep-default.mp3')
+  })
+
+  it('keeps an audio enclosure as it is, and a video-only episode as its video', () => {
+    expect(parseFeed(feedWith(`<enclosure url="https://cdn.example.com/ep.mp3" type="audio/mpeg"/><podcast:alternateEnclosure type="audio/aac"><podcast:source uri="https://cdn.example.com/ep.aac"/></podcast:alternateEnclosure>`)).episodes[0]!.audioUrl).toBe('https://cdn.example.com/ep.mp3')
+    expect(parseFeed(feedWith(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/>`)).episodes[0]!.audioUrl).toBe('https://cdn.example.com/ep.mp4')
+  })
+
+  it('keeps the same ID for an episode with none when its show adds an audio version (PC-1025-02)', () => {
+    const noGuid = (item: string) =>
+      `<?xml version="1.0"?><rss xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel><title>Show</title><item><title>Ep</title>${item}</item></channel></rss>`
+    const before = parseFeed(noGuid(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/>`)).episodes[0]!
+    const after = parseFeed(noGuid(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/><podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/ep.mp3"/></podcast:alternateEnclosure>`)).episodes[0]!
+    expect(after.audioUrl).toBe('https://cdn.example.com/ep.mp3')
+    expect(after.guid).toBe(before.guid)
+    expect(after.guid).toBe('https://cdn.example.com/ep.mp4')
+    expect(after.formerGuid).toBe('https://cdn.example.com/ep.mp3')
+    expect(before.formerGuid).toBeUndefined()
+    // An episode with its own ID never needs renaming.
+    expect(parseFeed(feedWith(`<enclosure url="https://cdn.example.com/ep.mp4" type="video/mp4"/><podcast:alternateEnclosure type="audio/mpeg"><podcast:source uri="https://cdn.example.com/ep.mp3"/></podcast:alternateEnclosure>`)).episodes[0]!.formerGuid).toBeUndefined()
+  })
+
+  it('tells video from audio by type, then by extension', () => {
+    expect(isVideo('https://x/ep.mp4', 'video/mp4')).toBe(true)
+    expect(isVideo('https://x/ep.mp4', 'audio/mp4')).toBe(false)
+    expect(isVideo('https://x/ep.mp3?token=a.mp4')).toBe(false)
+    expect(isVideo('https://x/ep.MP4?dl=1')).toBe(true)
+    expect(isVideo('https://x/ep.m4a')).toBe(false)
+    expect(isVideo('https://x/ep.mp3', 'application/octet-stream')).toBe(false)
   })
 })

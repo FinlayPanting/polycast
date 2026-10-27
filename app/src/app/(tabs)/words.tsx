@@ -8,6 +8,7 @@ import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
 import { listWords } from '../../lib/words'
 import { space, usePalette } from '../../theme'
+import { ENGLISH_SPEECH, speechLanguage } from '../../lib/speechLanguage'
 
 /** The word bank: everything saved while listening, with how many are due for review. */
 export default function Words() {
@@ -15,6 +16,7 @@ export default function Words() {
   const { profile } = useSession()
   const language = profile?.target_language ?? 'sv'
   const { data, reload } = useAsync(() => listWords(language), [language])
+  const speech = speechLanguage(language)
   useFocusEffect(useCallback(() => void reload(), [reload]))
   const now = new Date().toISOString()
   const due = (data ?? []).filter((w) => isDue(w.review, now))
@@ -52,8 +54,10 @@ export default function Words() {
         renderItem={({ item }) => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 52 }}>
             <View style={{ flex: 1 }}>
-              <Txt variant="bodyStrong">{item.lemma}</Txt>
-              <Txt variant="small" tone="quiet">
+              <Txt variant="bodyStrong" accessibilityLanguage={speech}>
+                {item.lemma}
+              </Txt>
+              <Txt variant="small" tone="quiet" accessibilityLanguage={ENGLISH_SPEECH}>
                 {item.meaning}
               </Txt>
             </View>

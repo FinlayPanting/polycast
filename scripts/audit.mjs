@@ -11,6 +11,14 @@ import { pathToFileURL } from 'node:url'
 /** Workspace folders whose production dependencies run on the server. */
 export const SERVER_SIDE = ['server', 'packages/core']
 const BLOCKING = new Set(['high', 'critical'])
+/**
+ * Advisories fixed by a patch in `patches/` rather than an upgrade (pnpm's patchedDependencies), keyed by
+ * advisory id. The audit only sees the version number, so these are listed as patched, not reported.
+ */
+export const PATCHED = {
+  // PC-1023-07: 0.3 and later are ES modules only, and expo-router's query-string 7 require()s it.
+  'GHSA-vcc3-ghjq-m6fr': { module: 'decode-uri-component', version: '0.2.2', patch: 'patches/decode-uri-component@0.2.2.patch' },
+}
 
 /** Every `name@version` in a `pnpm list --json` tree. */
 export function packagesInTree(list) {
@@ -33,9 +41,16 @@ export function packagesInTree(list) {
 export function triage(report, serverPackages) {
   const blocking = []
   const reported = []
+  const patched = []
   for (const a of Object.values(report?.advisories ?? {})) {
-    const roots = new Set((a.findings ?? []).flatMap((f) => f.paths ?? []).map((p) => p.split(' > ')[0]))
+    const id = String(a.github_advisory_id ?? a.url ?? '').match(/GHSA(-[0-9a-z]{4}){3}/i)?.[0]
+    const fix = id ? PATCHED[id] : undefined
     const versions = (a.findings ?? []).map((f) => f.version).filter(Boolean)
+    if (fix && fix.module === a.module_name && versions.length && versions.every((v) => v === fix.version)) {
+      patched.push(`${a.module_name} ${fix.version}: ${id} (${fix.patch})`)
+      continue
+    }
+    const roots = new Set((a.findings ?? []).flatMap((f) => f.paths ?? []).map((p) => p.split(' > ')[0]))
     const inServerTree = serverPackages ? versions.some((v) => serverPackages.has(`${a.module_name}@${v}`)) : false
     const serverSide = inServerTree || SERVER_SIDE.some((w) => roots.has(w))
     if (!roots.size) roots.add(inServerTree ? 'server' : 'no paths')
@@ -43,7 +58,7 @@ export function triage(report, serverPackages) {
     if (serverSide && BLOCKING.has(a.severity)) blocking.push(line)
     else reported.push(line)
   }
-  return { blocking, reported }
+  return { blocking, reported, patched }
 }
 
 function main() {
@@ -77,7 +92,8 @@ function main() {
   } catch {
     console.log("audit: couldn't list the server's dependencies; going by the report's paths")
   }
-  const { blocking, reported } = triage(report, serverPackages)
+  const { blocking, reported, patched } = triage(report, serverPackages)
+  for (const l of patched) console.log(`audit (patched in place): ${l}`)
   for (const l of reported) console.log(`audit (not blocking): ${l}`)
   for (const l of blocking) console.error(`audit BLOCKING: ${l}`)
   if (blocking.length) process.exit(1)

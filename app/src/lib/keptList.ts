@@ -32,6 +32,12 @@ export class KeptList<T> {
     this.set(toggleKept(this.items, item, this.idOf))
   }
 
+  /** Adds `item` at the end unless one with its id is already there. */
+  async add(item: T): Promise<void> {
+    await this.load()
+    if (!this.has(this.idOf(item))) this.set([...this.items, item])
+  }
+
   async remove(id: string): Promise<void> {
     await this.load()
     this.set(removeKept(this.items, id, this.idOf))

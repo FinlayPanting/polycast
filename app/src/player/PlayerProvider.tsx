@@ -7,7 +7,7 @@ import { api, type ListenPayload } from '../lib/api'
 import { config } from '../lib/config'
 import { resumePosition, savePosition } from '../lib/data'
 import { getEpisodeReady, type GetReadyStep } from '../lib/episodeAudio'
-import { goodbyeUrl, loadGoodbye, type Goodbye } from '../lib/goodbye'
+import { goodbyeUrl, loadGoodbye, pickFarewell, type Goodbye } from '../lib/goodbye'
 import { voicedGuideId } from '../lib/languages'
 import { isOfflineError } from '../lib/net'
 import { loadLesson, localPosition, readyPayload, saveLesson } from '../lib/offline'
@@ -21,6 +21,7 @@ import { setRemoteHandler } from './remote'
 import { LAST_PLAYED_KEY, miniPlayerView, openDecision, parseLastPlayed, sessionKey, type LastPlayed, type ListenParams, type MiniPlayerView } from './session'
 import { trackPlayerAudio } from './trackPlayerAudio'
 import { nowPlayingTrack } from './nowPlaying'
+import { keepStampFor } from '../lib/stamps'
 
 /**
  * The listen in progress, held above the screens (PC-1017-F04): swiping the full player away
@@ -78,7 +79,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state)
   stateRef.current = state
   const listen = useRef<GuidedListen | undefined>(undefined)
-  const goodbye = useRef<Goodbye | undefined>(undefined)
+  const goodbye = useRef<{ goodbye?: Goodbye; goodnight?: Goodbye }>({})
   const run = useRef<{ key: string; abort: AbortController; disposed: boolean } | undefined>(undefined)
   const profileRef = useRef(profile)
   profileRef.current = profile
@@ -163,9 +164,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           const startAt = from !== undefined ? from : resumeAt
           if (r.disposed) return
           // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
-          goodbye.current = undefined
+          // Late at night it's a goodnight instead (PC-1025-06), picked when it plays: both are fetched now.
+          const farewells: { goodbye?: Goodbye; goodnight?: Goodbye } = {}
+          goodbye.current = farewells
           if (!config.demo && moments.length > 0) {
-            void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, voicedGuideId(d.guideId, profileRef.current?.guide_id))).then((g) => (goodbye.current = g))
+            const guideId = voicedGuideId(d.guideId, profileRef.current?.guide_id)
+            void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, guideId)).then((g) => (farewells.goodbye = g))
+            void loadGoodbye(goodbyeUrl(config.supabaseUrl, d.transcript.language, guideId, true)).then((g) => (farewells.goodnight = g))
           }
 
           const l = new GuidedListen({
@@ -179,7 +184,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
               if (s) void savePosition(s.user.id, id, sec)
             },
             inForeground: () => AppState.currentState === 'active',
-            goodbye: () => goodbye.current,
+            goodbye: () => pickFarewell(goodbye.current, new Date()),
           })
           listen.current = l
           setRemoteHandler((cmd) => void l.remote(cmd))
@@ -272,6 +277,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const s = sessionRef.current
     if (s) void savePosition(s.user.id, params.id, state.position, true)
     if (last?.id === params.id) remember(undefined)
+    // A seasonal stamp for a guided episode finished while a season is on (PC-1024-07).
+    if (data) keepStampFor({ guided: data.guided, language: data.transcript.language })
   }, [state.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mini = useMemo(

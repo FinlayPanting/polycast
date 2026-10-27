@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApi, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { createApi, KNOWN_WORDS_EMPTY_TTL_MS, KNOWN_WORDS_TTL_MS, knownWordsFresh, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
 import { ProviderError, type TextModel } from '../src/providers/types'
 import { OWN_KEYS_LIMITS } from '../src/ownKeys'
@@ -150,9 +150,12 @@ run('API and worker', () => {
   it('opens a show it read recently without re-reading the feed or asking Apple (PC-1017-F03)', async () => {
     const fetched: string[] = []
     let slow = false
+    // The slow feed answers only when the test lets it, so its re-read can't land in a later test (PC-1024-10).
+    let answerFeed = () => {}
+    const feedHeld = new Promise<void>((r) => (answerFeed = r))
     const spy: typeof fetch = async (input, init) => {
       fetched.push(String(input))
-      if (slow && String(input) === FEED_URL) await new Promise((r) => setTimeout(r, 10_000))
+      if (slow && String(input) === FEED_URL) await feedHeld
       return fakeFetch(input, init)
     }
     const quick = createApi({ sql, verify: async (t) => t, fetch: spy, lookupHost: publicHost })
@@ -171,6 +174,12 @@ run('API and worker', () => {
     expect((await open({ feedUrl: FEED_URL })).episodes).toHaveLength(2)
     expect(Date.now() - started).toBeLessThan(5_000)
     expect(fetched).toEqual([FEED_URL])
+
+    // The re-read finishes in the background for next time; wait for it here rather than in Discover's test.
+    answerFeed()
+    const caughtUp = async () => (await sql`select updated_at > now() - interval '1 minute' as fresh from podcasts where feed_url = ${FEED_URL}`)[0]!.fresh
+    for (let i = 0; i < 100 && !(await caughtUp()); i++) await new Promise((r) => setTimeout(r, 50))
+    expect(await caughtUp()).toBe(true)
   }, 20_000)
 
   it('times the freshness of a show and the wait for a slow feed', async () => {
@@ -214,7 +223,8 @@ run('API and worker', () => {
 
   it('shows Polycast picks, easy listening and the top chart on Discover', async () => {
     const someone = await learner()
-    const [p] = await sql`select id from podcasts limit 1`
+    // By its feed, not 'limit 1': which row comes first isn't promised once rows have been updated.
+    const [p] = await sql`select id from podcasts where feed_url = ${FEED_URL}`
     await sql`insert into picks (language, podcast_id, position) values ('sv', ${p!.id}, 1)`
     await sql`update episodes set difficulty = '{"band":"easier","label":"A2–B1, relaxed pace","wpm":120}' where status = 'ready'`
     const { shelves } = await (await call(someone, 'GET', '/v1/discover/sv')).json()
@@ -610,12 +620,17 @@ run('API and worker', () => {
     const last = body.shows.find((s: any) => s.podcast.id === shows[13])
     expect(last.episodes.map((e: any) => e.title)).toEqual(['New 13'])
     expect(last.episodes[0]).toMatchObject({ duration_sec: 600, status: 'none' })
+    expect(last.episodes[0].video).toBeUndefined()
+    // A video-only episode says so, so auto-download can leave it for Wi-Fi (PC-1023-09).
+    await sql`update episodes set audio_url = 'https://cdn.example.com/n.mp4' where podcast_id = ${shows[12]!} and guid = 'new'`
+    const twelve = (await (await post({ podcastIds: [shows[12]] })).json()).shows[0]
+    expect(twelve.episodes[0]).toMatchObject({ title: 'New 12', video: true })
     // Only the stale feed is re-read, in the background.
     await new Promise((r) => setTimeout(r, 50))
     expect(feedReads).toBe(1)
     expect(await (await post({ podcastIds: [] })).json()).toEqual({ shows: [] })
     // Its own limit: the show-page limit isn't touched.
-    for (let i = 0; i < NEW_EPISODES_LIMITS.perMinute - 2; i++) await post({ podcastIds: [shows[0]] })
+    for (let i = 0; i < NEW_EPISODES_LIMITS.perMinute - 3; i++) await post({ podcastIds: [shows[0]] })
     expect((await post({ podcastIds: [shows[0]] })).status).toBe(429)
   })
 
@@ -645,6 +660,116 @@ run('API and worker', () => {
     await new Promise((r) => setTimeout(r, 50))
     expect(reads.slice(3)).toEqual(['alive-1'])
     expect(retry.waiting(ids[0]!, Date.now())).toBe(true)
+  })
+
+  it('offers five words the learner already knows from a starter episode, with the host saying them (PC-1022-08)', async () => {
+    const it1 = await learner()
+    expect(await (await call(it1, 'GET', '/v1/known-words/it')).json()).toEqual({ words: [] })
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/it-pick.xml', 'Caffè Italiano', 'it') returning id`
+    await sql`insert into picks (language, podcast_id, position) values ('it', ${p!.id}, 1)`
+    const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+      values (${p!.id}, 'it-1', 'Puntata 1', now(), 900, 'https://a.example/it1.mp3', 'it', 'ready') returning id`
+    const text = 'è importante la musica per la famiglia al ristorante con il telefono'
+    const words = text.split(' ').map((t, i) => ({ text: t, start: i, end: i + 0.8 }))
+    const glossary = {
+      importante: { lemma: 'importante', meaning: 'important' },
+      musica: { lemma: 'musica', meaning: 'music' },
+      famiglia: { lemma: 'famiglia', meaning: 'family' },
+      ristorante: { lemma: 'ristorante', meaning: 'restaurant' },
+      telefono: { lemma: 'telefono', meaning: 'telephone' },
+      per: { lemma: 'per', meaning: 'for' },
+    }
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
+      values (${e!.id}, 'it', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])}, ${sql.json(glossary)})`
+    const other = await learner() // a fresh learner: the empty answer above is cached for an hour per language
+    const body = await (await api().request('/v1/known-words/it', { headers: { Authorization: `Bearer ${other}` } })).json()
+    expect(body).toMatchObject({ episodeId: e!.id, podcastTitle: 'Caffè Italiano', audioUrl: 'https://a.example/it1.mp3' })
+    expect(body.words.map((w: any) => w.text).sort()).toEqual(['famiglia', 'importante', 'musica', 'ristorante', 'telefono'])
+    expect(body.words.find((w: any) => w.text === 'importante')).toEqual({ text: 'importante', meaning: 'important', clip: { start: 0.88, end: 1.92 } })
+    expect((await call(other, 'GET', '/v1/known-words/../x')).status).toBe(404)
+  })
+
+  it('keeps an empty "You already know" answer for five minutes, not an hour (PC-1023-01)', async () => {
+    expect(knownWordsFresh({ words: [] }, 0, KNOWN_WORDS_EMPTY_TTL_MS - 1)).toBe(true)
+    expect(knownWordsFresh({ words: [] }, 0, KNOWN_WORDS_EMPTY_TTL_MS)).toBe(false)
+    expect(knownWordsFresh({ words: [{}] }, 0, KNOWN_WORDS_EMPTY_TTL_MS)).toBe(true)
+    expect(knownWordsFresh({ words: [{}] }, 0, KNOWN_WORDS_TTL_MS)).toBe(false)
+
+    // Launch morning: one server, the starter episode still being prepared when the first learner arrives.
+    const app = api()
+    const get = async (user: string) => (await app.request('/v1/known-words/pt', { headers: { Authorization: `Bearer ${user}` } })).json()
+    const t0 = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(t0)
+    try {
+      expect(await get(await learner())).toEqual({ words: [] })
+      const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/pt-pick.xml', 'Café Brasil', 'pt') returning id`
+      await sql`insert into picks (language, podcast_id, position) values ('pt', ${p!.id}, 1)`
+      const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+        values (${p!.id}, 'pt-1', 'Episódio 1', now(), 900, 'https://a.example/pt1.mp3', 'pt', 'ready') returning id`
+      const text = 'a música é importante para a família no restaurante'
+      const words = text.split(' ').map((t, i) => ({ text: t, start: i, end: i + 0.8 }))
+      const glossary = {
+        música: { lemma: 'música', meaning: 'music' },
+        importante: { lemma: 'importante', meaning: 'important' },
+        família: { lemma: 'família', meaning: 'family' },
+        restaurante: { lemma: 'restaurante', meaning: 'restaurant' },
+      }
+      await sql`insert into transcripts (episode_id, language, native_language, source, words, segments, glossary)
+        values (${e!.id}, 'pt', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])}, ${sql.json(glossary)})`
+      clock.mockReturnValue(t0 + KNOWN_WORDS_EMPTY_TTL_MS - 1_000)
+      expect(await get(await learner())).toEqual({ words: [] }) // still the kept empty answer
+      clock.mockReturnValue(t0 + KNOWN_WORDS_EMPTY_TTL_MS + 1_000)
+      const ready = await get(await learner())
+      expect(ready.episodeId).toBe(e!.id)
+      expect(ready.words.length).toBeGreaterThanOrEqual(3)
+      // A found answer is kept for the hour, even once the episode stops being ready.
+      await sql`update episodes set status = 'failed' where id = ${e!.id}`
+      clock.mockReturnValue(t0 + KNOWN_WORDS_EMPTY_TTL_MS + 30 * 60_000)
+      expect((await get(await learner())).episodeId).toBe(e!.id)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('reads a slow feed once while it loads, not once per learner (PC-1022-05)', async () => {
+    const { FeedRetry } = await import('../src/api')
+    let reads = 0
+    let release!: () => void
+    const held = new Promise<void>((r) => (release = r))
+    const slow: typeof fetch = async (input, init) => {
+      if (String(input).startsWith('https://feeds.example.com/slow-1')) {
+        reads++
+        await held
+      }
+      return fakeFetch(input, init)
+    }
+    const retry = new FeedRetry()
+    const lib = createApi({ sql, verify: async (t) => t, fetch: slow, lookupHost: publicHost, feedRetry: retry })
+    const [p] = await sql`insert into podcasts (feed_url, title, language, updated_at) values ('https://feeds.example.com/slow-1.xml', 'Slow', 'sv', now() - interval '3 days') returning id`
+    const post = (who: string) => lib.request('/v1/library/new-episodes', { method: 'POST', headers: { Authorization: `Bearer ${who}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ podcastIds: [p!.id] }) })
+    for (const who of [await learner(), await learner(), await learner()]) expect((await post(who)).status).toBe(200)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(reads).toBe(1)
+    expect(retry.waiting(p!.id, Date.now())).toBe(true)
+    release()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(reads).toBe(1)
+  })
+
+  it('counts a feed as busy while it is read, for a while at most (PC-1022-05)', async () => {
+    const { FeedRetry } = await import('../src/api')
+    const r = new FeedRetry(60_000, 3_600_000, 30_000)
+    r.start('a', 0)
+    expect(r.waiting('a', 29_999)).toBe(true)
+    // A read that never settles can't hold the feed forever.
+    expect(r.waiting('a', 30_000)).toBe(false)
+    r.start('b', 0)
+    r.ok('b')
+    expect(r.waiting('b', 1)).toBe(false)
+    r.start('c', 0)
+    r.failed('c', 10)
+    expect(r.waiting('c', 59_999)).toBe(true)
+    expect(r.waiting('c', 60_010)).toBe(false)
   })
 
   it('waits longer each time a feed keeps failing, up to a day, and forgets once it loads (PC-1021-04)', async () => {

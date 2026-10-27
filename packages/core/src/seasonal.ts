@@ -17,6 +17,11 @@ export interface Season {
   from: string
   to: string
   byLanguage: Record<string, SeasonalMood>
+  /**
+   * A keepsake for finishing a guided episode while the season is on (PC-1024-07), named in the
+   * learner's language. Optional: a season without one simply gives none.
+   */
+  stamp?: Record<string, string>
 }
 
 export const SEASONS: Season[] = [
@@ -50,6 +55,7 @@ export const SEASONS: Season[] = [
         note: 'Sweden keeps Alla helgons dag on the Saturday between 31 October and 6 November, when people light candles on graves.',
       },
     },
+    stamp: { es: 'Todos los Santos', fr: 'Toussaint', de: 'Allerheiligen', it: 'Ognissanti', pt: 'Finados', sv: 'Allhelgona' },
   },
 ]
 
@@ -67,4 +73,64 @@ export function seasonalMood(language: string, now: Date, seasons: Season[] = SE
     if (m && day >= s.from && day <= s.to) return { ...m, seasonId: s.id }
   }
   return undefined
+}
+
+/**
+ * New Year lines (PC-1023-04): from Boxing Day to mid-January, when most people start learning, the welcome
+ * screen and the free plan's card on You speak to New Year learners, then switch themselves off. No discount
+ * and no price change: copy and timing only. `{language}` becomes the language's English name.
+ */
+export interface SeasonalLines {
+  id: string
+  /** First and last day it shows, inclusive, as YYYY-MM-DD in the learner's own time zone. */
+  from: string
+  to: string
+  /** Under the welcome screen's introduction, before a language is picked. */
+  welcome: string
+  /** On the free plan's card in You, above "See Plus". */
+  plusCard: string
+}
+
+export const SEASONAL_LINES: SeasonalLines[] = [
+  {
+    id: 'new-year-2027',
+    from: '2026-12-26',
+    to: '2027-01-18',
+    welcome: 'New year, new language? One podcast a week is a gentle way in.',
+    plusCard: 'One podcast a week in {language} this year? Plus brings your guide to every episode.',
+  },
+]
+
+/** The seasonal line for this place today, if one is on. */
+export function seasonalLine(place: 'welcome' | 'plusCard', now: Date, languageName = 'your language', lines: SeasonalLines[] = SEASONAL_LINES): string | undefined {
+  const day = localDay(now)
+  const s = lines.find((l) => day >= l.from && day <= l.to)
+  return s?.[place].replace('{language}', languageName)
+}
+
+/**
+ * Seasonal stamps (PC-1024-07): finishing a guided episode while a season is on earns that season's
+ * stamp, once, named in the language of the episode. Kept on the phone and never counted as a streak.
+ */
+export interface SeasonStamp {
+  seasonId: string
+  language: string
+  name: string
+  /** The learner's local day it was earned, YYYY-MM-DD. */
+  earnedOn: string
+}
+
+/** The stamp a guided episode in `language` finished now would earn, if a season with one is on. */
+export function seasonalStamp(language: string, now: Date, seasons: Season[] = SEASONS): SeasonStamp | undefined {
+  const day = localDay(now)
+  for (const s of seasons) {
+    const name = s.stamp?.[language]
+    if (name && day >= s.from && day <= s.to) return { seasonId: s.id, language, name, earnedOn: day }
+  }
+  return undefined
+}
+
+/** The stamps with `stamp` added, unless that season's stamp is already there (one per season). */
+export function addStamp(stamps: readonly SeasonStamp[], stamp: SeasonStamp): SeasonStamp[] {
+  return stamps.some((s) => s.seasonId === stamp.seasonId) ? [...stamps] : [...stamps, stamp]
 }

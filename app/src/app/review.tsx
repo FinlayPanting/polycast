@@ -9,6 +9,7 @@ import { CLIP_GONE } from '../lib/storage'
 import { listWords, recordReview } from '../lib/words'
 import { useHostClip } from '../lib/useHostClip'
 import { space, usePalette } from '../theme'
+import { ENGLISH_SPEECH, speechLanguage } from '../lib/speechLanguage'
 
 /** A short review: hear the host say it, try to recall the meaning, then reveal. */
 export default function Review() {
@@ -16,6 +17,7 @@ export default function Review() {
   const { session, profile } = useSession()
   const language = profile?.target_language ?? 'sv'
   const { data } = useAsync(() => listWords(language), [language])
+  const speech = speechLanguage(language)
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const play = useHostClip()
@@ -53,11 +55,11 @@ export default function Review() {
       </View>
       {word ? (
         <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
-          <Txt variant="title" style={{ fontSize: 40, lineHeight: 46 }}>
+          <Txt variant="title" accessibilityLanguage={speech} style={{ fontSize: 40, lineHeight: 46 }}>
             {word.lemma}
           </Txt>
           {word.source.sentence ? (
-            <Txt tone="quiet" style={{ fontStyle: 'italic' }}>
+            <Txt tone="quiet" accessibilityLanguage={speech} style={{ fontStyle: 'italic' }}>
               “{word.source.sentence}”
             </Txt>
           ) : null}
@@ -69,7 +71,7 @@ export default function Review() {
             </Txt>
           ) : null}
           {revealed ? (
-            <Txt variant="heading" style={{ color: p.savedText }}>
+            <Txt variant="heading" accessibilityLanguage={ENGLISH_SPEECH} style={{ color: p.savedText }}>
               {word.meaning}
             </Txt>
           ) : null}

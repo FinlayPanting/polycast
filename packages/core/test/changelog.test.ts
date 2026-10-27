@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { buildLabel, groupChangelog, hasUnread, newestDate, parseChangelog, type ChangelogEntry } from '../src/changelog'
+import { buildLabel, groupChangelog, hasUnread, newestDate, parseChangelog, REVIEW_NOTES_MAX, reviewNotes, type ChangelogEntry } from '../src/changelog'
 
 const entry = (id: string, date: string, kind: ChangelogEntry['kind']): ChangelogEntry => ({ id, date, kind, title: id, description: `${id} changed` })
 
@@ -39,5 +39,40 @@ describe("What's new (PC-1019-F02)", () => {
     expect(entries.length).toBe(raw.entries.length)
     expect(new Set(entries.map((e) => e.id)).size).toBe(entries.length)
     for (const e of entries) expect(e.description).not.toMatch(/!!/)
+  })
+})
+
+describe('Notes for App Review from the change log (PC-1022-06)', () => {
+  const e = (id: string, date: string, kind: ChangelogEntry['kind'], extra: Partial<ChangelogEntry> = {}): ChangelogEntry => ({
+    id,
+    date,
+    kind,
+    title: `Title ${id}`,
+    description: `What ${id} does.`,
+    ...extra,
+  })
+  const log = [e('A', '2026-10-20', 'Feature', { tryIt: 'Open Discover' }), e('B', '2026-10-22', 'Bug'), e('C', '2026-10-23', 'UX')]
+
+  it('describes every change since the last approved version, over-the-air ones included', () => {
+    const text = reviewNotes(log, '2026-10-20')
+    expect(text).toContain('since the last approved version (2026-10-20)')
+    expect(text).toContain('over-the-air update')
+    expect(text).not.toContain('Title A')
+    expect(text).toContain('New and changed:\n- Title C: What C does.')
+    expect(text).toContain('Fixes and refinements:\n- Title B: What B does.')
+    expect(reviewNotes(log)).toContain('- Title A: What A does. (Try it: Open Discover.)')
+    expect(reviewNotes(log, '2026-10-23')).toBe('No changes since the last approved version.')
+  })
+
+  it('always fits the box and never leaves a change out', () => {
+    const many = Array.from({ length: 80 }, (_, i) => e(`X${i}`, '2026-10-21', i % 2 ? 'Bug' : 'Feature', { description: 'x'.repeat(120) }))
+    const text = reviewNotes(many)
+    expect(text.length).toBeLessThanOrEqual(REVIEW_NOTES_MAX)
+    for (const m of many) expect(text).toContain(`- Title ${m.id}`)
+  })
+
+  it('reads the real change log within the limit', async () => {
+    const entries = parseChangelog(JSON.parse(readFileSync(new URL('../../../server/changelog.json', import.meta.url), 'utf8')))
+    expect(reviewNotes(entries).length).toBeLessThanOrEqual(REVIEW_NOTES_MAX)
   })
 })

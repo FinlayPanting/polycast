@@ -2,7 +2,7 @@ import { LAUNCH_LANGUAGES } from '@polycast/core'
 import { describe, expect, it } from 'vitest'
 import { silentWav } from '../src/audio'
 import { memoryLedger, SpendGuard } from '../src/budget'
-import { ensureGoodbyeAudio, GOODBYE_LINES, goodbyeManifestPath, voiceGoodbye, type GoodbyeManifest } from '../src/goodbye'
+import { ensureGoodbyeAudio, GOODBYE_LINES, goodbyeManifestPath, GOODNIGHT_LINES, voiceGoodbye, type GoodbyeManifest } from '../src/goodbye'
 import { memoryStorage } from '../src/providers/mock'
 import type { SpeechSynth } from '../src/providers/types'
 import { GUIDES, guideById } from '../src/voices'
@@ -44,7 +44,7 @@ describe('guide goodbye', () => {
     const { s, calls } = speech()
     const storage = memoryStorage()
     const guard = new SpendGuard(memoryLedger(), 5)
-    expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toHaveLength(LAUNCH_LANGUAGES.length * GUIDES.length)
+    expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toHaveLength(LAUNCH_LANGUAGES.length * GUIDES.length * 2)
     const n = calls.length
     expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toEqual([])
     expect(calls).toHaveLength(n)
@@ -54,5 +54,26 @@ describe('guide goodbye', () => {
     const { s, calls } = speech()
     expect(await ensureGoodbyeAudio({ speech: s, storage: memoryStorage(), guard: new SpendGuard(memoryLedger(), 0) })).toEqual([])
     expect(calls).toHaveLength(0)
+  })
+
+  it('has a goodnight for every launch language too, voiced beside the goodbye without touching it (PC-1025-06)', async () => {
+    for (const lang of LAUNCH_LANGUAGES) {
+      expect(GOODNIGHT_LINES[lang].text.length).toBeLessThan(30)
+      expect(GOODNIGHT_LINES[lang].text).not.toBe(GOODBYE_LINES[lang].text)
+    }
+    const { s, calls } = speech()
+    const storage = memoryStorage()
+    const guard = new SpendGuard(memoryLedger(), 5)
+    // The goodbyes are already there, as in production: only the twelve goodnights are voiced.
+    for (const guide of GUIDES) for (const lang of LAUNCH_LANGUAGES) await voiceGoodbye(lang, guide, { speech: s, storage, guard })
+    const before = calls.length
+    const voiced = await ensureGoodbyeAudio({ speech: s, storage, guard })
+    expect(voiced).toHaveLength(LAUNCH_LANGUAGES.length * GUIDES.length)
+    expect(voiced).toContain('it/mia-night')
+    expect(calls.slice(before).map((c) => c.text)).toContain('Sogni d’oro!')
+    const night = JSON.parse(new TextDecoder().decode(storage.files.get(goodbyeManifestPath('de', { id: 'leo' }, 'goodnight'))!)) as GoodbyeManifest
+    expect(night).toMatchObject({ text: 'Schlaf gut!', meaning: 'Sleep well!', guideId: 'leo' })
+    expect(night.url).toContain('goodbye/v2/de/leo-night.m4a')
+    expect(goodbyeManifestPath('de', { id: 'leo' }, 'goodnight')).toBe('goodbye/v2/de/leo-night.json')
   })
 })

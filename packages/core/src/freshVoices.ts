@@ -1,0 +1,62 @@
+/**
+ * Fresh voices on Discover (PC-1023-05): new shows from Spotify's RADAR Creators class of 2026 (named
+ * 21 Oct 2026), so 18-to-30s current voices sit next to the long-running chart shows. Listed by title and
+ * the country whose Apple catalogue carries them; the server finds each one's public feed and keeps it only
+ * when the feed is in the language. Spotify named no Italian, German or Swedish shows, so those have none.
+ */
+export interface FreshVoice {
+  title: string
+  /** Apple storefront to search, and where the show is from. */
+  country: string
+}
+
+export const FRESH_VOICES_SOURCE = 'Spotify RADAR Creators 2026'
+
+export const FRESH_VOICES: Record<string, FreshVoice[]> = {
+  es: [
+    { title: 'Ahora me entero', country: 'es' },
+    { title: 'Terapia de Parejas', country: 'es' },
+    { title: 'Chronically Online', country: 'es' },
+    { title: 'Querido Pícaro', country: 'es' },
+    { title: 'Pareja in Crime', country: 'es' },
+    { title: 'Mientras lavás los platos', country: 'ar' },
+    { title: 'Nada que ocultar', country: 'ar' },
+    { title: 'Tengo bocha para decir', country: 'ar' },
+    { title: 'Todo por la empresa', country: 'ar' },
+    { title: '¿Quién es Quién? por Martu Boden', country: 'ar' },
+  ],
+  fr: [
+    { title: 'STONKS! avec Arthur Perticoz', country: 'fr' },
+    { title: 'Star System', country: 'fr' },
+    { title: 'The Elevate House', country: 'fr' },
+    { title: 'Femmes au bord de la crise de nerfs', country: 'fr' },
+    { title: 'Tunnel par Anna Toumazoff', country: 'fr' },
+    { title: 'Les Histoires Sombres et Morbides', country: 'fr' },
+  ],
+  pt: [
+    { title: 'Café Frio Show com Victor Vaz', country: 'br' },
+    { title: 'Só Pod Ser História', country: 'br' },
+    { title: 'obra aberta', country: 'br' },
+    { title: 'Medo em Cia.', country: 'br' },
+    { title: 'Uma Tupá no Tempo', country: 'br' },
+    { title: 'Em Voz Alta com @moniqueevelle', country: 'br' },
+    { title: 'Dossiê de Orí', country: 'br' },
+    { title: 'segunda terapia', country: 'br' },
+    { title: 'Sarah de Terapia', country: 'br' },
+    { title: 'Diálogos', country: 'br' },
+  ],
+}
+
+const COUNTRY_NAMES: Record<string, string> = { es: 'Spain', ar: 'Argentina', fr: 'France', br: 'Brazil' }
+
+/** The line under a fresh voice's tile, e.g. "New voice from Argentina". */
+export function freshVoiceWhy(country: string): string {
+  const name = COUNTRY_NAMES[country]
+  return name ? `New voice from ${name}` : 'New voice'
+}
+
+/** Titles compared without case, accents, punctuation or spacing, so "Querido Pìcaro" finds "Querido Pícaro". */
+export function sameShowTitle(a: string, b: string): boolean {
+  const n = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+  return n(a) !== '' && n(a) === n(b)
+}

@@ -26,6 +26,9 @@
       "channel": "production"
     },
     "base": {
+      "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://polycast-production.up.railway.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://usfdvpivogjtmrbwopzg.supabase.co",

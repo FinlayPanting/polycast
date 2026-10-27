@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clientAddress, rateLimiter } from '../src/rateLimit'
+import { addressKey, clientAddress, rateLimiter } from '../src/rateLimit'
 
 describe('rate limiter', () => {
   it('allows up to the limit per key in a window, then resets', () => {
@@ -26,5 +26,21 @@ describe('client address', () => {
     expect(clientAddress(headers({ 'x-real-ip': '1.2.3.4', 'x-forwarded-for': '9.9.9.9' }))).toBe('1.2.3.4')
     expect(clientAddress(headers({ 'x-forwarded-for': 'made-up, 5.6.7.8' }))).toBe('5.6.7.8')
     expect(clientAddress(headers({}))).toBe('unknown')
+  })
+})
+
+describe('address key (PC-1025-03)', () => {
+  it('counts IPv6 callers by their /64 block, however the address is written', () => {
+    const block = addressKey('2001:db8:abcd:12::1')
+    expect(block).toBe('2001:db8:abcd:12::/64')
+    expect(addressKey('2001:0db8:abcd:0012:ffff:1:2:3')).toBe(block)
+    expect(addressKey('[2001:DB8:ABCD:12::beef]')).toBe(block)
+    expect(addressKey('2001:db8:abcd:13::1')).not.toBe(block)
+    expect(addressKey('fe80::1%en0')).toBe('fe80:0:0:0::/64')
+  })
+  it('keeps IPv4 addresses whole, including IPv4 written as IPv6', () => {
+    expect(addressKey('203.0.113.7')).toBe('203.0.113.7')
+    expect(addressKey('::ffff:203.0.113.7')).toBe('203.0.113.7')
+    expect(addressKey('unknown')).toBe('unknown')
   })
 })

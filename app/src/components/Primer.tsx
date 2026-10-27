@@ -6,6 +6,7 @@ import { clockTime, episodeMap, playableClip, primerReveal } from '../lib/primer
 import { useHostClip } from '../lib/useHostClip'
 import { MIN_TAP, motion, space, usePalette } from '../theme'
 import { Button, Txt } from './ui'
+import { ENGLISH_SPEECH, speechLanguage } from '../lib/speechLanguage'
 
 /**
  * The Episode Primer (PC-1017-P2, P4): what the episode is about, the words to listen for in the
@@ -18,10 +19,13 @@ export function Primer({
   onSkip,
   durationSec,
   onJump,
+  language,
 }: {
   primer: PrimerData
   audioUrl?: string
   languageName: string
+  /** The episode's language code, so VoiceOver reads its words in that accent (PC-1024-04). */
+  language?: string | null
   onSkip?: () => void
   durationSec?: number
   /** Starts listening from a place on the episode map. */
@@ -30,6 +34,7 @@ export function Primer({
   const p = usePalette()
   const [native, setNative] = useState(false)
   const play = useHostClip()
+  const lang = speechLanguage(language)
   return (
     <View style={{ gap: space.md, backgroundColor: p.raised, borderRadius: 20, padding: space.lg }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
@@ -40,7 +45,7 @@ export function Primer({
       </View>
 
       <View style={{ gap: space.xs }}>
-        <Txt>{native && primer.gistNative ? primer.gistNative : primer.gist}</Txt>
+        <Txt accessibilityLanguage={native && primer.gistNative ? ENGLISH_SPEECH : lang}>{native && primer.gistNative ? primer.gistNative : primer.gist}</Txt>
         {primer.gistNative ? (
           <Button
             kind="quiet"
@@ -57,7 +62,7 @@ export function Primer({
             Words to listen for
           </Txt>
           {primer.words.map((w) => (
-            <WordCard key={`${w.lemma}-${w.at}`} word={w} onPlay={audioUrl && playableClip(w.clip) ? () => void play(audioUrl, w.clip.start, w.clip.end) : undefined} />
+            <WordCard key={`${w.lemma}-${w.at}`} word={w} lang={lang} onPlay={audioUrl && playableClip(w.clip) ? () => void play(audioUrl, w.clip.start, w.clip.end) : undefined} />
           ))}
         </View>
       ) : null}
@@ -135,7 +140,7 @@ function EpisodeMap({ primer, durationSec, onJump }: { primer: PrimerData; durat
 }
 
 /** One word: the word, its meaning, and a tap to hear the host say it. */
-function WordCard({ word, onPlay }: { word: PrimerWord; onPlay?: () => void }) {
+function WordCard({ word, lang, onPlay }: { word: PrimerWord; lang?: string; onPlay?: () => void }) {
   const p = usePalette()
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: MIN_TAP }}>
@@ -151,8 +156,10 @@ function WordCard({ word, onPlay }: { word: PrimerWord; onPlay?: () => void }) {
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }}>
-        <Txt variant="bodyStrong">{word.text}</Txt>
-        <Txt variant="small" tone="quiet">
+        <Txt variant="bodyStrong" accessibilityLanguage={lang}>
+          {word.text}
+        </Txt>
+        <Txt variant="small" tone="quiet" accessibilityLanguage={ENGLISH_SPEECH}>
           {word.meaning}
           {` · ${clockTime(word.at)}`}
         </Txt>
@@ -180,8 +187,9 @@ function Appear({ shown, still, children }: { shown: boolean; still: boolean; ch
  * The primer filling in on the prepare screen while Mia works (PC-1017-P3): nothing until it really
  * exists, then the gist, each word to listen for and the themes, one after another.
  */
-export function PrimerBuilding({ primer, guide }: { primer?: PrimerData; guide: string }) {
+export function PrimerBuilding({ primer, guide, language }: { primer?: PrimerData; guide: string; language?: string | null }) {
   const p = usePalette()
+  const lang = speechLanguage(language)
   const steps = primerReveal(primer)
   const [shown, setShown] = useState(0)
   const [still, setStill] = useState(false)
@@ -203,7 +211,7 @@ export function PrimerBuilding({ primer, guide }: { primer?: PrimerData; guide: 
         What {guide} has found so far
       </Txt>
       <Appear shown={has('gist')} still={still}>
-        <Txt>{primer.gist}</Txt>
+        <Txt accessibilityLanguage={lang}>{primer.gist}</Txt>
       </Appear>
       {primer.words.length > 0 && has('word:0') ? (
         <Txt variant="smallStrong" tone="quiet">
@@ -212,7 +220,7 @@ export function PrimerBuilding({ primer, guide }: { primer?: PrimerData; guide: 
       ) : null}
       {primer.words.map((w, i) => (
         <Appear key={`${w.lemma}-${w.at}`} shown={has(`word:${i}`)} still={still}>
-          <WordCard word={w} />
+          <WordCard word={w} lang={lang} />
         </Appear>
       ))}
       <Appear shown={has('themes')} still={still}>

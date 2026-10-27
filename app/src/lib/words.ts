@@ -125,3 +125,10 @@ export async function savedWordEpisodes(): Promise<Set<string>> {
   if (error) throw error
   return new Set(((data ?? []) as { episode_id: string | null }[]).flatMap((r) => (r.episode_id ? [r.episode_id] : [])))
 }
+
+/** How many words are saved in this language (the Plus screen's opening line, PC-1023-03). */
+export async function countWords(language: string): Promise<number | undefined> {
+  if (config.demo) return DEMO_WORDS.filter((w) => w.language === language).length || DEMO_WORDS.length
+  const { count, error } = await supabase.from('saved_words').select('lemma', { count: 'exact', head: true }).eq('language', language)
+  return error ? undefined : (count ?? 0)
+}

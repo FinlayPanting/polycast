@@ -1,6 +1,6 @@
 import type { ShowEpisodes } from './libraryCore'
 import type { EpisodeEstimate } from './ownKeysCore'
-import type { Difficulty, GlossEntry, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
+import type { Difficulty, GlossEntry, KnownWord, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
 import { demoCall } from '../demo/api'
 import { supabase } from './supabase'
@@ -90,6 +90,15 @@ export interface ListenPayload {
   syncUrl?: string | null
 }
 
+/** GET /v1/known-words/:language (PC-1022-08). */
+export interface KnownWordsAnswer {
+  episodeId?: string
+  episodeTitle?: string
+  podcastTitle?: string
+  audioUrl?: string
+  words: KnownWord[]
+}
+
 /** One of Mia's picks for a mood (server/src/mood.ts). */
 export type MoodPick =
   | { kind: 'show'; title: string; author: string | null; artwork: string | null; podcastId?: string; appleId?: string; feedUrl?: string; why: string }
@@ -129,6 +138,8 @@ export const api = {
     call<ListenPayload>('POST', `/v1/episodes/${episodeId}/listen`, level ? { guide, level } : { guide }),
   /** The same lesson, for saving to the phone: doesn't count as starting a listen. */
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
+  /** "You already know these words" after picking a language (PC-1022-08); empty when there aren't enough. */
+  knownWords: (language: string) => call<KnownWordsAnswer>('GET', `/v1/known-words/${language}`, undefined, 8_000),
   /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
   primer: (episodeId: string) => call<{ primer: Primer | null; guideId?: string | null }>('GET', `/v1/episodes/${episodeId}/primer`),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),

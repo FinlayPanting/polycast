@@ -45,11 +45,13 @@ export interface NewEpisode {
   durationSec: number
   published: string
   ready: boolean
+  /** Only a video file is on offer (PC-1023-09): auto-download leaves it for Wi-Fi. */
+  video?: boolean
 }
 
 export interface ShowEpisodes {
   podcast: { id: string; title: string; artwork: string | null }
-  episodes: { id: string; title: string; published: string | null; duration_sec: number; image: string | null; status: string }[]
+  episodes: { id: string; title: string; published: string | null; duration_sec: number; image: string | null; status: string; video?: boolean }[]
 }
 
 /** How far back "new" reaches. */
@@ -67,7 +69,7 @@ export function newEpisodes(shows: readonly ShowEpisodes[], nowMs: number, start
     for (const e of s.episodes) {
       const t = e.published ? Date.parse(e.published) : NaN
       if (!Number.isFinite(t) || t < since || t > nowMs + 86_400_000 || started.has(e.id)) continue
-      out.push({ episodeId: e.id, title: e.title, podcastId: s.podcast.id, podcastTitle: s.podcast.title, image: e.image ?? s.podcast.artwork, durationSec: e.duration_sec, published: e.published!, ready: e.status === 'ready' })
+      out.push({ episodeId: e.id, title: e.title, podcastId: s.podcast.id, podcastTitle: s.podcast.title, image: e.image ?? s.podcast.artwork, durationSec: e.duration_sec, published: e.published!, ready: e.status === 'ready', ...(e.video ? { video: true } : {}) })
     }
   return out.sort((a, b) => b.published.localeCompare(a.published)).slice(0, max)
 }

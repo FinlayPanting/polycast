@@ -45,3 +45,18 @@ describe('the App Review notes', () => {
     for (const s of ['own API keys', 'mood', 'Download for offline', 'one episode a week', 'never invents', 'polycast.app/creators', 'no hidden screens']) expect(notes).toContain(s)
   })
 })
+
+describe('the build image (PC-1019-05)', () => {
+  it('stays on Xcode 26.6 so the iPhone Duo shows Polycast as a phone-shaped window', () => {
+    // Apps built with the iOS 27 SDK (Xcode 27) become resizable on the iPhone Duo and may lose the portrait lock.
+    // Every profile extends base, so they all build on this image until the app is laid out for any shape.
+    expect(eas.build.base.ios.image).toBe('macos-tahoe-26.5-xcode-26.6')
+    for (const [name, p] of Object.entries(eas.build) as [string, { extends?: string; ios?: { image?: string } }][]) {
+      if (name === 'base') continue
+      expect(p.extends).toBe('base')
+      expect(p.ios?.image).toBeUndefined()
+    }
+    expect(app.orientation).toBe('portrait')
+    expect(app.ios.supportsTablet).toBe(false)
+  })
+})

@@ -504,6 +504,94 @@
    "title": "New-episode nudges from your guide",
    "description": "When a show you finished has a new episode, Mia or Leo tells you, and only ever points you to something you can play right away.",
    "tryIt": "Finish an episode, then wait for the show's next one"
+  },
+  {
+   "id": "PC-1022-03",
+   "date": "2026-10-23",
+   "kind": "Bug",
+   "title": "Siri knows the shows you follow",
+   "description": "“Play the newest episode” now works for shows you follow after installing Polycast, and the shortcuts no longer stop the app building for older iPhones.",
+   "tryIt": "Follow a new show, then ask Siri to play its newest episode in Polycast"
+  },
+  {
+   "id": "PC-1022-08",
+   "date": "2026-10-23",
+   "kind": "UX",
+   "title": "You already know some words",
+   "description": "Right after picking a language, Polycast shows a few words from one of the first shows you could hear that you already know, like Italian “importante”, and the host says each one.",
+   "tryIt": "Pick a language when you first set up Polycast, then tap a word"
+  },
+  {
+   "id": "PC-1019-05",
+   "date": "2026-10-24",
+   "kind": "UX",
+   "title": "Fits the iPhone Duo's outer screen",
+   "description": "On a short, wide screen like the iPhone Duo's outer display, the player makes room for your guide instead of crowding the title and controls.",
+   "tryIt": "Open any episode on the iPhone Duo's outer screen"
+  },
+  {
+   "id": "PC-1023-03",
+   "date": "2026-10-24",
+   "kind": "UX",
+   "title": "Plus starts with what's yours",
+   "description": "The Plus screen now opens with your own progress, like the words you've saved and the episodes you've finished with your guide.",
+   "tryIt": "Open Plus from the You tab"
+  },
+  {
+   "id": "PC-1023-05",
+   "date": "2026-10-24",
+   "kind": "Content",
+   "title": "Fresh voices on Discover",
+   "description": "A new shelf of young, current shows from Spain, Argentina, France and Brazil sits next to the charts in Spanish, French and Portuguese.",
+   "tryIt": "Open Discover in Spanish, French or Portuguese and scroll past Top charts"
+  },
+  {
+   "id": "PC-1023-09",
+   "date": "2026-10-24",
+   "kind": "Refinement",
+   "title": "Video podcasts play as audio",
+   "description": "When a show publishes episodes as video but also offers an audio version, Polycast now streams and downloads the audio, and video-only episodes wait for Wi-Fi before downloading on their own.",
+   "tryIt": "Follow a video-first show and turn on Download new episodes"
+  },
+  {
+   "id": "PC-1024-04",
+   "date": "2026-10-25",
+   "kind": "UX",
+   "title": "VoiceOver speaks each line in its own language",
+   "description": "With VoiceOver on, subtitles, the primer's words and your saved words are read in the language they're in, and meanings and translations in English.",
+   "tryIt": "Turn on VoiceOver and swipe through the subtitles while you listen"
+  },
+  {
+   "id": "PC-1024-07",
+   "date": "2026-10-25",
+   "kind": "UX",
+   "title": "A stamp for the All Saints' weekend",
+   "description": "Finish an episode with your guide between 28 October and 2 November and you'll keep a small stamp in You, named in your language.",
+   "tryIt": "From 28 October, finish a guided episode, then look in You"
+  },
+  {
+   "id": "PC-1025-06",
+   "date": "2026-10-26",
+   "kind": "UX",
+   "title": "Night owl: Mia says goodnight",
+   "description": "Finish a guided episode after 11 pm and Mia (or Leo) signs off with a goodnight in your language, like Sov gott or Sogni d’oro.",
+   "tryIt": "Finish a guided episode late in the evening"
+  },
+  {
+   "id": "PC-1026-02",
+   "date": "2026-10-27",
+   "kind": "UX",
+   "title": "Plus fits the iPhone Duo",
+   "description": "On a wide screen the Plus page keeps to a readable column with sensibly sized buttons, the folded screen gets a compact footer, and Not now stays put while you scroll.",
+   "tryIt": "Open Plus from You on an iPhone Duo, folded and open"
+  },
+  {
+   "id": "PC-1026-03",
+   "date": "2026-10-27",
+   "kind": "Feature",
+   "title": "Two panes on the open iPhone Duo",
+   "description": "With the Duo open, the player shows subtitles on one side and your guide's notes so far, the words to listen for and the words you've saved on the other. Folded, nothing changes.",
+   "tryIt": "Play a guided episode with your iPhone Duo open"
   }
  ]
 }
