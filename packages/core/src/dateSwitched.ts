@@ -39,7 +39,7 @@ const SET_DATE = 'set the iPhone’s date in Settings → General → Date & Tim
 export function dateSwitchedFeatures(): DateSwitchedFeature[] {
   const out: DateSwitchedFeature[] = []
   for (const s of SEASONS) {
-    const when = dayRange(s.from, s.to)
+    const when = dayRange(s.from, s.to) + (s.lastDayWords ? `; ${s.lastDayWords}` : '')
     out.push({
       id: `${s.id}-mood`,
       name: `Seasonal mood pick on Discover (${s.id})`,

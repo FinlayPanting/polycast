@@ -41,3 +41,10 @@ describe('App Review notes name every date-switched feature (PC-1026-05)', () =>
     for (const m of many) expect(text).toContain(`- ${m.title}`)
   })
 })
+
+describe('Sweden’s later All Saints’ day in the review notes (PC-1027-07)', () => {
+  it('says the Swedish pick runs to Alla helgons dag', () => {
+    const mood = dateSwitchedFeatures().find((f) => f.id === 'all-saints-mood')!
+    expect(mood.when).toBe('28 Oct to 2 Nov every year; in Swedish, until Alla helgons dag (the Saturday between 31 Oct and 6 Nov) when that is later')
+  })
+})

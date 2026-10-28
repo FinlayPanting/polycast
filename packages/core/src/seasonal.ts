@@ -25,6 +25,23 @@ export interface Season {
    * learner's language. Optional: a season without one simply gives none.
    */
   stamp?: Record<string, string>
+  /**
+   * A later last day (MM-DD) for one language, worked out for the year, when that country keeps the day
+   * later than the shared range (PC-1027-07). The season shows until whichever is later.
+   */
+  lastDayByLanguage?: Record<string, (year: number) => string>
+  /** Those later last days in words, for App Review's notes ("in Swedish, until …"). */
+  lastDayWords?: string
+}
+
+/**
+ * Alla helgons dag: the Saturday between 31 October and 6 November (PC-1027-07), as MM-DD.
+ * 31 Oct 2026, 6 Nov 2027, 4 Nov 2028, 3 Nov 2029.
+ */
+export function allaHelgonsDag(year: number): string {
+  const oct31 = new Date(Date.UTC(year, 9, 31))
+  const d = new Date(Date.UTC(year, 9, 31 + ((6 - oct31.getUTCDay() + 7) % 7)))
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 
 export const SEASONS: Season[] = [
@@ -59,6 +76,8 @@ export const SEASONS: Season[] = [
       },
     },
     stamp: { es: 'Todos los Santos', fr: 'Toussaint', de: 'Allerheiligen', it: 'Ognissanti', pt: 'Finados', sv: 'Allhelgona' },
+    lastDayByLanguage: { sv: allaHelgonsDag },
+    lastDayWords: 'in Swedish, until Alla helgons dag (the Saturday between 31 Oct and 6 Nov) when that is later',
   },
 ]
 
@@ -95,11 +114,17 @@ function idFor(s: { id: string; from: string; to: string }, year: number): strin
   return isYearly(s) ? `${s.id}-${year}` : s.id
 }
 
+/** A season's dates for one language: its own later last day, if it has one this year (PC-1027-07). */
+function rangeFor(s: Season, language: string, now: Date): { from: string; to: string } {
+  const later = s.lastDayByLanguage?.[language]?.(now.getFullYear())
+  return later && isYearly(s) && s.from <= s.to && later > s.to ? { from: s.from, to: later } : s
+}
+
 /** The seasonal mood for this language today, if one is on. */
 export function seasonalMood(language: string, now: Date, seasons: Season[] = SEASONS): (SeasonalMood & { seasonId: string }) | undefined {
   for (const s of seasons) {
     const m = s.byLanguage[language]
-    const year = m ? seasonYear(s, now) : undefined
+    const year = m ? seasonYear(rangeFor(s, language, now), now) : undefined
     if (m && year !== undefined) return { ...m, seasonId: idFor(s, year) }
   }
   return undefined
@@ -153,7 +178,7 @@ export interface SeasonStamp {
 export function seasonalStamp(language: string, now: Date, seasons: Season[] = SEASONS): SeasonStamp | undefined {
   for (const s of seasons) {
     const name = s.stamp?.[language]
-    const year = name ? seasonYear(s, now) : undefined
+    const year = name ? seasonYear(rangeFor(s, language, now), now) : undefined
     if (name && year !== undefined) return { seasonId: idFor(s, year), language, name, earnedOn: localDay(now) }
   }
   return undefined

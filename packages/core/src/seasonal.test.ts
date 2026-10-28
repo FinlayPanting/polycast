@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LAUNCH_LANGUAGES } from './index'
 import { MOOD_MAX_CHARS } from './mood'
-import { SEASONAL_LINES, SEASONS, addStamp, isYearly, localDay, seasonYear, seasonalLine, seasonalMood, seasonalStamp } from './seasonal'
+import { SEASONAL_LINES, SEASONS, addStamp, allaHelgonsDag, isYearly, localDay, seasonYear, seasonalLine, seasonalMood, seasonalStamp } from './seasonal'
 
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h)
 
@@ -90,7 +90,7 @@ describe('seasons come round every year (PC-1026-06)', () => {
       expect(seasonalMood('it', at(`${y}-10-27`, 23))).toBeUndefined()
       expect(seasonalMood('it', at(`${y}-10-28`, 0))?.seasonId).toBe(`all-saints-${y}`)
       expect(seasonalStamp('sv', at(`${y}-11-02`, 23))).toEqual({ seasonId: `all-saints-${y}`, language: 'sv', name: 'Allhelgona', earnedOn: `${y}-11-02` })
-      expect(seasonalStamp('sv', at(`${y}-11-03`, 0))).toBeUndefined()
+      expect(seasonalStamp('fr', at(`${y}-11-03`, 0))).toBeUndefined() // Sweden's runs to its own Saturday (PC-1027-07)
     }
   })
 
@@ -121,5 +121,31 @@ describe('seasons come round every year (PC-1026-06)', () => {
     expect(seasonYear({ from: '2027-06-01', to: '2027-06-02' }, at('2028-06-01'))).toBeUndefined()
     // Leap day in a yearly season: there in leap years, simply not there otherwise.
     expect(seasonYear({ from: '02-28', to: '03-01' }, at('2028-02-29'))).toBe(2028)
+  })
+})
+
+describe('Allhelgona arrives when Sweden keeps it (PC-1027-07)', () => {
+  const at = (iso: string) => new Date(`${iso}T12:00:00`)
+  it('finds the Saturday between 31 October and 6 November', () => {
+    expect(allaHelgonsDag(2026)).toBe('10-31')
+    expect(allaHelgonsDag(2027)).toBe('11-06')
+    expect(allaHelgonsDag(2028)).toBe('11-04')
+    expect(allaHelgonsDag(2029)).toBe('11-03')
+    expect(allaHelgonsDag(2031)).toBe('11-01')
+  })
+
+  it('keeps the Swedish pick and stamp up to that Saturday, and the others to 2 November', () => {
+    expect(seasonalMood('sv', at('2027-11-06'))?.seasonId).toBe('all-saints-2027')
+    expect(seasonalStamp('sv', at('2027-11-06'))?.name).toBe('Allhelgona')
+    expect(seasonalMood('sv', at('2027-11-07'))).toBeUndefined()
+    expect(seasonalMood('fr', at('2027-11-03'))).toBeUndefined()
+    expect(seasonalMood('sv', at('2028-11-04'))).toBeDefined()
+    expect(seasonalMood('sv', at('2028-11-05'))).toBeUndefined()
+  })
+
+  it('never ends Sweden’s season before everyone else’s', () => {
+    expect(seasonalMood('sv', at('2026-11-02'))?.seasonId).toBe('all-saints-2026')
+    expect(seasonalMood('sv', at('2026-11-03'))).toBeUndefined()
+    expect(seasonalMood('sv', at('2026-10-27'))).toBeUndefined()
   })
 })

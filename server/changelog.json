@@ -616,6 +616,14 @@
    "title": "Older video episodes show once",
    "description": "A few video shows listed some older episodes twice. They now show once, with your progress and saved words from both kept together.",
    "tryIt": "Open a video show you follow and look through its older episodes"
+  },
+  {
+   "id": "PC-1027-07",
+   "date": "2026-10-28",
+   "kind": "Bug",
+   "title": "Allhelgona when Sweden keeps it",
+   "description": "If you're learning Swedish, the All Saints' pick on Discover and the Allhelgona stamp now last until Alla helgons dag, the Saturday Sweden keeps it, in years when that's after 2 November.",
+   "tryIt": "Learning Swedish: look for the All Saints' pick on Discover"
   }
  ]
 }
