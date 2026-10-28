@@ -13,7 +13,17 @@ export const FUNNEL_STEPS = [
 ] as const
 
 export type FunnelStep = (typeof FUNNEL_STEPS)[number][0]
-export type Funnel = { weekStart: string } & Record<FunnelStep, number>
+/** Whether the first-listen nudge (PC-1026-09) helps (PC-1027-04): shown after the steps, not as one. */
+export interface NudgeCheck {
+  /** That week's sign-ups who got the one-time first-listen nudge. */
+  firstListenNudged: number
+  /** Of those, how many started a guided listen within two days of it. */
+  startedWithinTwoDays: number
+}
+
+export const NUDGE_WINDOW_DAYS = 2
+
+export type Funnel = { weekStart: string } & Record<FunnelStep, number> & NudgeCheck
 
 /** Counts one first open of the app. No identifier is sent or stored. */
 export async function countFirstOpen(sql: Sql): Promise<void> {
@@ -44,7 +54,12 @@ export async function weeklyFunnel(sql: Sql, weekStart: string): Promise<Funnel>
       count(*) filter (where plus_period_start is not null)::int as started_plus,
       count(*) filter (where exists (
         select 1 from listens l where l.user_id = c.id and l.updated_at >= c.created_at + interval '7 days'
-      ))::int as came_back
+      ))::int as came_back,
+      count(*) filter (where first_listen_nudged_at is not null)::int as nudged,
+      count(*) filter (where first_listen_nudged_at is not null and exists (
+        select 1 from listens l where l.user_id = c.id and l.guided
+          and l.started_at >= c.first_listen_nudged_at and l.started_at < c.first_listen_nudged_at + make_interval(days => ${NUDGE_WINDOW_DAYS})
+      ))::int as nudged_started
     from cohort c`
   return {
     weekStart,
@@ -56,6 +71,8 @@ export async function weeklyFunnel(sql: Sql, weekStart: string): Promise<Funnel>
     usedFreeEpisode: row!.used_free_episode,
     startedPlus: row!.started_plus,
     cameBack: row!.came_back,
+    firstListenNudged: row!.nudged,
+    startedWithinTwoDays: row!.nudged_started,
   }
 }
 
@@ -68,5 +85,7 @@ export function funnelText(f: Funnel): string {
     previous = n
     return `${label}: ${n}${share}`
   })
-  return [`Week of ${f.weekStart}`, ...lines].join('\n')
+  const n = f.firstListenNudged
+  const nudge = `Got the day-two nudge: ${n}, of whom ${f.startedWithinTwoDays} started a guided listen within two days${n ? ` (${Math.round((100 * f.startedWithinTwoDays) / n)}%)` : ''}`
+  return [`Week of ${f.weekStart}`, ...lines, nudge].join('\n')
 }

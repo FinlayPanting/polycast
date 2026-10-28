@@ -54,8 +54,29 @@ run('weekly funnel', () => {
     expect(f).toEqual({
       weekStart: '2026-10-05', opened: 3, signedUp: 3, pickedLanguage: 2, startedGuided: 2,
       finishedGuided: 1, usedFreeEpisode: 1, startedPlus: 1, cameBack: 1,
+      firstListenNudged: 0, startedWithinTwoDays: 0,
     })
     expect(funnelText(f)).toContain('Picked a language: 2 (67%)')
+  })
+
+  it('says how many got the day-two nudge and how many started a guided listen within two days of it (PC-1027-04)', async () => {
+    const [p] = await sql`insert into podcasts (feed_url, title) values ('https://f/n.xml', 'N') returning id`
+    const [e] = await sql`insert into episodes (podcast_id, guid, title, audio_url, duration_sec, language) values (${p!.id}, 'gn', 'E', 'https://a/n.mp3', 600, 'sv') returning id`
+    const nudged = async (signedUp: string, nudgedAt: string, listenedAt?: string) => {
+      const id = await learner(signedUp, { target_language: 'sv' })
+      await sql`update profiles set first_listen_nudged_at = ${nudgedAt}, last_nudged_at = ${nudgedAt} where id = ${id}`
+      if (listenedAt) await sql`insert into listens (user_id, episode_id, guided, started_at, updated_at) values (${id}, ${e!.id}, true, ${listenedAt}, ${listenedAt})`
+      return id
+    }
+    await nudged('2026-09-01T09:00:00Z', '2026-09-02T12:00:00Z', '2026-09-03T08:00:00Z') // within two days
+    await nudged('2026-09-02T09:00:00Z', '2026-09-03T12:00:00Z', '2026-09-06T08:00:00Z') // later than that
+    await nudged('2026-09-03T09:00:00Z', '2026-09-04T12:00:00Z') // not yet
+    const lone = await learner('2026-09-03T10:00:00Z', { target_language: 'sv' })
+    await sql`update profiles set last_nudged_at = '2026-09-05T12:00:00Z' where id = ${lone}` // a weekly nudge isn't counted
+    const f = await weeklyFunnel(sql, '2026-08-31')
+    expect(f).toMatchObject({ signedUp: 4, firstListenNudged: 3, startedWithinTwoDays: 1 })
+    expect(funnelText(f)).toContain('Got the day-two nudge: 3, of whom 1 started a guided listen within two days (33%)')
+    expect(funnelText({ ...f, firstListenNudged: 0, startedWithinTwoDays: 0 })).toContain('Got the day-two nudge: 0, of whom 0 started a guided listen within two days')
   })
 
   it('counts first opens a few times a day per address at most, so the funnel cannot be pumped', async () => {

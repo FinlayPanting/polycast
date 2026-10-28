@@ -126,7 +126,7 @@ export async function sendFirstListenNudges(sql: Sql, push: Push, now = new Date
   if (hour < NUDGE_HOURS_UTC[0] || hour >= NUDGE_HOURS_UTC[1]) return 0
   let sent = 0
   for (const n of await dueFirstListenNudges(sql)) {
-    const [claimed] = await sql`update profiles set last_nudged_at = now() where id = ${n.userId} and last_nudged_at is null returning id`
+    const [claimed] = await sql`update profiles set last_nudged_at = now(), first_listen_nudged_at = now() where id = ${n.userId} and last_nudged_at is null returning id`
     if (!claimed) continue
     const { title, body } = firstListenText(n)
     try {

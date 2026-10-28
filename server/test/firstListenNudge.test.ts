@@ -59,6 +59,8 @@ run('one nudge if the first listen hasn’t happened (PC-1026-09)', () => {
     expect(mine.length).toBeGreaterThanOrEqual(1)
     expect(mine[0]!.body).toBe('Mia: “Fika på jobbet” (12 min) is a good one to start with. It’s ready when you are.')
     expect(await due(lea)).toBeUndefined()
+    const [mark] = await sql`select first_listen_nudged_at is not null as marked from profiles where id = ${lea}`
+    expect(mark!.marked).toBe(true) // for the Monday funnel (PC-1027-04)
     const before = sent.length
     await sendFirstListenNudges(sql, push, NOON)
     expect(sent.length).toBe(before)
