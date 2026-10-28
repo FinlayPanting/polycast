@@ -1,5 +1,5 @@
 import { ProviderError, errorFromResponse, type JsonSchema, type TextModel } from './types'
-import { GEMINI_MODELS } from './gemini'
+import { GEMINI_MODELS, GEMINI_STORE } from './gemini'
 
 const ROOT = 'https://generativelanguage.googleapis.com/v1beta'
 
@@ -49,6 +49,7 @@ export function geminiBatchText(apiKey: string, model: string = GEMINI_MODELS.te
     async generateJson<T>({ system, prompt, schema, temperature }: { system: string; prompt: string; schema: JsonSchema; temperature?: number }) {
       const input = `${system}\n\n${prompt}`
       const request = {
+        store: GEMINI_STORE,
         contents: [{ role: 'user', parts: [{ text: input }] }],
         generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, ...(temperature !== undefined ? { temperature } : {}) },
       }

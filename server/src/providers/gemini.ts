@@ -3,6 +3,13 @@ import { wavDurationSec } from '../audio'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 
+/**
+ * Google stores requests by default (store=true) since 26 Oct 2026. Every request Polycast sends
+ * to Gemini carries store: false, so learners' text and hosts' transcripts don't sit on Google's
+ * servers (PC-1027-01). server/test/geminiStore.test.ts fails a request that forgets it.
+ */
+export const GEMINI_STORE = false
+
 export const GEMINI_MODELS = {
   text: 'gemini-3.8-flash',
   /** Show titles and descriptions (PC-1017-T1): short, simple translations. */
@@ -47,6 +54,7 @@ export function geminiText(apiKey: string, model: string = GEMINI_MODELS.text, f
         headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
+          store: GEMINI_STORE,
           input,
           response_format: { type: 'text', mime_type: 'application/json', schema },
         }),
@@ -84,6 +92,7 @@ export function geminiSpeech(
         headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
+          store: GEMINI_STORE,
           input: [{ type: 'user_input', content: [{ type: 'text', text, annotations: [{ type: 'speech_metadata', style }] }] }],
           response_format: { type: 'audio' },
           generation_config: { speech_config: [{ voice }] },
