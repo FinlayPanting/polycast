@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { forYou, freshVoices, keepShowsInLanguage, syncFeed, topChart } from '../src/catalogue'
 import { discoverShelves } from '../src/discover'
@@ -211,5 +212,77 @@ run('Episodes with no ID in video-first feeds (PC-1025-02)', () => {
     const after = await episodes(p!.id)
     expect(after).toHaveLength(1)
     expect(after[0]).toMatchObject({ id: saved!.id, guid: 'https://cdn.example.com/uno.mp4' })
+  })
+
+  it('folds a copy saved under both addresses into the original, keeping every listen, preparation and word (PC-1027-06)', async () => {
+    const FEED3 = 'https://feeds.example.com/video-first-3.xml'
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values (${FEED3}, 'Vídeo 3', 'es') returning id`
+    const [orig] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language)
+      values (${p!.id}, 'https://cdn.example.com/uno.mp4', 'Uno', 600, 'https://cdn.example.com/uno.mp4', 'es') returning id`
+    const [copy] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language, status, ready_at, difficulty)
+      values (${p!.id}, 'https://cdn.example.com/uno.mp3', 'Uno', 612, 'https://cdn.example.com/uno.mp3', 'es', 'ready', now(), ${sql.json({ band: 'easier' })}) returning id`
+    const user = async () => {
+      const id = randomUUID()
+      await sql`insert into auth.users (id) values (${id})`
+      return id
+    }
+    const both = await user()
+    const copyOnly = await user()
+    await sql`insert into listens (user_id, episode_id, position_sec, guided, started_at, updated_at) values (${both}, ${orig!.id}, 120, false, '2026-10-20T10:00:00Z', '2026-10-20T10:10:00Z')`
+    await sql`insert into listens (user_id, episode_id, position_sec, guided, guided_at, started_at, updated_at, finished_at)
+      values (${both}, ${copy!.id}, 600, true, '2026-10-25T09:00:00Z', '2026-10-25T09:00:00Z', '2026-10-25T09:20:00Z', '2026-10-25T09:20:00Z')`
+    await sql`insert into listens (user_id, episode_id, position_sec, guided) values (${copyOnly}, ${copy!.id}, 42, true)`
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments) values (${copy!.id}, 'es', 'en', 'scribe', '[]', '[]')`
+    await sql`insert into lesson_plans (episode_id, guide_id, plan) values (${copy!.id}, 'mia', '{}')`
+    await sql`insert into prep_jobs (episode_id, requested_by, guide_id, charge, status) values (${copy!.id}, ${copyOnly}, 'mia', 'freeEpisode', 'done')`
+    await sql`insert into saved_words (user_id, language, lemma, meaning, episode_id, clip, review) values (${copyOnly}, 'es', 'uno', 'one', ${copy!.id}, '{}', '{}')`
+
+    await syncFeed(sql, serving(rss(withAudio)), FEED3, undefined, NET)
+
+    // The prepared copy is the one kept (its guide audio and primer are stored under its id), with the original ID.
+    const after = await episodes(p!.id)
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ id: copy!.id, guid: 'https://cdn.example.com/uno.mp4', audio_url: 'https://cdn.example.com/uno.mp3' })
+    const kept = copy!.id
+    const [ep] = await sql`select status, duration_sec, difficulty from episodes where id = ${kept}`
+    expect(ep).toMatchObject({ status: 'ready', duration_sec: 612, difficulty: { band: 'easier' } })
+    const listens = await sql`select user_id, position_sec, guided, finished_at is not null as finished, started_at, guided_at from listens where episode_id = ${kept} order by position_sec`
+    expect(listens).toHaveLength(2)
+    expect(listens[0]).toMatchObject({ user_id: copyOnly, position_sec: 42, guided: true })
+    expect(listens[1]).toMatchObject({ user_id: both, position_sec: 600, guided: true, finished: true })
+    expect(new Date(listens[1]!.started_at).toISOString()).toBe('2026-10-20T10:00:00.000Z')
+    expect(new Date(listens[1]!.guided_at).toISOString()).toBe('2026-10-25T09:00:00.000Z')
+    expect((await sql`select 1 from transcripts where episode_id = ${kept}`).length).toBe(1)
+    expect((await sql`select 1 from lesson_plans where episode_id = ${kept} and guide_id = 'mia'`).length).toBe(1)
+    expect((await sql`select 1 from prep_jobs where episode_id = ${kept}`).length).toBe(1)
+    expect((await sql`select episode_id from saved_words where user_id = ${copyOnly}`)[0]!.episode_id).toBe(kept)
+
+    // Syncing again changes nothing.
+    await syncFeed(sql, serving(rss(withAudio)), FEED3, undefined, NET)
+    expect(await episodes(p!.id)).toHaveLength(1)
+  })
+
+  it('keeps the original when neither copy is prepared, and waits while one is being prepared (PC-1027-06)', async () => {
+    const FEED4 = 'https://feeds.example.com/video-first-4.xml'
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values (${FEED4}, 'Vídeo 4', 'es') returning id`
+    const [orig] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language)
+      values (${p!.id}, 'https://cdn.example.com/uno.mp4', 'Uno', 600, 'https://cdn.example.com/uno.mp4', 'es') returning id`
+    const [copy] = await sql`insert into episodes (podcast_id, guid, title, duration_sec, audio_url, language, status)
+      values (${p!.id}, 'https://cdn.example.com/uno.mp3', 'Uno', 600, 'https://cdn.example.com/uno.mp3', 'es', 'preparing') returning id`
+    const id = randomUUID()
+    await sql`insert into auth.users (id) values (${id})`
+    await sql`insert into listens (user_id, episode_id, position_sec) values (${id}, ${copy!.id}, 30)`
+    const [job] = await sql`insert into prep_jobs (episode_id, requested_by, guide_id, charge, status) values (${copy!.id}, ${id}, 'mia', 'freeEpisode', 'running') returning id`
+    await syncFeed(sql, serving(rss(withAudio)), FEED4, undefined, NET)
+    expect(await episodes(p!.id)).toHaveLength(2) // being prepared: left for the next sync
+
+    await sql`update prep_jobs set status = 'failed' where id = ${job!.id}`
+    await sql`update episodes set status = 'failed' where id = ${copy!.id}`
+    await syncFeed(sql, serving(rss(withAudio)), FEED4, undefined, NET)
+    const after = await episodes(p!.id)
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({ id: orig!.id, guid: 'https://cdn.example.com/uno.mp4' })
+    expect((await sql`select position_sec from listens where user_id = ${id} and episode_id = ${orig!.id}`)[0]!.position_sec).toBe(30)
+    expect((await sql`select episode_id from prep_jobs where id = ${job!.id}`)[0]!.episode_id).toBe(orig!.id)
   })
 })

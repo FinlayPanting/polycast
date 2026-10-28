@@ -60,6 +60,8 @@ export async function syncFeed(
       // A copy saved between 23 and 26 Oct under its audio address takes back its original ID, keeping the learner's progress (PC-1025-02).
       await sql`update episodes set guid = ${e.guid} where podcast_id = ${podcastId} and guid = ${e.formerGuid}
         and not exists (select 1 from episodes x where x.podcast_id = ${podcastId} and x.guid = ${e.guid})`
+      // Saved under both addresses: fold the copy into the original (PC-1027-06).
+      await mergeEpisodeCopy(sql, podcastId, e.guid, e.formerGuid)
     }
     await sql`
       insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, image, language, description)
@@ -68,6 +70,46 @@ export async function syncFeed(
         duration_sec = case when episodes.status = 'none' then excluded.duration_sec else episodes.duration_sec end`
   }
   return { podcastId, feed }
+}
+
+/**
+ * An episode saved under both its original ID and its audio address (before 24 Oct) shows twice
+ * (PC-1027-06). The two become one: the prepared one is kept (its guide audio, primer and sync
+ * files are stored under its own id), the original when both or neither are, and it takes the
+ * original ID. The other's listens, past jobs and saved words move onto it, and it is removed. Where a learner has a listen
+ * of both, the two are joined: the further position, the earliest start, finished if either was.
+ * Nothing a learner did is lost. One transaction, so a failure leaves both as they were.
+ */
+export async function mergeEpisodeCopy(sql: Sql, podcastId: string, guid: string, copyGuid: string): Promise<boolean> {
+  return sql.begin(async (tx: any) => {
+    const [o] = await tx`select e.id, exists (select 1 from transcripts t where t.episode_id = e.id) as prepared
+      from episodes e where e.podcast_id = ${podcastId} and e.guid = ${guid} for update`
+    const [c] = await tx`select e.id, exists (select 1 from transcripts t where t.episode_id = e.id) as prepared
+      from episodes e where e.podcast_id = ${podcastId} and e.guid = ${copyGuid} for update`
+    if (!o || !c || o.id === c.id) return false
+    // Not while either is being prepared: the worker holds its episode's id until it finishes. The next sync merges them.
+    const [busy] = await tx`select 1 from prep_jobs where episode_id in (${o.id}, ${c.id}) and status in ('queued', 'running') limit 1`
+    if (busy) return false
+    const [keep, drop] = c.prepared && !o.prepared ? [c, o] : [o, c]
+    // Listens: join the two where a learner has both, else move them across.
+    await tx`update listens l set
+        position_sec = greatest(l.position_sec, x.position_sec),
+        guided = l.guided or x.guided,
+        guidance_level = coalesce(l.guidance_level, x.guidance_level),
+        started_at = least(l.started_at, x.started_at),
+        updated_at = greatest(l.updated_at, x.updated_at),
+        finished_at = coalesce(l.finished_at, x.finished_at),
+        guided_at = case when l.guided_at is null then x.guided_at when x.guided_at is null then l.guided_at else least(l.guided_at, x.guided_at) end
+      from listens x where l.episode_id = ${keep.id} and x.episode_id = ${drop.id} and x.user_id = l.user_id`
+    await tx`update listens set episode_id = ${keep.id} where episode_id = ${drop.id}
+      and not exists (select 1 from listens y where y.episode_id = ${keep.id} and y.user_id = listens.user_id)`
+    // Past jobs, for allowances and history. (Merging waits while either is being prepared, above.)
+    await tx`update prep_jobs set episode_id = ${keep.id} where episode_id = ${drop.id}`
+    await tx`update saved_words set episode_id = ${keep.id} where episode_id = ${drop.id}`
+    await tx`delete from episodes where id = ${drop.id}`
+    if (keep.id === c.id) await tx`update episodes set guid = ${guid} where id = ${keep.id}`
+    return true
+  }) as Promise<boolean>
 }
 
 /** Podcast search through Apple, in the target language's country. */

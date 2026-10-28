@@ -608,6 +608,14 @@
    "title": "Your first episode starts with the talking",
    "description": "On your very first guided episode, after your guide's welcome, playback starts just before the host's first words, not at theme music or an advert. Play from the very start is there if you want it.",
    "tryIt": "Start your first guided episode"
+  },
+  {
+   "id": "PC-1027-06",
+   "date": "2026-10-28",
+   "kind": "Bug",
+   "title": "Older video episodes show once",
+   "description": "A few video shows listed some older episodes twice. They now show once, with your progress and saved words from both kept together.",
+   "tryIt": "Open a video show you follow and look through its older episodes"
   }
  ]
 }
