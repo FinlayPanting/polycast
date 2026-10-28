@@ -86,6 +86,16 @@ export async function savePosition(userId: string, episodeId: string, sec: numbe
   await supabase.from('listens').update(patch).eq('user_id', userId).eq('episode_id', episodeId)
 }
 
+/**
+ * Whether this is the learner's very first guided episode (PC-1027-03): no guided listen of any other
+ * episode, started or finished. Unsure (offline, demo) counts as no, so nothing surprising happens.
+ */
+export async function isFirstGuidedListen(episodeId: string): Promise<boolean> {
+  if (config.demo) return false
+  const { count, error } = await supabase.from('listens').select('episode_id', { count: 'exact', head: true }).eq('guided', true).neq('episode_id', episodeId)
+  return !error && count === 0
+}
+
 /** Guided listens finished, any language (the Plus screen's opening line, PC-1023-03). */
 export async function countFinishedGuided(): Promise<number | undefined> {
   if (config.demo) return 2

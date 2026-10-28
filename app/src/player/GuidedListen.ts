@@ -109,9 +109,13 @@ export class GuidedListen {
     this.o.onChange?.(this.state)
   }
 
-  async start(track: Parameters<EpisodeAudio['load']>[0], startAt = 0): Promise<void> {
+  /**
+   * `keepIntro`: a first listen that starts where the talking starts (PC-1027-03) still opens with
+   * the guide's introduction; a resume passes over it as before.
+   */
+  async start(track: Parameters<EpisodeAudio['load']>[0], startAt = 0, opts: { keepIntro?: boolean } = {}): Promise<void> {
     await this.o.audio.load(track, startAt)
-    if (startAt > 0) this.timeline.seek(startAt)
+    if (startAt > 0) this.timeline.seek(startAt, opts.keepIntro ? (m) => m.kind === 'warmup' : undefined)
     this.lastSaved = startAt
     this.unsubscribe.push(this.o.audio.onProgress((p) => void this.onProgress(p)))
     this.unsubscribe.push(this.o.audio.onEnded(() => void this.onEnded()))

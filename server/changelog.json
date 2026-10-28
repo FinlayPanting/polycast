@@ -600,6 +600,14 @@
    "title": "A gentle hello on day two",
    "description": "If you've signed up but haven't started an episode with your guide a day later, they'll send one notification naming a good first episode and how long it is. Just once.",
    "tryIt": "Allow notifications, then wait a day before your first guided listen"
+  },
+  {
+   "id": "PC-1027-03",
+   "date": "2026-10-28",
+   "kind": "UX",
+   "title": "Your first episode starts with the talking",
+   "description": "On your very first guided episode, after your guide's welcome, playback starts just before the host's first words, not at theme music or an advert. Play from the very start is there if you want it.",
+   "tryIt": "Start your first guided episode"
   }
  ]
 }

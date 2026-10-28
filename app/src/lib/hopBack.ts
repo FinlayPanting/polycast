@@ -14,6 +14,8 @@ export interface HopBack {
   to: number
   /** When the offer goes away (ms since epoch). */
   until: number
+  /** Words other than "Back to where you were", e.g. "Play from the very start" (PC-1027-03). */
+  label?: string
 }
 
 export function hopBackOffer(previous: number | undefined, jumpTo: number, nowMs: number): HopBack | undefined {
@@ -36,5 +38,6 @@ function clock(sec: number): string {
 }
 
 export function hopBackLabel(h: HopBack): string {
+  if (h.label) return h.label
   return `Back to where you were, ${clock(h.to)}`
 }

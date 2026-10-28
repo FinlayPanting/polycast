@@ -501,3 +501,26 @@ describe('Line by line (PC-1018-07)', () => {
     expect(listen.current.phase).toBe('playing')
   })
 })
+
+describe('a first listen that starts where the talking starts (PC-1027-03)', () => {
+  const intro: GuideMoment = { ...spotlight, id: 'intro', kind: 'warmup', at: 0, script: 'Welcome', clips: [], audio: { parts: [{ kind: 'speech', url: 'intro.m4a', durationSec: 1 }], durationSec: 1 } }
+
+  it('still opens with the introduction, then plays on from the first words', async () => {
+    const { audio, voice, listen } = setup([intro, spotlight])
+    const started = listen.start(track, 4, { keepIntro: true })
+    await flush()
+    expect(voice.played).toEqual(['intro.m4a'])
+    await voice.finishCurrent()
+    await started
+    expect(listen.current.phase).toBe('playing')
+    expect(audio.pos).toBeGreaterThanOrEqual(2)
+    expect(audio.pos).toBeLessThan(10)
+  })
+
+  it('a resume later on passes over the introduction, as before', async () => {
+    const { voice, listen } = setup([intro])
+    await listen.start(track, 4)
+    await flush()
+    expect(voice.played).toEqual([])
+  })
+})
