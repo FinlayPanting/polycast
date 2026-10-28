@@ -624,6 +624,14 @@
    "title": "Allhelgona when Sweden keeps it",
    "description": "If you're learning Swedish, the All Saints' pick on Discover and the Allhelgona stamp now last until Alla helgons dag, the Saturday Sweden keeps it, in years when that's after 2 November.",
    "tryIt": "Learning Swedish: look for the All Saints' pick on Discover"
+  },
+  {
+   "id": "PC-1027-08",
+   "date": "2026-10-28",
+   "kind": "UX",
+   "title": "Stamps land with a soft press",
+   "description": "The first time you earn a seasonal stamp, it's pressed onto the wrap-up in Polycast's colours with a gentle tap, then kept in You. It's still if Reduce Motion is on.",
+   "tryIt": "Finish a guided episode between 28 Oct and 2 Nov"
   }
  ]
 }

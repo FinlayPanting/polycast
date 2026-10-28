@@ -1,4 +1,4 @@
-import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment } from '@polycast/core'
+import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment, type SeasonStamp } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -10,6 +10,7 @@ import { ShareCard, type ShareCardHandle } from '../../components/ShareCard'
 import { RecapCard, type RecapCardHandle } from '../../components/RecapCard'
 import { didYouKnow, recapLayout, recapMessage, recapWords, wordCardLayout, wordOfTheEpisode, type RecapStats } from '../../lib/recap'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
+import { StampPress } from '../../components/StampPress'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
@@ -172,7 +173,7 @@ function ShareRecap({ data, savedThisListen, stats }: { data: ListenPayload; sav
 }
 
 /** After the episode: the wrap-up questions and the words gathered on the way. */
-function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data: ListenPayload; savedThisListen: string[]; caughtAt: number[]; listenedSec: number; onDone: () => void }) {
+function WrapUp({ data, newStamp, savedThisListen, caughtAt, listenedSec, onDone }: { data: ListenPayload; newStamp?: SeasonStamp; savedThisListen: string[]; caughtAt: number[]; listenedSec: number; onDone: () => void }) {
   const p = usePalette()
   const questions = data.plan?.wrapUpQuestions ?? []
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -191,6 +192,7 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
     <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
       <Mark height={44} />
       <Txt variant="title">You listened to {data.episode.title}</Txt>
+      {newStamp ? <StampPress stamp={newStamp} /> : null}
       {questions.map((q, i) => (
         <View key={i} style={{ gap: space.sm }}>
           <Txt variant="bodyStrong">{q.prompt}</Txt>
@@ -303,7 +305,7 @@ export default function Listen() {
       </Screen>
     )
   }
-  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={end} /></Screen>
+  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} newStamp={player.newStamp} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={end} /></Screen>
 
   const l = player.listen
   const guideOn = state.phase === 'guide' || state.phase === 'question'

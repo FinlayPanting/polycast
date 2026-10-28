@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { findOldFriends, guideVolume, selectMoments, type Clip, type GuideMoment } from '@polycast/core'
+import { findOldFriends, guideVolume, selectMoments, type Clip, type GuideMoment, type SeasonStamp } from '@polycast/core'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { demoAudio, demoVoice } from '../demo/audio'
@@ -54,6 +54,8 @@ export interface Player {
   hopBack?: HopBack
   /** Goes back to that place. */
   takeHopBack: () => void
+  /** A seasonal stamp this listen earned for the first time, pressed onto the wrap-up once (PC-1027-08). */
+  newStamp?: SeasonStamp
 }
 
 const LOADING: ListenState = { phase: 'loading', position: 0, rate: 1 }
@@ -77,6 +79,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [oldFriends, setOldFriends] = useState<Set<number>>(new Set())
   const [last, setLast] = useState<LastPlayed>()
   const [hopBack, setHopBack] = useState<HopBack>()
+  const [newStamp, setNewStamp] = useState<SeasonStamp>()
   const stateRef = useRef(state)
   stateRef.current = state
   const listen = useRef<GuidedListen | undefined>(undefined)
@@ -127,6 +130,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setSaved([])
       setCaughtAt([])
       setOldFriends(new Set())
+      setNewStamp(undefined)
       const { id, guide, level: chosenLevel, from } = p
       ;(async () => {
         try {
@@ -283,7 +287,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (s) void savePosition(s.user.id, params.id, state.position, true)
     if (last?.id === params.id) remember(undefined)
     // A seasonal stamp for a guided episode finished while a season is on (PC-1024-07).
-    if (data) keepStampFor({ guided: data.guided, language: data.transcript.language })
+    if (data) void keepStampFor({ guided: data.guided, language: data.transcript.language }).then((s) => s && setNewStamp(s), () => {})
   }, [state.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mini = useMemo(
@@ -303,6 +307,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     void (mini.playing ? l.pause() : l.resume())
   }, [mini, last, open])
 
-  const value: Player = { params, data, state, error, getReady, listen: listen.current, saved, caughtAt, oldFriends, mini, open, stop, toggle, keepWord, hopBack, takeHopBack }
+  const value: Player = { params, data, state, error, getReady, listen: listen.current, saved, caughtAt, oldFriends, mini, open, stop, toggle, keepWord, hopBack, takeHopBack, newStamp }
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
 }

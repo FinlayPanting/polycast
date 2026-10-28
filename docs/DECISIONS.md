@@ -508,3 +508,7 @@ Board item PC-1027-06. When a feed sync finds an episode saved under both its or
 ## Allhelgona arrives when Sweden keeps it (28 Oct 2026)
 
 Board item PC-1027-07. A season can now give one language a later last day, worked out for the year (`lastDayByLanguage` in `packages/core/src/seasonal.ts`). Swedish uses `allaHelgonsDag`, the Saturday between 31 October and 6 November, so the All Saints' pick and the Allhelgona stamp show from 28 October until that Saturday or 2 November, whichever is later (6 Nov 2027, 4 Nov 2028, 3 Nov 2029). It never ends earlier than the other languages: in 2026 the Saturday is 31 October, so Swedish keeps 2 November. The start stays 28 October for everyone. The App Review notes say so too.
+
+## The stamp lands with a soft press (28 Oct 2026)
+
+Board item PC-1027-08. The first time a guided finish earns a seasonal stamp, the wrap-up shows it under the title, pressed onto the page: it starts a little large and tilted, presses down and settles in under half a second, with one soft haptic tap as it lands (`StampPress`, timings in `STAMP_PRESS` in `app/src/lib/stampsCore.ts`). It's framed in the logo's coral, magenta and violet. With Reduce Motion on it simply appears, still, with the same tap. `keepStampFor` now says whether the stamp is new, so a second finish in the same season shows nothing. Simplest options picked: it settles in place on the wrap-up and then lives in You as before (no flying animation between screens); the tap uses `expo-haptics`, which the app already has, so this ships as an over-the-air update.
