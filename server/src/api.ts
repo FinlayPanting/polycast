@@ -17,7 +17,7 @@ import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { feedTranscriptLink } from './worker'
-import { addressKey, clientAddress, rateLimiter } from './rateLimit'
+import { addressKey, blockKey, clientAddress, rateLimiter } from './rateLimit'
 import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -82,7 +82,8 @@ function changelogEntries(): ChangelogEntry[] {
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
 /** First opens counted per internet address per day (PC-1024-03); generous enough for a shared Wi-Fi or mobile network. */
-export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10, overallPerDay: 5000 }
+/** perBlockPerDay: each IPv6 /48, so one rented block can't fill the overall ceiling (PC-1027-09). */
+export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10, perBlockPerDay: 50, overallPerDay: 5000 }
 
 /**
  * Fair-use limits per signed-in learner, per minute. Each of these calls reaches outside services
@@ -215,8 +216,13 @@ export function createApi(deps: ApiDeps) {
   // IPv6 callers are counted by their /64 block, and there's an overall daily ceiling, like the removal form's (PC-1025-03).
   const firstOpenLimit = rateLimiter(FIRST_OPEN_LIMITS.perAddressPerDay, 24 * 60 * 60_000)
   const firstOpenOverall = rateLimiter(FIRST_OPEN_LIMITS.overallPerDay, 24 * 60 * 60_000)
+  // Each IPv6 /48 too, in its own limiter so IPv4 callers never push a block's count out of memory (PC-1027-09).
+  const firstOpenBlock = rateLimiter(FIRST_OPEN_LIMITS.perBlockPerDay, 24 * 60 * 60_000)
   app.post('/events/first-open', async (c) => {
-    if (!firstOpenLimit.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !firstOpenOverall.hit('all')) return c.json({ error: 'Already counted today.' }, 429)
+    const address = clientAddress((n) => c.req.header(n))
+    const block = blockKey(address)
+    if (!firstOpenLimit.hit(addressKey(address)) || (block !== undefined && !firstOpenBlock.hit(block)) || !firstOpenOverall.hit('all'))
+      return c.json({ error: 'Already counted today.' }, 429)
     await countFirstOpen(sql)
     return c.json({ ok: true })
   })

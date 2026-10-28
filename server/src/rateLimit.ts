@@ -48,14 +48,31 @@ export function clientAddress(header: (name: string) => string | undefined): str
  * callers are counted by that block; IPv4 (and IPv4 written as IPv6) by the address itself.
  */
 export function addressKey(address: string): string {
+  return ipv6Groups(address)?.key64 ?? normalised(address)
+}
+
+/**
+ * The wider block an IPv6 address sits in, its /48 (PC-1027-09): what one rented allocation usually spans,
+ * 65,536 /64s. Undefined for IPv4, which is counted by address alone.
+ */
+export function blockKey(address: string): string | undefined {
+  const g = ipv6Groups(address)
+  return g ? `${g.groups.slice(0, 3).map((x) => x.replace(/^0+(?=.)/, '')).join(':')}::/48` : undefined
+}
+
+function normalised(address: string): string {
   const a = address.trim().toLowerCase().replace(/^\[|\]$/g, '').split('%')[0]!
-  if (!a.includes(':')) return a
   const mapped = a.match(/^(?:0*:)*:?ffff:(\d+\.\d+\.\d+\.\d+)$/) ?? a.match(/^::(\d+\.\d+\.\d+\.\d+)$/)
-  if (mapped) return mapped[1]!
+  return mapped ? mapped[1]! : a
+}
+
+function ipv6Groups(address: string): { groups: string[]; key64: string } | undefined {
+  const a = normalised(address)
+  if (!a.includes(':')) return undefined
   const [head = '', tail] = a.split('::')
   const left = head ? head.split(':') : []
   const right = tail ? tail.split(':') : []
   const groups = tail === undefined ? left : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right]
-  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return a
-  return `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64`
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return undefined
+  return { groups, key64: `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64` }
 }

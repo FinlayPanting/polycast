@@ -86,6 +86,18 @@ run('weekly funnel', () => {
     await sql`delete from first_opens where day <> '2026-10-06'`
   })
 
+  it('caps each IPv6 /48 below the overall ceiling, so one rented block can’t fill the day (PC-1027-09)', async () => {
+    const a = api()
+    const from = (ip: string) => a.request('/events/first-open', { method: 'POST', headers: { 'X-Real-IP': ip } })
+    let accepted = 0
+    // A different /64 every time, all inside one /48.
+    for (let i = 0; i < FIRST_OPEN_LIMITS.perBlockPerDay + 20; i++) if ((await from(`2001:db8:77:${i.toString(16)}::1`)).status === 200) accepted++
+    expect(accepted).toBe(FIRST_OPEN_LIMITS.perBlockPerDay)
+    expect((await from('2001:db8:78:1::1')).status).toBe(200) // the next /48 is someone else
+    expect((await from('198.51.100.40')).status).toBe(200) // IPv4 is unaffected
+    await sql`delete from first_opens where day <> '2026-10-06'`
+  })
+
   it('serves the funnel only with the token', async () => {
     expect((await api().request('/admin/funnel?week=2026-10-05')).status).toBe(401)
     const res = await api().request('/admin/funnel?week=2026-10-05', { headers: { Authorization: 'Bearer t0ken' } })
