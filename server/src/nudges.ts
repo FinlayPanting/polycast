@@ -83,7 +83,7 @@ export interface FirstListenNudge {
 
 /**
  * Learners due the first-listen nudge, each with the episode to start with: the most recent one they asked
- * to get ready, if it's ready; otherwise the newest ready episode of the first Polycast pick in their language.
+ * to get ready, if it's ready and in the language they're learning now (PC-1027-02); otherwise the newest ready episode of the first Polycast pick in their language.
  */
 export async function dueFirstListenNudges(sql: Sql): Promise<FirstListenNudge[]> {
   const rows = await sql`
@@ -93,7 +93,7 @@ export async function dueFirstListenNudges(sql: Sql): Promise<FirstListenNudge[]
       select * from (
         (select e.id, e.title, e.duration_sec, p.title as podcast_title, 0 as rank, j.created_at as at
           from prep_jobs j join episodes e on e.id = j.episode_id join podcasts p on p.id = e.podcast_id and not p.removed
-          where j.requested_by = pr.id and e.status = 'ready'
+          where j.requested_by = pr.id and e.status = 'ready' and e.language = pr.target_language
           order by j.created_at desc limit 1)
         union all
         (select e.id, e.title, e.duration_sec, p.title, 1, null

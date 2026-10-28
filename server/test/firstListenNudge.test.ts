@@ -75,6 +75,21 @@ run('one nudge if the first listen hasn’t happened (PC-1026-09)', () => {
     expect((await due(sam))?.episodeId).toBe(pickEp)
   })
 
+  it('names an episode in the language they’re learning now, not one they asked for before switching (PC-1027-02)', async () => {
+    const [{ id: esShow }] = (await sql`insert into podcasts (feed_url, title) values ('https://f.example/es.xml', 'Charlas') returning id`) as any
+    await sql`insert into picks (language, podcast_id, position) values ('es', ${esShow}, 0)`
+    const esEp = (await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+      values (${esShow}, ${randomUUID()}, 'Café con leche', now() - interval '1 day', 900, 'https://a.example/es.mp3', 'es', 'ready') returning id`)[0]!.id as string
+    const sv = await episode(otherShow, 'Avsnitt 9', 2, 'ready', 1200)
+    const lea = await learner({ language: 'es' })
+    await sql`insert into prep_jobs (episode_id, requested_by, guide_id, charge) values (${sv}, ${lea}, 'mia', 'freeEpisode')`
+    expect(await due(lea)).toMatchObject({ episodeId: esEp, podcastTitle: 'Charlas' })
+    const ownEs = (await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+      values (${esShow}, ${randomUUID()}, 'Mi episodio', now() - interval '3 days', 600, 'https://a.example/es2.mp3', 'es', 'ready') returning id`)[0]!.id as string
+    await sql`insert into prep_jobs (episode_id, requested_by, guide_id, charge) values (${ownEs}, ${lea}, 'mia', 'freeEpisode')`
+    expect((await due(lea))?.episodeId).toBe(ownEs)
+  })
+
   it('leaves alone anyone too new, too old, without notifications, without a language, or already listening with the guide', async () => {
     expect(await due(await learner({ hoursAgo: 20 }))).toBeUndefined()
     expect(await due(await learner({ hoursAgo: 24 * 8 }))).toBeUndefined()
