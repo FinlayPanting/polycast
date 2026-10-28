@@ -30,17 +30,71 @@ export function noteText(m: GuideMoment, clipText: (c: Clip) => string): string 
  * are left out (their answer is the point); the wrap-up is the finish screen's.
  */
 export function notesSoFar(plan: LessonPlan | undefined, level: GuidanceLevel, position: number, clipText: (c: Clip) => string): PaneNote[] {
+  const all = paneNotes(plan, level, clipText)
+  return notesUpTo(all, passedCount(all, position))
+}
+
+/**
+ * Every note this listen can show, oldest first, worked out once per plan and level (PC-1027-10): the pane
+ * then only counts how many have passed on each tick, instead of re-sorting and rewriting them all.
+ */
+export function paneNotes(plan: LessonPlan | undefined, level: GuidanceLevel, clipText: (c: Clip) => string): PaneNote[] {
   if (!plan) return []
   return selectMoments(plan.moments, level)
-    .filter((m) => m.at <= position && m.kind !== 'quickQuestion' && m.kind !== 'wrapUp')
+    .filter((m) => m.kind !== 'quickQuestion' && m.kind !== 'wrapUp')
     .map((m) => ({ id: m.id, kind: m.kind, at: m.at, ...(m.term ? { term: { text: m.term.text, meaning: m.term.meaning } } : {}), text: noteText(m, clipText) }))
     .filter((n) => n.text.length > 0)
-    .reverse()
+    .sort((a, b) => a.at - b.at)
+}
+
+/** How many of `items` (sorted by `at`) have come up by `position`: a binary search, cheap on every tick. */
+export function passedCount(items: readonly { at: number }[], position: number): number {
+  let lo = 0
+  let hi = items.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (items[mid]!.at <= position) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/** The first `count` notes, newest first, as the pane shows them. */
+export function notesUpTo(all: readonly PaneNote[], count: number): PaneNote[] {
+  return all.slice(0, count).reverse()
+}
+
+/**
+ * The host's words inside a clip, found by binary search on the transcript's word times (PC-1027-10)
+ * rather than scanning all ~9,000 words of an hour-long episode for each clip.
+ */
+export function clipTextFrom(words: readonly { start: number; end: number; text: string }[]): (c: Clip) => string {
+  return (c) => {
+    const from = c.start - 0.05
+    const to = c.end + 0.05
+    let lo = 0
+    let hi = words.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (words[mid]!.start < from) lo = mid + 1
+      else hi = mid
+    }
+    const out: string[] = []
+    for (let i = lo; i < words.length && words[i]!.start <= to; i++) if (words[i]!.end <= to) out.push(words[i]!.text)
+    return out.join(' ')
+  }
 }
 
 /** The primer's words to listen for, with whether the host has said each one yet. */
 export function primerWordsSoFar(plan: LessonPlan | undefined, position: number): (PrimerWord & { heard: boolean })[] {
   return (plan?.primer?.words ?? []).map((w) => ({ ...w, heard: w.at <= position }))
+}
+
+/** How many primer words have been heard by `position`: the key the pane rebuilds its word list on. */
+export function heardCount(plan: LessonPlan | undefined, position: number): number {
+  let n = 0
+  for (const w of plan?.primer?.words ?? []) if (w.at <= position) n++
+  return n
 }
 
 /** Words saved during this listen, newest first, with their meaning from the episode's glossary when it has one. */

@@ -1,7 +1,7 @@
 import type { GuideMoment, LessonPlan } from '@polycast/core'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { isTwoPane, noteText, notesSoFar, primerWordsSoFar, savedWithMeanings } from './sidePane'
+import { clipTextFrom, heardCount, isTwoPane, noteText, notesSoFar, notesUpTo, paneNotes, passedCount, primerWordsSoFar, savedWithMeanings } from './sidePane'
 
 const m = (id: string, at: number, kind: GuideMoment['kind'], script: string, extra: Partial<GuideMoment> = {}): GuideMoment => ({
   id,
@@ -81,5 +81,36 @@ describe('two panes on the open iPhone Duo (PC-1026-03)', () => {
     const source = readFileSync(new URL('../app/listen/[id].tsx', import.meta.url), 'utf8')
     expect(source).toMatch(/flexDirection: twoPane \? 'row' : 'column'/)
     expect(source).toMatch(/\{twoPane \? \(\s*<SidePane/)
+  })
+})
+
+describe('the Duo’s notes pane stops redoing its sums (PC-1027-10)', () => {
+  it('counts passed notes by binary search, matching a plain count', () => {
+    const items = [10, 20, 20, 35, 90].map((at) => ({ at }))
+    for (const pos of [0, 9.9, 10, 20, 34, 35, 89, 90, 1e6]) expect(passedCount(items, pos), String(pos)).toBe(items.filter((i) => i.at <= pos).length)
+    expect(passedCount([], 50)).toBe(0)
+  })
+
+  it('finds a clip’s words the same way a full scan does, on an hour-long transcript', () => {
+    const words = Array.from({ length: 9000 }, (_, i) => ({ start: i * 0.4, end: i * 0.4 + 0.35, text: `w${i}` }))
+    const scan = (c: { start: number; end: number }) => words.filter((w) => w.start >= c.start - 0.05 && w.end <= c.end + 0.05).map((w) => w.text).join(' ')
+    const fast = clipTextFrom(words)
+    for (const c of [{ start: 0, end: 1 }, { start: 1200.1, end: 1203.3 }, { start: 3599, end: 3700 }, { start: 5000, end: 5001 }]) expect(fast(c)).toBe(scan(c))
+    expect(clipTextFrom([])({ start: 1, end: 2 })).toBe('')
+  })
+
+  it('works out the notes once, then only slices them as the episode plays', () => {
+    let calls = 0
+    const clipText = () => (calls++, 'x')
+    const all = paneNotes(plan, 'standard', clipText)
+    const before = calls
+    for (let t = 0; t < 400; t += 0.25) notesUpTo(all, passedCount(all, t))
+    expect(calls).toBe(before)
+    expect(notesUpTo(all, passedCount(all, 400)).map((n) => n.id)).toEqual(notesSoFar(plan, 'standard', 400, () => 'x').map((n) => n.id))
+  })
+
+  it('keys the primer list on how many words have been heard', () => {
+    expect(heardCount(plan, 100)).toBe(primerWordsSoFar(plan, 100).filter((w) => w.heard).length)
+    expect(heardCount(undefined, 100)).toBe(0)
   })
 })

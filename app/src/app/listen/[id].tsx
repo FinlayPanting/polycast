@@ -19,7 +19,7 @@ import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
 import { playerArtSize } from '../../lib/screenShape'
-import { isTwoPane } from '../../lib/sidePane'
+import { clipTextFrom, isTwoPane } from '../../lib/sidePane'
 import { SidePane } from '../../components/SidePane'
 import { hopBackLabel } from '../../lib/hopBack'
 import { playerMenu, REPORT_FAILED, REPORT_THANKS } from '../../lib/playerMenu'
@@ -248,14 +248,8 @@ export default function Listen() {
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
   const [bloom, setBloom] = useState<string>()
 
-  const clipText = useCallback(
-    (c: Clip) =>
-      (data?.transcript.words ?? [])
-        .filter((w) => w.start >= c.start - 0.05 && w.end <= c.end + 0.05)
-        .map((w) => w.text)
-        .join(' '),
-    [data],
-  )
+  // Binary search on word times, not a scan of the whole transcript per clip (PC-1027-10).
+  const clipText = useMemo(() => clipTextFrom(data?.transcript.words ?? []), [data])
 
   // The listen lives above the screens (PC-1017-F04): opening the player starts it, or re-attaches
   // to the one already playing; closing the player leaves it playing in the mini-player.

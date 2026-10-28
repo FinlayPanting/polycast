@@ -516,3 +516,7 @@ Board item PC-1027-08. The first time a guided finish earns a seasonal stamp, th
 ## One rented address block can't freeze the funnel (28 Oct 2026)
 
 Board item PC-1027-09. `POST /events/first-open` now also counts each IPv6 /48 (`blockKey` in `server/src/rateLimit.ts`) at most 50 times a day (`FIRST_OPEN_LIMITS.perBlockPerDay`), after the per-/64 limit and before the overall 5,000 ceiling, so one cheaply rented block (65,536 /64s) can no longer fill the day's ceiling. The /48 counts live in their own in-memory limiter, which IPv4 callers never touch, so a flood of other addresses can't push them out. Nothing is stored. Simplest options picked: 50 (five shared networks' worth at 10 each); IPv4 stays per address, since a /24 is not cheap to rent in the same way. A refused real phone simply sends its first open again next time.
+
+## The Duo's notes pane stops redoing its sums (28 Oct 2026)
+
+Board item PC-1027-10. The notes pane (`SidePane`) now works out every note once per plan and level (`paneNotes`), and on each player tick only counts, by binary search, how many have passed (`passedCount`); the list is rebuilt only when that count, the number of primer words heard or the saved words change. The host's words for a clip are found by binary search on word times (`clipTextFrom`) instead of scanning the whole transcript, which also speeds up the guide card's quotes. Nothing changes on screen, so there's no What's new entry; it rides the next app update and matters once Duo builds are resizable.

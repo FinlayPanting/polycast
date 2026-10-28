@@ -1,7 +1,8 @@
 import type { GlossEntry, GuidanceLevel, LessonPlan, Clip } from '@polycast/core'
+import { memo, useMemo } from 'react'
 import { ScrollView, View } from 'react-native'
 import { ENGLISH_SPEECH, speechLanguage } from '../lib/speechLanguage'
-import { notesSoFar, primerWordsSoFar, savedWithMeanings } from '../lib/sidePane'
+import { heardCount, notesUpTo, paneNotes, passedCount, primerWordsSoFar, savedWithMeanings } from '../lib/sidePane'
 import { space, usePalette } from '../theme'
 import { Txt } from './ui'
 
@@ -9,7 +10,7 @@ import { Txt } from './ui'
  * The second pane on the open iPhone Duo (PC-1026-03): what the guide has explained so far, the primer's words
  * to listen for and the words saved this listen, beside the subtitles rather than over them.
  */
-export function SidePane({
+export const SidePane = memo(function SidePane({
   plan,
   level,
   guided,
@@ -31,9 +32,15 @@ export function SidePane({
   clipText: (c: Clip) => string
 }) {
   const p = usePalette()
-  const notes = guided ? notesSoFar(plan, level, position, clipText) : []
-  const primer = primerWordsSoFar(plan, position)
-  const kept = savedWithMeanings(saved, glossary)
+  // Worked out once per plan and level; on each tick (four a second) only the counts are checked, and the
+  // lists are rebuilt when a new moment or primer word has passed (PC-1027-10).
+  const all = useMemo(() => (guided ? paneNotes(plan, level, clipText) : []), [guided, plan, level, clipText])
+  const passed = passedCount(all, position)
+  const notes = useMemo(() => notesUpTo(all, passed), [all, passed])
+  const heard = heardCount(plan, position)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const primer = useMemo(() => primerWordsSoFar(plan, position), [plan, heard])
+  const kept = useMemo(() => savedWithMeanings(saved, glossary), [saved, glossary])
   const lang = speechLanguage(language)
   return (
     <ScrollView
@@ -104,4 +111,4 @@ export function SidePane({
       </View>
     </ScrollView>
   )
-}
+})
