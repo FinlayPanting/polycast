@@ -36,7 +36,7 @@ Target: public App Store launch before the On Air Fest pitch (aim 23 Oct 2026). 
 
 ## Preview without an iPhone
 
-`EXPO_PUBLIC_DEMO=1 npx expo export --platform web` builds a browser preview with sample data (a fictional Swedish show) and pretend audio. Icons (SF Symbols) don't show on the web.
+`EXPO_PUBLIC_DEMO=1 npx expo export --platform web` builds a browser preview with sample data (a fictional Swedish show) and pretend audio. Icons (SF Symbols) don't show on the web. Add `EXPO_PUBLIC_DEMO_SIGNED_OUT=1` (and `--clear`) to start from the welcome screen; any email and code then sign in as a new learner. `node app/scripts/first-line.mjs --json` walks that from first open to Mia's first line and prints every step (PC-1028-07).
 
 ## Needs from Finlay
 

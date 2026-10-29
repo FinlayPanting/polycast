@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { config } from './config'
 import { PENDING_PLUS_MS, waitForServerPlus, withPendingPlus } from './plusPending'
 import { supabase } from './supabase'
-import { DEMO_PROFILE, DEMO_SESSION } from '../demo/session'
+import { DEMO_NEW_PROFILE, DEMO_PROFILE, DEMO_SESSION } from '../demo/session'
 
 export interface Profile {
   id: string
@@ -114,10 +114,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error('Sign-in didn’t work. Please try again.')
       },
       async sendEmailCode(email) {
+        // The browser preview signed out (EXPO_PUBLIC_DEMO_SIGNED_OUT): any address and code sign in as a
+        // brand-new learner, so the whole first run can be walked and counted (PC-1028-07).
+        if (config.demo) return
         const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
         if (error) throw new Error('We couldn’t send a code to that address. Check it and try again.')
       },
       async verifyEmailCode(email, code) {
+        if (config.demo) {
+          setSession(DEMO_SESSION)
+          setProfile(DEMO_NEW_PROFILE)
+          return
+        }
         const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
         if (error) throw new Error('That code didn’t work. Check it, or send a new one.')
       },
