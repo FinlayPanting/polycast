@@ -50,6 +50,15 @@ describe('which way a night of app changes reaches phones (PC-1020-U1)', () => {
     expect(rootPackageChanged(undefined, root({}))).toBe(true)
   })
 
+  it('needs no build for the install-script allowlist alone (PC-1028-04), but still does for a patch beside it', () => {
+    const root = (extra: Record<string, unknown>) => JSON.stringify({ name: 'polycast', scripts: { check: 'pnpm test' }, ...extra })
+    const patches = { patchedDependencies: { 'a@1': 'patches/a@1.patch' } }
+    expect(rootPackageChanged(root({ pnpm: patches }), root({ pnpm: { onlyBuiltDependencies: ['esbuild'], ...patches } }))).toBe(false)
+    expect(rootPackageChanged(root({}), root({ pnpm: { onlyBuiltDependencies: ['esbuild'] } }))).toBe(false)
+    expect(rootPackageChanged(root({ pnpm: { onlyBuiltDependencies: ['esbuild'] } }), root({ pnpm: { onlyBuiltDependencies: ['esbuild'], overrides: { x: '1' } } }))).toBe(true)
+    expect(rootPackageChanged(root({ pnpm: patches }), root({ pnpm: { onlyBuiltDependencies: ['esbuild'] } }))).toBe(true)
+  })
+
   it('plays safe when package.json can not be read', () => {
     expect(dependenciesChanged(undefined, pkg({ expo: '1' }))).toBe(true)
     expect(dependenciesChanged('not json', pkg({}))).toBe(true)

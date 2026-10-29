@@ -115,3 +115,55 @@ describe('the audit says which warnings ship (PC-1026-10)', () => {
     expect(reported).toEqual([expect.stringMatching(/^build tool only: high zod/), expect.stringMatching(/^ships in the app: high braces/), expect.stringMatching(/^server: moderate fast-xml-parser/)])
   })
 })
+
+describe('only named packages may run install scripts (PC-1028-04)', () => {
+  it('spots install hooks and native builds', async () => {
+    // @ts-expect-error plain JavaScript script, no type declarations
+    const { runsOnInstall } = await import('../../scripts/audit.mjs')
+    expect(runsOnInstall({ scripts: { postinstall: 'node install.js' } })).toBe(true)
+    expect(runsOnInstall({ scripts: { preinstall: 'curl evil' } })).toBe(true)
+    expect(runsOnInstall({ scripts: { install: 'node-gyp rebuild' } })).toBe(true)
+    expect(runsOnInstall({ scripts: { test: 'vitest', build: 'tsc', prepare: 'husky' } })).toBe(false)
+    expect(runsOnInstall({}, true)).toBe(true)
+    expect(runsOnInstall({ scripts: { postinstall: '  ' } })).toBe(false)
+  })
+
+  it('flags a newcomer, and the lack of an allowlist', async () => {
+    // @ts-expect-error plain JavaScript script, no type declarations
+    const { unlistedInstallScripts, allowedInstallScripts } = await import('../../scripts/audit.mjs')
+    expect(unlistedInstallScripts(['esbuild'], ['esbuild'])).toEqual([])
+    expect(unlistedInstallScripts(['esbuild', 'sneaky-sdk'], ['esbuild'])[0]).toMatch(/^sneaky-sdk has an install script/)
+    expect(unlistedInstallScripts([], undefined)).toHaveLength(1)
+    expect(allowedInstallScripts({ pnpm: { onlyBuiltDependencies: ['esbuild'] } })).toEqual(['esbuild'])
+    expect(allowedInstallScripts({})).toBeUndefined()
+  })
+
+  it('finds them in a real node_modules tree, scoped and nested', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
+    // @ts-expect-error plain JavaScript script, no type declarations
+    const { installScriptPackages } = await import('../../scripts/audit.mjs')
+    const nm = join(mkdtempSync(join(tmpdir(), 'pc-scripts-')), 'node_modules')
+    const pkg = (dir: string, json: object, gyp = false) => {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify(json))
+      if (gyp) writeFileSync(join(dir, 'binding.gyp'), '{}')
+    }
+    pkg(join(nm, 'plain'), { name: 'plain', scripts: { test: 'x' } })
+    pkg(join(nm, '@scope', 'hooked'), { name: '@scope/hooked', scripts: { postinstall: 'node x.js' } })
+    pkg(join(nm, 'plain', 'node_modules', 'deep'), { name: 'deep', scripts: { preinstall: 'node y.js' } })
+    pkg(join(nm, 'native'), { name: 'native' }, true)
+    expect(installScriptPackages([nm, join(nm, 'missing')])).toEqual(['@scope/hooked', 'deep', 'native'])
+  })
+
+  it('the repo’s own allowlist covers every package installed today', async () => {
+    const { readFileSync } = await import('node:fs')
+    // @ts-expect-error plain JavaScript script, no type declarations
+    const { installScriptPackages, unlistedInstallScripts, allowedInstallScripts } = await import('../../scripts/audit.mjs')
+    const root = new URL('../../', import.meta.url).pathname
+    const allowed = allowedInstallScripts(JSON.parse(readFileSync(`${root}package.json`, 'utf8')))
+    expect(allowed).toEqual(expect.arrayContaining(['esbuild']))
+    expect(unlistedInstallScripts(installScriptPackages([`${root}node_modules`, `${root}app/node_modules`, `${root}server/node_modules`]), allowed)).toEqual([])
+  })
+})

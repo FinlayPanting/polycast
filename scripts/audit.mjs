@@ -9,9 +9,79 @@
  * to it runs through a build tool (Expo's command-line tool, config plugins, Metro, Babel), which never
  * reaches a learner's phone or the server; "ships in the app" when some path doesn't; "server" for
  * moderate ones in the server's tree; "reach unknown" when pnpm gives no paths.
+ *
+ * Install scripts (PC-1028-04): only the packages named in the root package.json's
+ * `pnpm.onlyBuiltDependencies` may run a script when installed (pnpm 9 blocks the rest once that list
+ * exists). The check fails on any installed package that has an install script and isn't named there,
+ * so a newcomer is a decision, never a surprise. This part runs offline too.
  */
 import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+const INSTALL_HOOKS = ['preinstall', 'install', 'postinstall']
+
+/** Whether a package.json (parsed) runs anything when installed: an install hook, or a native build (binding.gyp). */
+export function runsOnInstall(pkg, hasBindingGyp = false) {
+  return INSTALL_HOOKS.some((h) => typeof pkg?.scripts?.[h] === 'string' && pkg.scripts[h].trim() !== '') || hasBindingGyp
+}
+
+/** Names of installed packages under these node_modules folders that run something on install. */
+export function installScriptPackages(nodeModulesDirs) {
+  const found = new Set()
+  const walk = (dir) => {
+    let entries
+    try {
+      entries = readdirSync(dir)
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (e.startsWith('.')) continue
+      const p = join(dir, e)
+      if (e.startsWith('@')) {
+        walk(p)
+        continue
+      }
+      const pj = join(p, 'package.json')
+      if (existsSync(pj)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pj, 'utf8'))
+          if (pkg.name && runsOnInstall(pkg, existsSync(join(p, 'binding.gyp')))) found.add(pkg.name)
+        } catch {
+          // An unreadable package.json is pnpm's problem, not this check's.
+        }
+      }
+      walk(join(p, 'node_modules'))
+    }
+  }
+  for (const d of nodeModulesDirs) walk(d)
+  return [...found].sort()
+}
+
+/** The install-script allowlist from the root package.json (pnpm.onlyBuiltDependencies), or undefined if there is none. */
+export function allowedInstallScripts(rootPackage) {
+  const list = rootPackage?.pnpm?.onlyBuiltDependencies
+  return Array.isArray(list) ? list : undefined
+}
+
+/** Lines for the check: packages that run something on install but aren't on the allowlist. No allowlist at all fails too. */
+export function unlistedInstallScripts(found, allowed) {
+  if (!allowed) return ['the root package.json has no pnpm.onlyBuiltDependencies, so every package may run install scripts']
+  const ok = new Set(allowed)
+  return found.filter((n) => !ok.has(n)).map((n) => `${n} has an install script and isn't in pnpm.onlyBuiltDependencies (add it there only if it truly needs to run one)`)
+}
+
+function checkInstallScripts(root) {
+  const rootPackage = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  const workspaces = ['', 'app', 'server', ...(existsSync(join(root, 'packages')) ? readdirSync(join(root, 'packages')).map((d) => `packages/${d}`) : [])]
+  const found = installScriptPackages(workspaces.map((w) => join(root, w, 'node_modules')))
+  const problems = unlistedInstallScripts(found, allowedInstallScripts(rootPackage))
+  for (const l of problems) console.error(`install scripts BLOCKING: ${l}`)
+  if (!problems.length) console.log(`install scripts: only allowlisted packages may run them (${found.join(', ') || 'none installed'})`)
+  return problems.length === 0
+}
 
 /** Workspace folders whose production dependencies run on the server. */
 export const SERVER_SIDE = ['server', 'packages/core']
@@ -100,6 +170,8 @@ export function triage(report, serverPackages) {
 }
 
 function main() {
+  const scriptsOk = checkInstallScripts(process.cwd())
+  if (!scriptsOk) process.exitCode = 1
   let out
   try {
     out = execFileSync('pnpm', ['audit', '--prod', '--json'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] })
