@@ -1,6 +1,6 @@
 import type { ShowEpisodes } from './libraryCore'
 import type { EpisodeEstimate } from './ownKeysCore'
-import type { Difficulty, GlossEntry, KnownWord, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
+import type { Difficulty, GlossEntry, GuessClip, KnownWord, LessonPlan, PodcastSummary, Primer, Refusal, Segment, Word } from '@polycast/core'
 import { config } from './config'
 import { demoCall } from '../demo/api'
 import { supabase } from './supabase'
@@ -140,6 +140,8 @@ export const api = {
   lesson: (episodeId: string, guide: boolean) => call<ListenPayload>('POST', `/v1/episodes/${episodeId}/lesson`, { guide }),
   /** "You already know these words" after picking a language (PC-1022-08); empty when there aren't enough. */
   knownWords: (language: string) => call<KnownWordsAnswer>('GET', `/v1/known-words/${language}`, undefined, 8_000),
+  /** Guess the language while an episode prepares (PC-1028-06): three seconds of a host per launch language. */
+  guessClips: () => call<{ clips: GuessClip[] }>('GET', '/v1/guess-clips', undefined, 8_000),
   /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
   primer: (episodeId: string) => call<{ primer: Primer | null; guideId?: string | null }>('GET', `/v1/episodes/${episodeId}/primer`),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),

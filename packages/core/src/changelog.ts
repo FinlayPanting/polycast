@@ -110,5 +110,23 @@ export function reviewNotes(entries: readonly ChangelogEntry[], sinceDate?: stri
       .join('\n')
       .trim() + tail
   for (const text of [render(full, full), render(full, short), render(short, short)]) if (text.length <= max) return text
-  return render(short, short)
+  // Titles alone still too long (PC-1028-06, once the log passed 80 entries): titles run on in one paragraph
+  // per section; if even that overflows, the last ones give way to a count and a pointer to What's new.
+  const compact = (shown: number) => {
+    const all = [...features.map((e) => ['f', e.title] as const), ...fixes.map((e) => ['x', e.title] as const)]
+    const kept = all.slice(0, shown)
+    const rest = all.length - kept.length
+    const line = (k: 'f' | 'x') => kept.filter(([kind]) => kind === k).map(([, t]) => t).join('; ')
+    const more = rest ? ` And ${rest} more, each listed in the app under You, then What’s new.` : ''
+    const parts = [head, '']
+    if (line('f')) parts.push(`New and changed: ${line('f')}.`, '')
+    if (line('x')) parts.push(`Fixes and refinements: ${line('x')}.`)
+    return parts.join('\n').trim() + more + tail
+  }
+  const total = features.length + fixes.length
+  for (let shown = total; shown >= 0; shown--) {
+    const text = compact(shown)
+    if (text.length <= max) return text
+  }
+  return compact(0).slice(0, max)
 }

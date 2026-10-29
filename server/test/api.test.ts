@@ -692,6 +692,27 @@ run('API and worker', () => {
     expect((await call(other, 'GET', '/v1/known-words/../x')).status).toBe(404)
   })
 
+  it('hands out three seconds of a real host per launch language for the guessing game, with no AI (PC-1028-06)', async () => {
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/sv-guess.xml', 'Gissa', 'sv') returning id`
+    await sql`insert into picks (language, podcast_id, position) values ('sv', ${p!.id}, 0) on conflict do nothing`
+    const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+      values (${p!.id}, 'sv-guess-1', 'Avsnitt 1', now(), 900, 'https://a.example/sv-guess.mp3', 'sv', 'ready') returning id`
+    // Thirty words, 0.4 s apart: talk throughout, so the clip comes from after the opening fifth.
+    const words = Array.from({ length: 30 }, (_, i) => ({ text: `ord${i}`, start: i * 0.4, end: i * 0.4 + 0.3 }))
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments)
+      values (${e!.id}, 'sv', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])})`
+    const lea = await learner()
+    const res = await call(lea, 'GET', '/v1/guess-clips')
+    expect(res.status).toBe(200)
+    const { clips } = await res.json()
+    const sv = clips.find((c: any) => c.language === 'sv')
+    expect(sv).toMatchObject({ language: 'sv', audioUrl: expect.stringMatching(/^https:\/\/a\.example\//) })
+    expect(sv.end - sv.start).toBeCloseTo(3)
+    for (const c of clips) expect(['es', 'fr', 'de', 'it', 'pt', 'sv']).toContain(c.language)
+    expect(new Set(clips.map((c: any) => c.language)).size).toBe(clips.length)
+    expect((await api().request('/v1/guess-clips')).status).toBe(401)
+  })
+
   it('keeps an empty "You already know" answer for five minutes, not an hour (PC-1023-01)', async () => {
     expect(knownWordsFresh({ words: [] }, 0, KNOWN_WORDS_EMPTY_TTL_MS - 1)).toBe(true)
     expect(knownWordsFresh({ words: [] }, 0, KNOWN_WORDS_EMPTY_TTL_MS)).toBe(false)

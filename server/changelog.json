@@ -640,6 +640,14 @@
    "title": "Ask Mia, not a sparkle",
    "description": "The button in Discover’s search bar now shows your guide’s mark and says “Ask Mia” (or Leo), and Discover has its own compass icon.",
    "tryIt": "Type a mood in Discover’s search bar and tap Ask Mia"
+  },
+  {
+   "id": "PC-1028-06",
+   "date": "2026-10-29",
+   "kind": "Feature",
+   "title": "Guess the language while Mia prepares",
+   "description": "While an episode is being prepared, play three seconds of a real host and guess which language it is. Mia tells you what gave it away; nobody keeps score.",
+   "tryIt": "Prepare an episode and look under the progress card"
   }
  ]
 }
