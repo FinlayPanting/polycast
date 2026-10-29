@@ -442,11 +442,14 @@ run('API and worker', () => {
         body: JSON.stringify({ event: { app_user_id: max, ...event } }),
       })
     const used = async () => (await sql`select plus_used_sec, plus_period_start from profiles where id = ${max}`)[0]!
-    const sept = Date.parse('2026-09-01T10:00:00Z')
-    const oct = Date.parse('2026-10-01T10:00:00Z')
+    // Relative to today: the 'no purchase time' fallback resets a month older than 27 days,
+    // so fixed calendar dates would start failing as the real date moves on.
+    const day = 24 * 3600 * 1000
+    const oct = Math.floor(Date.now() / 1000) * 1000 - 2 * day
+    const sept = oct - 30 * day
 
     await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
-    expect((await used()).plus_period_start.toISOString()).toBe('2026-09-01T10:00:00.000Z')
+    expect((await used()).plus_period_start.toISOString()).toBe(new Date(sept).toISOString())
     await sql`update profiles set plus_used_sec = 3600 where id = ${max}`
     // The same purchase delivered again: hours stay used.
     await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
@@ -460,7 +463,7 @@ run('API and worker', () => {
     // An event without a purchase time can't reset a month that's still running.
     await hook({ type: 'RENEWAL', id: 'e3' })
     expect((await used()).plus_used_sec).toBe(1800)
-    expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
+    expect((await used()).plus_period_start.toISOString()).toBe(new Date(oct).toISOString())
   })
 
   it("sends Polycast's own re-preparations through the batch service quietly, and never a learner's request", async () => {
