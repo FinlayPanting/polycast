@@ -42,7 +42,7 @@ export async function getEpisode(id: string): Promise<{ episode: EpisodeDetail; 
 }
 
 export async function listListens(): Promise<ListenRow[]> {
-  if (config.demo) return demo.listListens()
+  if (config.demo) return config.demoSignedOut ? [] : demo.listListens() // a brand-new learner in the signed-out preview (PC-1028-10)
   const { data, error } = await supabase
     .from('listens')
     .select('episode_id, position_sec, finished_at, updated_at, episodes(title, duration_sec, image, podcast_id, podcasts(title, artwork))')

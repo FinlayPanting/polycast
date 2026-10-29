@@ -648,6 +648,14 @@
    "title": "Guess the language while Mia prepares",
    "description": "While an episode is being prepared, play three seconds of a real host and guess which language it is. Mia tells you what gave it away; nobody keeps score.",
    "tryIt": "Prepare an episode and look under the progress card"
+  },
+  {
+   "id": "PC-1028-10",
+   "date": "2026-10-29",
+   "kind": "UX",
+   "title": "Empty screens with one thing to do",
+   "description": "Before your first listen, the Words and Library screens offer one button that starts a good first listen in your language, straight in with your guide.",
+   "tryIt": "Open Words or Library before you’ve listened to anything"
   }
  ]
 }

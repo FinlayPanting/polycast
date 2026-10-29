@@ -6,6 +6,7 @@ import { listListens, type ListenRow } from '../../lib/data'
 import { useAsync } from '../../lib/useAsync'
 import { space, usePalette } from '../../theme'
 import { Loading } from '../../components/Loading'
+import { FirstListenStart } from '../../components/FirstListenStart'
 import { isSavedForOffline, listSavedLessons } from '../../lib/offline'
 import { LaterList } from '../../components/LaterList'
 import { api } from '../../lib/api'
@@ -74,7 +75,7 @@ export default function Library() {
         ) : !data.length && !follows.length ? (
           <View style={{ gap: space.md, paddingHorizontal: space.lg }}>
             <Txt tone="quiet">Episodes you start will appear here, so you can pick up where you left off.</Txt>
-            <Button kind="secondary" label="Find something to listen to" onPress={() => router.push('/')} style={{ alignSelf: 'flex-start' }} />
+            <FirstListenStart fallback={<Button kind="secondary" label="Find something to listen to" onPress={() => router.push('/')} style={{ alignSelf: 'flex-start' }} />} />
           </View>
         ) : (
           <Section title={SECTION.recent.title} empty={recent.length ? undefined : SECTION.recent.empty} flush>
