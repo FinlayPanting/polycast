@@ -4,6 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certi
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+# pnpm reads every patch named in package.json's patchedDependencies, even for packages it won't install here.
+COPY patches patches
 COPY packages/core packages/core
 COPY server server
 RUN pnpm install --frozen-lockfile --filter @polycast/server...
