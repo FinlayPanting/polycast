@@ -13,12 +13,35 @@ import type { LookupHost } from './safeFetch'
 export const NUDGE_EVERY_DAYS = 7
 /** Shows finished longer ago than this aren't followed up. */
 export const NUDGE_SHOWS_FROM_DAYS = 60
-/** Sent only in daytime across Europe (UTC hours, inclusive start, exclusive end). */
+/** For a learner whose phone hasn't told us its time zone: daytime across Europe (UTC hours, inclusive start, exclusive end). */
 export const NUDGE_HOURS_UTC = [9, 19] as const
+/** Sent only in the learner's own daytime (PC-1028-01): local hours, inclusive start, exclusive end. */
+export const NUDGE_LOCAL_HOURS = [10, 20] as const
+
+/** The hour (0-23) on a learner's clock, or undefined when the time zone isn't one we recognise. */
+export function localHour(timeZone: string, now: Date): number | undefined {
+  try {
+    const h = new Intl.DateTimeFormat('en-GB', { timeZone, hour: 'numeric', hourCycle: 'h23' }).formatToParts(now).find((p) => p.type === 'hour')
+    const n = Number(h?.value)
+    return Number.isInteger(n) && n >= 0 && n < 24 ? n : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Whether it's daytime for this learner: their own 10:00-20:00, or 9:00-19:00 UTC when we don't know their time zone. */
+export function isNudgeHour(timeZone: string | null | undefined, now: Date): boolean {
+  const local = timeZone ? localHour(timeZone, now) : undefined
+  if (local !== undefined) return local >= NUDGE_LOCAL_HOURS[0] && local < NUDGE_LOCAL_HOURS[1]
+  const utc = now.getUTCHours()
+  return utc >= NUDGE_HOURS_UTC[0] && utc < NUDGE_HOURS_UTC[1]
+}
 
 export interface Nudge {
   userId: string
   pushToken: string
+  /** The phone's IANA time zone, if it sent one with its push token (PC-1028-01). */
+  timeZone?: string | null
   /** The episode the nudge opens: the new one, or one that's already prepared (PC-1022-07). */
   episodeId: string
   podcastTitle: string
@@ -74,6 +97,7 @@ export function firstListenText(n: { guideName: string; podcastTitle: string; ep
 export interface FirstListenNudge {
   userId: string
   pushToken: string
+  timeZone?: string | null
   guideName: string
   podcastTitle: string
   episodeId: string
@@ -87,7 +111,7 @@ export interface FirstListenNudge {
  */
 export async function dueFirstListenNudges(sql: Sql): Promise<FirstListenNudge[]> {
   const rows = await sql`
-    select pr.id as user_id, pr.push_token, pr.guide_id, ep.id as episode_id, ep.title as episode_title, ep.duration_sec, ep.podcast_title
+    select pr.id as user_id, pr.push_token, pr.time_zone, pr.guide_id, ep.id as episode_id, ep.title as episode_title, ep.duration_sec, ep.podcast_title
     from profiles pr
     cross join lateral (
       select * from (
@@ -112,6 +136,7 @@ export async function dueFirstListenNudges(sql: Sql): Promise<FirstListenNudge[]
   return rows.map((r) => ({
     userId: r.user_id,
     pushToken: r.push_token,
+    timeZone: r.time_zone,
     guideName: guideNameFor(r.guide_id),
     podcastTitle: r.podcast_title,
     episodeId: r.episode_id,
@@ -122,10 +147,10 @@ export async function dueFirstListenNudges(sql: Sql): Promise<FirstListenNudge[]
 
 /** Sends the first-listen nudges that are due, each claimed first so nobody gets two. Returns how many went out. */
 export async function sendFirstListenNudges(sql: Sql, push: Push, now = new Date()): Promise<number> {
-  const hour = now.getUTCHours()
-  if (hour < NUDGE_HOURS_UTC[0] || hour >= NUDGE_HOURS_UTC[1]) return 0
   let sent = 0
   for (const n of await dueFirstListenNudges(sql)) {
+    // Night where they are: left for a later round, unclaimed.
+    if (!isNudgeHour(n.timeZone, now)) continue
     const [claimed] = await sql`update profiles set last_nudged_at = now() where id = ${n.userId} and last_nudged_at is null returning id`
     if (!claimed) continue
     const { title, body } = firstListenText(n)
@@ -206,6 +231,7 @@ export async function refreshFinishedShows(sql: Sql, f: Fetch, opts: { lookupHos
 interface NudgeRow extends NudgeCandidate {
   userId: string
   pushToken: string
+  timeZone: string | null
   podcastTitle: string
   guideName: string
   published: Date
@@ -221,7 +247,7 @@ async function nudgeCandidates(sql: Sql, now: Date): Promise<NudgeRow[]> {
       group by l.user_id, e.podcast_id
     ),
     newest as (
-      select distinct on (pr.id, p.id) pr.id as user_id, p.id as podcast_id, pr.push_token, pr.guide_id, pr.plan, pr.signup_rank,
+      select distinct on (pr.id, p.id) pr.id as user_id, p.id as podcast_id, pr.push_token, pr.time_zone, pr.guide_id, pr.plan, pr.signup_rank,
         pr.free_episode_used,
         case when pr.plus_period_start is null or now() >= pr.plus_period_start + interval '1 month' then 0 else pr.plus_used_sec end as plus_used_sec,
         e.id as episode_id, e.title as episode_title, e.duration_sec, e.status, e.published, p.title as podcast_title
@@ -250,6 +276,7 @@ async function nudgeCandidates(sql: Sql, now: Date): Promise<NudgeRow[]> {
   return rows.map((r) => ({
     userId: r.user_id,
     pushToken: r.push_token,
+    timeZone: r.time_zone,
     podcastTitle: r.podcast_title,
     guideName: guideNameFor(r.guide_id),
     published: r.published,
@@ -276,6 +303,7 @@ export async function dueNudges(sql: Sql, now = new Date()): Promise<Nudge[]> {
     const nudge = {
       userId: c.userId,
       pushToken: c.pushToken,
+      timeZone: c.timeZone,
       podcastTitle: c.podcastTitle,
       guideName: c.guideName,
       episodeId: plan.episodeId,
@@ -294,10 +322,10 @@ export type Push = (to: string, title: string, body: string, data: Record<string
 
 /** Sends what's due and records it, so nobody hears twice in a week. Returns how many went out. */
 export async function sendNudges(sql: Sql, push: Push, now = new Date()): Promise<number> {
-  const hour = now.getUTCHours()
-  if (hour < NUDGE_HOURS_UTC[0] || hour >= NUDGE_HOURS_UTC[1]) return 0
   let sent = 0
   for (const n of await dueNudges(sql, now)) {
+    // Night where they are: left for a later round, unclaimed (PC-1028-01).
+    if (!isNudgeHour(n.timeZone, now)) continue
     // Mark first: a failed push loses one nudge rather than risking two.
     const [claimed] = await sql`update profiles set last_nudged_at = now() where id = ${n.userId}
       and (last_nudged_at is null or last_nudged_at < now() - make_interval(days => ${NUDGE_EVERY_DAYS})) returning id`
