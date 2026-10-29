@@ -632,6 +632,14 @@
    "title": "Stamps land with a soft press",
    "description": "The first time you earn a seasonal stamp, it's pressed onto the wrap-up in Polycast's colours with a gentle tap, then kept in You. It's still if Reduce Motion is on.",
    "tryIt": "Finish a guided episode between 28 Oct and 2 Nov"
+  },
+  {
+   "id": "PC-1028-03",
+   "date": "2026-10-29",
+   "kind": "UX",
+   "title": "Ask Mia, not a sparkle",
+   "description": "The button in Discover’s search bar now shows your guide’s mark and says “Ask Mia” (or Leo), and Discover has its own compass icon.",
+   "tryIt": "Type a mood in Discover’s search bar and tap Ask Mia"
   }
  ]
 }

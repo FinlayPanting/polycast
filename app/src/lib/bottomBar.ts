@@ -1,6 +1,6 @@
 /** The four tabs, in order (PC-1017-F04: the same bar on every screen). */
 export const TABS = [
-  { id: 'index', title: 'Discover', icon: 'sparkles', href: '/' },
+  { id: 'index', title: 'Discover', icon: 'safari', href: '/' },
   { id: 'library', title: 'Library', icon: 'headphones', href: '/library' },
   { id: 'words', title: 'Words', icon: 'text.book.closed', href: '/words' },
   { id: 'you', title: 'You', icon: 'person.crop.circle', href: '/you' },

@@ -14,7 +14,8 @@ import { SymbolView } from 'expo-symbols'
  * three shows or prepared episodes in the language with a line on why each fits.
  *
  * One bar for search and mood (PC-1017-F07): the keyboard's search key opens a normal podcast
- * search for what's typed; the sparkle button sends it to Mia instead.
+ * search for what's typed; the 'Ask Mia' button (the guide's own mark, never a generic sparkle: PC-1028-03)
+ * sends it to Mia instead.
  */
 export function MoodPicks({ language, guideName, flagId }: { language: string; guideName: string; flagId?: string }) {
   const p = usePalette()
@@ -70,13 +71,18 @@ export function MoodPicks({ language, guideName, flagId }: { language: string; g
             accessibilityLabel={`Ask ${guideName}`}
             accessibilityHint={`${guideName} picks shows to match what you've typed`}
             onPress={() => {
-              const r = searchOrMood(mood, 'sparkle')
+              const r = searchOrMood(mood, 'guide')
               if (r?.kind === 'mood') void ask(r.mood)
             }}
             hitSlop={4}
-            style={({ pressed }) => ({ width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+            style={({ pressed }) => ({ minWidth: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center', paddingRight: space.xs, opacity: pressed ? 0.6 : 1 })}
           >
-            <SymbolView name="sparkles" tintColor={mood.trim() ? p.guide : p.faint} size={20} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.sm, minHeight: MIN_TAP - 12, borderRadius: 999, borderWidth: 1, borderColor: mood.trim() ? p.guide : p.line, opacity: mood.trim() ? 1 : 0.7 }}>
+              <Mark height={14} flagId={flagId} accessibilityLabel="" />
+              <Txt variant="smallStrong" style={{ color: mood.trim() ? p.text : p.quiet }}>
+                Ask {guideName}
+              </Txt>
+            </View>
           </Pressable>
         </View>
       </View>

@@ -15,12 +15,12 @@ export function moodPickByline(p: MoodPick): string {
 
 /**
  * One field for both (PC-1017-F07): pressing search on the keyboard does a normal podcast search;
- * the sparkle button sends the same words to the guide's mood search. Nothing for an empty field,
+ * the 'Ask Mia' button sends the same words to the guide's mood search. Nothing for an empty field,
  * or a search under two letters (search needs at least two).
  */
-export function searchOrMood(text: string, via: 'keyboard' | 'sparkle'): { kind: 'search'; q: string } | { kind: 'mood'; mood: string } | null {
+export function searchOrMood(text: string, via: 'keyboard' | 'guide'): { kind: 'search'; q: string } | { kind: 'mood'; mood: string } | null {
   const t = text.trim()
-  if (via === 'sparkle') return t ? { kind: 'mood', mood: t } : null
+  if (via === 'guide') return t ? { kind: 'mood', mood: t } : null
   return t.length >= 2 ? { kind: 'search', q: t } : null
 }
 
