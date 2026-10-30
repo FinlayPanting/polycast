@@ -664,6 +664,14 @@
    "title": "Host clips play in full on a slow connection",
    "description": "When you tap to hear the host say a word, or play the guessing game's clip, it now plays to the end even if the audio takes a moment to load.",
    "tryIt": "Tap a word's play button in Review or on an episode's word list"
+  },
+  {
+   "id": "PC-1029-04",
+   "date": "2026-10-30",
+   "kind": "Refinement",
+   "title": "More clips in the guessing game",
+   "description": "While an episode prepares, the guessing game now has up to five hosts per language from different shows, and won't play you the same clip twice.",
+   "tryIt": "Prepare a new episode and tap 'Another one' a few times"
   }
  ]
 }

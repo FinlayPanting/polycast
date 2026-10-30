@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, guessClip, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
+import { cohortAlert, GUESS_CLIPS_PER_LANGUAGE, guessClip, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -620,20 +620,26 @@ export function createApi(deps: ApiDeps) {
   })
 
   /**
-   * Guess the language while the guide prepares (PC-1028-06): three seconds of a real host in each launch
-   * language, from the newest ready episode of its first Polycast pick. Cut from existing transcripts, so
-   * no AI is used and nothing is stored; the audio streams from the publisher. Kept for an hour (five minutes when empty).
+   * Guess the language while the guide prepares (PC-1028-06): three seconds of a real host per launch language,
+   * up to five per language, each from the newest ready episode of a different Polycast pick (PC-1029-04). Cut from
+   * existing transcripts, so no AI is used and nothing is stored; the audio streams from the publisher. Kept for an
+   * hour (five minutes when empty).
    */
   let guessCache: { at: number; clips: GuessClip[] } | undefined
   app.get('/v1/guess-clips', async (c) => {
     if (guessCache && Date.now() - guessCache.at < (guessCache.clips.length ? 3600_000 : 300_000)) return c.json({ clips: guessCache.clips })
     const rows = await sql`
-      select distinct on (k.language) k.language, e.audio_url, t.words
-      from picks k join podcasts p on p.id = k.podcast_id and not p.removed
-      join episodes e on e.podcast_id = p.id and e.status = 'ready' and e.language = k.language and e.audio_url is not null
-      join transcripts t on t.episode_id = e.id
-      where k.language = any(${[...LAUNCH_LANGUAGES]})
-      order by k.language, k.position, e.published desc nulls last`
+      with per_show as (
+        select distinct on (k.language, p.id) k.language, k.position, p.id as podcast_id, e.audio_url, t.words
+        from picks k join podcasts p on p.id = k.podcast_id and not p.removed
+        join episodes e on e.podcast_id = p.id and e.status = 'ready' and e.language = k.language and e.audio_url is not null
+        join transcripts t on t.episode_id = e.id
+        where k.language = any(${[...LAUNCH_LANGUAGES]})
+        order by k.language, p.id, e.published desc nulls last
+      ), ranked as (
+        select *, row_number() over (partition by language order by position, podcast_id) as n from per_show
+      )
+      select language, audio_url, words from ranked where n <= ${GUESS_CLIPS_PER_LANGUAGE} order by language, n`
     const clips: GuessClip[] = []
     for (const r of rows) {
       const clip = guessClip(r.words ?? [])

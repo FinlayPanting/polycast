@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GUESS_TELLS, guessClip, guessReply, nextGuess } from './guessLanguage'
+import { GUESS_TELLS, guessClip, guessKey, guessReply, nextGuess } from './guessLanguage'
 import { unkindReasons } from './kindness'
 import { LAUNCH_LANGUAGES } from './types'
 
@@ -43,5 +43,30 @@ describe('guess the language while the guide prepares (PC-1028-06)', () => {
     expect(nextGuess([{ language: 'sv' }], 'sv')?.language).toBe('sv')
     expect(nextGuess([], 'sv')).toBeUndefined()
     expect(nextGuess(clips, undefined, () => 0.999)?.language).toBe('es')
+  })
+
+  it('never repeats a clip until every clip has been heard (PC-1029-04)', () => {
+    const clips = ['sv', 'es', 'fr'].flatMap((language) => [1, 2].map((n) => ({ language, audioUrl: `https://a.example/${language}${n}.mp3`, start: 10 })))
+    const played = new Set<string>()
+    let previous: string | undefined
+    for (let i = 0; i < clips.length; i++) {
+      const next = nextGuess(clips, previous, Math.random, played)!
+      expect(played.has(guessKey(next))).toBe(false)
+      played.add(guessKey(next))
+      previous = next.language
+    }
+    expect(played.size).toBe(clips.length)
+    // All heard: they come round again rather than the game stopping.
+    expect(nextGuess(clips, previous, Math.random, played)).toBeDefined()
+  })
+
+  it('prefers a clip not yet heard over a change of language', () => {
+    const clips = [
+      { language: 'sv', audioUrl: 'a', start: 1 },
+      { language: 'sv', audioUrl: 'b', start: 1 },
+      { language: 'es', audioUrl: 'c', start: 1 },
+    ]
+    const played = new Set([guessKey(clips[0]!), guessKey(clips[2]!)])
+    expect(nextGuess(clips, 'sv', () => 0, played)).toBe(clips[1])
   })
 })

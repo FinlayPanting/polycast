@@ -1,5 +1,5 @@
-import { guessReply, nextGuess, type GuessClip } from '@polycast/core'
-import { useEffect, useState } from 'react'
+import { guessKey, guessReply, nextGuess, type GuessClip } from '@polycast/core'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { api } from '../lib/api'
 import { LANGUAGES } from '../lib/languages'
@@ -20,6 +20,8 @@ export function GuessTheLanguage({ guideName }: { guideName: string }) {
   const [current, setCurrent] = useState<GuessClip>()
   const [heard, setHeard] = useState(false)
   const [reply, setReply] = useState<string>()
+  // Clips already played on this screen, so a second round of a language is a different host (PC-1029-04).
+  const played = useRef(new Set<string>())
 
   useEffect(() => {
     let live = true
@@ -40,12 +42,13 @@ export function GuessTheLanguage({ guideName }: { guideName: string }) {
 
   const listen = () => {
     setHeard(true)
+    played.current.add(guessKey(current))
     void play(current.audioUrl, current.start, current.end).catch(() => {})
   }
   const another = () => {
     setReply(undefined)
     setHeard(false)
-    setCurrent(nextGuess(clips, current.language))
+    setCurrent(nextGuess(clips, current.language, Math.random, played.current))
   }
 
   return (

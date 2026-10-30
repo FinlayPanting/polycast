@@ -62,9 +62,27 @@ export interface GuessClip extends Clip {
   audioUrl: string
 }
 
-/** The next clip to play: a random one, never the language just heard (when there's a choice). */
-export function nextGuess<T extends { language: string }>(clips: T[], previous?: string, random: () => number = Math.random): T | undefined {
-  const pool = clips.length > 1 ? clips.filter((c) => c.language !== previous) : clips
+/** Up to this many clips per language, each from a different show (PC-1029-04). */
+export const GUESS_CLIPS_PER_LANGUAGE = 5
+
+/** Identifies one clip, so the game can tell which it has already played. */
+export function guessKey(c: { language: string; audioUrl?: string; start?: number }): string {
+  return `${c.language}|${c.audioUrl ?? ''}|${c.start ?? ''}`
+}
+
+/**
+ * The next clip to play: a random one, never the language just heard (when there's a choice) and never one already
+ * played (PC-1029-04). Once every clip has been heard, any may come round again.
+ */
+export function nextGuess<T extends { language: string; audioUrl?: string; start?: number }>(
+  clips: T[],
+  previous?: string,
+  random: () => number = Math.random,
+  played: ReadonlySet<string> = new Set(),
+): T | undefined {
+  const fresh = clips.filter((c) => !played.has(guessKey(c)))
+  const from = fresh.length ? fresh : clips
+  const pool = from.length > 1 && from.some((c) => c.language !== previous) ? from.filter((c) => c.language !== previous) : from
   if (!pool.length) return undefined
   return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))]
 }

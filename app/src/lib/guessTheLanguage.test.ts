@@ -20,4 +20,9 @@ describe('guess the language while the guide prepares (PC-1028-06)', () => {
     expect(game).toContain('useHostClip')
     expect(game.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/score|points|streak|AsyncStorage|api\.(mood|listen)/i)
   })
+
+  it('does not repeat a clip it has already played until all have been heard (PC-1029-04)', () => {
+    expect(game).toContain('played.current.add(guessKey(current))')
+    expect(game).toContain('nextGuess(clips, current.language, Math.random, played.current)')
+  })
 })

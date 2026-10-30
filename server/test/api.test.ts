@@ -710,8 +710,30 @@ run('API and worker', () => {
     expect(sv).toMatchObject({ language: 'sv', audioUrl: expect.stringMatching(/^https:\/\/a\.example\//) })
     expect(sv.end - sv.start).toBeCloseTo(3)
     for (const c of clips) expect(['es', 'fr', 'de', 'it', 'pt', 'sv']).toContain(c.language)
-    expect(new Set(clips.map((c: any) => c.language)).size).toBe(clips.length)
+    expect(new Set(clips.map((c: any) => c.audioUrl)).size).toBe(clips.length)
     expect((await api().request('/v1/guess-clips')).status).toBe(401)
+  })
+
+  it('offers up to five clips per language, each from a different show (PC-1029-04)', async () => {
+    const words = Array.from({ length: 30 }, (_, i) => ({ text: `palabra${i}`, start: i * 0.4, end: i * 0.4 + 0.3 }))
+    for (let n = 0; n < 7; n++) {
+      const [p] = await sql`insert into podcasts (feed_url, title, language) values (${`https://feeds.example.com/es-guess-${n}.xml`}, ${`Show ${n}`}, 'es') returning id`
+      await sql`insert into picks (language, podcast_id, position) values ('es', ${p!.id}, ${10 + n})`
+      // Two ready episodes per show: only the newest is used, so no show is heard twice.
+      for (const [guid, days] of [[`es-guess-${n}-old`, 7], [`es-guess-${n}-new`, 0]] as const) {
+        const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+          values (${p!.id}, ${guid}, ${guid}, now() - make_interval(days => ${days}), 900, ${`https://a.example/${guid}.mp3`}, 'es', 'ready') returning id`
+        await sql`insert into transcripts (episode_id, language, native_language, source, words, segments)
+          values (${e!.id}, 'es', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])})`
+      }
+    }
+    const { clips } = await (await call(await learner(), 'GET', '/v1/guess-clips')).json()
+    const es = clips.filter((c: any) => c.language === 'es')
+    expect(es).toHaveLength(5)
+    expect(es.every((c: any) => c.audioUrl.endsWith('-new.mp3'))).toBe(true)
+    expect(new Set(es.map((c: any) => c.audioUrl)).size).toBe(5)
+    // The first five picks, in Finlay's order.
+    expect(es.map((c: any) => c.audioUrl.match(/es-guess-(\d)/)[1]).sort()).toEqual(['0', '1', '2', '3', '4'])
   })
 
   it('keeps an empty "You already know" answer for five minutes, not an hour (PC-1023-01)', async () => {
