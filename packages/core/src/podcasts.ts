@@ -90,6 +90,31 @@ function alternateAudio(alternates: any[] | undefined): string | undefined {
   return undefined
 }
 
+/**
+ * Measurement links ('prefixes') known to have stopped working (PC-1029-01). A prefix sits in front of the real
+ * file's address and redirects to it; once its service shuts down the redirect dies and the episode can't be fetched.
+ * Podcorn (now Audacy Creator Lab) stops its pdcn.co/e/ prefix on 1 November 2026.
+ */
+export const DEAD_PREFIXES: { name: string; pattern: RegExp }[] = [{ name: 'Podcorn', pattern: /^https?:\/\/(?:www\.)?pdcn\.co\/e\//i }]
+
+/**
+ * The episode's address with known dead prefixes taken off, so preparing and playing go straight to the real file.
+ * The rest is the real address, with or without its scheme (Podcorn's instructions swap "http://" for the prefix).
+ * Addresses without a dead prefix come back unchanged.
+ */
+export function withoutDeadPrefixes(url: string): string {
+  let out = url
+  for (let i = 0; i < 5; i++) {
+    const dead = DEAD_PREFIXES.find((p) => p.pattern.test(out))
+    if (!dead) break
+    const scheme = /^http:/i.test(out) ? 'http' : 'https'
+    const rest = out.replace(dead.pattern, '')
+    if (!rest || rest.startsWith('/')) break
+    out = /^https?:\/\//i.test(rest) ? rest : `${scheme}://${rest}`
+  }
+  return out
+}
+
 /** Parses an RSS or Atom podcast feed. Throws if the document is not a feed. */
 export function parseFeed(xml: string): Feed {
   const start = xml.trimStart()
@@ -119,7 +144,7 @@ export function parseFeed(xml: string): Feed {
         title: text(item.title) ?? 'Untitled episode',
         published: isoDate(text(item.pubDate) ?? text(item.published) ?? text(item.updated)),
         durationSec: parseDuration(text(item['itunes:duration'])),
-        audioUrl,
+        audioUrl: withoutDeadPrefixes(audioUrl),
         description: text(item['itunes:summary']) ?? text(item.description) ?? text(item.summary),
         image: item['itunes:image']?.['@href'] ?? channelImage,
         transcripts,

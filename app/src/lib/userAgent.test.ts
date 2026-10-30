@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { POLYCAST_USER_AGENT, audioHeaders, audioSource } from './userAgent'
+import { POLYCAST_USER_AGENT, audioHeaders, audioSource, streamUrl } from './userAgent'
 
 describe('Polycast names itself on audio requests', () => {
   it('matches the pattern hosts use to recognise Polycast', () => {
@@ -13,5 +13,10 @@ describe('Polycast names itself on audio requests', () => {
   it('gives expo-audio a source with headers when it streams, the plain path for a file on the phone', () => {
     expect(audioSource('https://cdn.example/ep.mp3')).toEqual({ uri: 'https://cdn.example/ep.mp3', headers: { 'User-Agent': POLYCAST_USER_AGENT } })
     expect(audioSource('file:///docs/episodes/a.mp3')).toBe('file:///docs/episodes/a.mp3')
+  })
+  it('skips the dead Podcorn prefix on addresses saved before the server did (PC-1029-01)', () => {
+    expect(streamUrl('https://pdcn.co/e/cdn.example/ep.mp3')).toBe('https://cdn.example/ep.mp3')
+    expect(audioSource('https://pdcn.co/e/cdn.example/ep.mp3')).toEqual({ uri: 'https://cdn.example/ep.mp3', headers: { 'User-Agent': POLYCAST_USER_AGENT } })
+    expect(streamUrl('https://cdn.example/ep.mp3')).toBe('https://cdn.example/ep.mp3')
   })
 })

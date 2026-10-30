@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { FINGERPRINT_SAMPLE_RATE, FingerprintBuilder, GUIDE_LUFS, parseIntegratedLoudness } from '@polycast/core'
+import { FINGERPRINT_SAMPLE_RATE, FingerprintBuilder, GUIDE_LUFS, parseIntegratedLoudness, withoutDeadPrefixes } from '@polycast/core'
 import { POLYCAST_UA, safeFetch, TooLarge, UnsafeUrl, type LookupHost } from './safeFetch'
 
 /** Duration of a PCM WAV file from its header. */
@@ -148,8 +148,8 @@ export const EPISODE_MAX_BYTES = 400 * 1024 * 1024
 export function downloadEpisode(fetchImpl: typeof fetch = fetch, maxBytes = EPISODE_MAX_BYTES, opts: { lookupHost?: LookupHost; timeoutMs?: number } = {}) {
   return async (url: string): Promise<Uint8Array> => {
     try {
-      // Podcast links often hop through a few measurement redirects before the file.
-      const res = await safeFetch(url, { fetch: fetchImpl, maxBytes, maxRedirects: 10, timeoutMs: opts.timeoutMs ?? EPISODE_TIMEOUT_MS, lookupHost: opts.lookupHost, headers: POLYCAST_UA })
+      // Podcast links often hop through a few measurement redirects before the file; known dead ones are skipped (PC-1029-01).
+      const res = await safeFetch(withoutDeadPrefixes(url), { fetch: fetchImpl, maxBytes, maxRedirects: 10, timeoutMs: opts.timeoutMs ?? EPISODE_TIMEOUT_MS, lookupHost: opts.lookupHost, headers: POLYCAST_UA })
       if (!res.ok) throw new Error(`Couldn't download the episode: ${res.status}`)
       return res.body
     } catch (e) {

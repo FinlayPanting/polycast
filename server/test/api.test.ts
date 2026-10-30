@@ -671,7 +671,7 @@ run('API and worker', () => {
     const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/it-pick.xml', 'Caffè Italiano', 'it') returning id`
     await sql`insert into picks (language, podcast_id, position) values ('it', ${p!.id}, 1)`
     const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
-      values (${p!.id}, 'it-1', 'Puntata 1', now(), 900, 'https://a.example/it1.mp3', 'it', 'ready') returning id`
+      values (${p!.id}, 'it-1', 'Puntata 1', now(), 900, 'https://pdcn.co/e/a.example/it1.mp3', 'it', 'ready') returning id`
     const text = 'è importante la musica per la famiglia al ristorante con il telefono'
     const words = text.split(' ').map((t, i) => ({ text: t, start: i, end: i + 0.8 }))
     const glossary = {
@@ -686,6 +686,7 @@ run('API and worker', () => {
       values (${e!.id}, 'it', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])}, ${sql.json(glossary)})`
     const other = await learner() // a fresh learner: the empty answer above is cached for an hour per language
     const body = await (await api().request('/v1/known-words/it', { headers: { Authorization: `Bearer ${other}` } })).json()
+    // Saved with Podcorn's prefix, which dies on 1 Nov 2026: handed out without it (PC-1029-01).
     expect(body).toMatchObject({ episodeId: e!.id, podcastTitle: 'Caffè Italiano', audioUrl: 'https://a.example/it1.mp3' })
     expect(body.words.map((w: any) => w.text).sort()).toEqual(['famiglia', 'importante', 'musica', 'ristorante', 'telefono'])
     expect(body.words.find((w: any) => w.text === 'importante')).toEqual({ text: 'importante', meaning: 'important', clip: { start: 0.88, end: 1.92 } })
