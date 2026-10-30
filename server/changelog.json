@@ -656,6 +656,14 @@
    "title": "Empty screens with one thing to do",
    "description": "Before your first listen, the Words and Library screens offer one button that starts a good first listen in your language, straight in with your guide.",
    "tryIt": "Open Words or Library before you’ve listened to anything"
+  },
+  {
+   "id": "PC-1029-03",
+   "date": "2026-10-30",
+   "kind": "Bug",
+   "title": "Host clips play in full on a slow connection",
+   "description": "When you tap to hear the host say a word, or play the guessing game's clip, it now plays to the end even if the audio takes a moment to load.",
+   "tryIt": "Tap a word's play button in Review or on an episode's word list"
   }
  ]
 }

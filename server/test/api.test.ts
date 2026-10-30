@@ -41,9 +41,9 @@ run('API and worker', () => {
   })
   afterAll(async () => drop?.())
 
-  /** The token is just the user id here; production verifies a Supabase token. */
+  /** The token is just the user id here; production verifies a Supabase token. Only the literal 'bad' is refused (a random id can start with 'bad'). */
   const api = () =>
-    createApi({ sql, verify: async (t) => (t.startsWith('bad') ? undefined : t), fetch: fakeFetch, lookupHost: publicHost, alert: async (k, m) => void alerts.push(`${k}: ${m}`) })
+    createApi({ sql, verify: async (t) => (t === 'bad' ? undefined : t), fetch: fakeFetch, lookupHost: publicHost, alert: async (k, m) => void alerts.push(`${k}: ${m}`) })
 
   async function learner(): Promise<string> {
     const id = randomUUID()
