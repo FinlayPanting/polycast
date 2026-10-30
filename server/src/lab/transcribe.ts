@@ -20,11 +20,22 @@ export const VOXTRAL_PER_MIN_USD = 0.0035
 /** Mistral takes up to 100 words or phrases to bias towards. */
 export const VOXTRAL_CONTEXT_MAX = 100
 
-export type TranscribeProvider = 'scribe' | 'voxtral'
+/**
+ * Gladia Solaria-3 (PC-1029-09): Gladia's most accurate model for European languages, pre-recorded only. Self-serve
+ * price €0.16 an hour (Gladia, 27 Oct 2026), taken here as $0.19 (about 1.16 dollars to the euro).
+ */
+export const GLADIA_TRANSCRIBE_MODEL = 'solaria-3'
+export const GLADIA_PER_HOUR_USD = 0.19
+/** How long the Lab waits for Gladia to finish a clip before giving up. */
+export const GLADIA_MAX_WAIT_MS = 5 * 60_000
+
+export type TranscribeProvider = 'scribe' | 'voxtral' | 'gladia'
+export const TRANSCRIBE_PROVIDERS: TranscribeProvider[] = ['scribe', 'voxtral', 'gladia']
 
 /** What each provider costs for an hour of audio, name hints included. */
 export function transcribePerHourUSD(provider: TranscribeProvider, at?: Date): number {
   if (provider === 'voxtral') return VOXTRAL_PER_MIN_USD * 60
+  if (provider === 'gladia') return GLADIA_PER_HOUR_USD
   const p = pricesOn(at)
   return (p.transcriptionPerSec + p.transcriptEditPerSec) * 3600
 }
@@ -97,6 +108,70 @@ export function voxtralTranscriber(apiKey: string, fetchImpl: typeof fetch = fet
   }
 }
 
+/** Timed words from a finished Gladia job: every utterance's words, in order. */
+export function wordsFromGladia(body: unknown): Word[] {
+  const utterances: any[] = (body as any)?.result?.transcription?.utterances ?? []
+  const out: Word[] = []
+  for (const u of Array.isArray(utterances) ? utterances : []) {
+    for (const w of Array.isArray(u?.words) ? u.words : []) {
+      const text = String(w?.word ?? '').trim()
+      const start = Number(w?.start)
+      const end = Number(w?.end)
+      if (text && Number.isFinite(start) && Number.isFinite(end)) out.push({ text, start, end, ...(u?.speaker != null ? { speaker: String(u.speaker) } : {}) })
+    }
+  }
+  return out.sort((a, b) => a.start - b.start)
+}
+
+/**
+ * Gladia speech to text (`/v2/upload`, then `/v2/pre-recorded`, polled until done) with Solaria-3. No language is
+ * given, so it detects one (the page shows what it heard: the Swedish check). The show's names go in as custom
+ * vocabulary.
+ */
+export function gladiaTranscriber(
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+  opts: { model?: string; pollMs?: number; maxWaitMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Transcriber {
+  const headers = { 'x-gladia-key': apiKey }
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  const json = async (res: Response) => {
+    if (!res.ok) throw errorFromResponse('Gladia', res.status, await res.text())
+    return (await res.json()) as any
+  }
+  return {
+    async transcribe({ audioUrl, audio, durationSec, names }) {
+      let url = audioUrl
+      if (audio) {
+        const form = new FormData()
+        form.set('audio', new Blob([audio as BlobPart], { type: 'audio/mpeg' }), 'clip.mp3')
+        url = (await json(await fetchImpl('https://api.gladia.io/v2/upload', { method: 'POST', headers, body: form }))).audio_url
+      }
+      const vocabulary = contextBias(names)
+      const job = await json(
+        await fetchImpl('https://api.gladia.io/v2/pre-recorded', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_url: url, model: opts.model ?? GLADIA_TRANSCRIBE_MODEL, ...(vocabulary.length ? { custom_vocabulary: true, custom_vocabulary_config: { vocabulary } } : {}) }),
+        }),
+      )
+      const resultUrl: string = job.result_url ?? `https://api.gladia.io/v2/pre-recorded/${job.id}`
+      const deadline = Date.now() + (opts.maxWaitMs ?? GLADIA_MAX_WAIT_MS)
+      for (;;) {
+        const r = await json(await fetchImpl(resultUrl, { headers }))
+        if (r.status === 'done') {
+          const words = wordsFromGladia(r)
+          const seconds = Number(r.result?.metadata?.audio_duration)
+          return { words, detectedLanguage: r.result?.transcription?.languages?.[0] ?? undefined, usage: { transcriptionSec: Number.isFinite(seconds) ? seconds : Math.max(durationSec, words.at(-1)?.end ?? 0) } }
+        }
+        if (r.status === 'error') throw new Error(`Gladia couldn't transcribe the clip${r.error_code ? ` (${r.error_code})` : ''}`)
+        if (Date.now() > deadline) throw new Error('Gladia took too long to transcribe the clip')
+        await sleep(opts.pollMs ?? 2000)
+      }
+    },
+  }
+}
+
 const tokens = (words: Word[], language: string) => words.map((w) => normalizeToken(w.text, language)).filter(Boolean)
 
 /** Word error rate of `hyp` against `ref` (edits over reference words), on normalised words. */
@@ -125,7 +200,7 @@ export interface TranscribeResult {
   text?: string
   words?: number
   detectedLanguage?: string
-  /** Agreement with the other provider's transcript of the same clip, 0 to 1 (1 minus word error rate). */
+  /** Agreement with Scribe's transcript of the same clip, 0 to 1 (1 minus word error rate); on Scribe, with the one other when there are only two. */
   agreement?: number
   names?: { name: string; found: boolean }[]
   seconds?: number
@@ -133,16 +208,16 @@ export interface TranscribeResult {
   perHourUSD: number
 }
 
-export const TRANSCRIBE_LABEL: Record<TranscribeProvider, string> = { scribe: 'ElevenLabs Scribe v2 (now)', voxtral: 'Mistral Voxtral Mini Transcribe 3' }
+export const TRANSCRIBE_LABEL: Record<TranscribeProvider, string> = { scribe: 'ElevenLabs Scribe v2 (now)', voxtral: 'Mistral Voxtral Mini Transcribe 3', gladia: 'Gladia Solaria-3' }
 
 /** What a comparison of `seconds` of audio will cost. */
 export function estimateTranscribeUSD(seconds: number, at?: Date) {
-  const estimate = (['scribe', 'voxtral'] as const).map((p) => ({ label: TRANSCRIBE_LABEL[p], usd: transcribeCostUSD(p, seconds, at) }))
+  const estimate = TRANSCRIBE_PROVIDERS.map((p) => ({ label: TRANSCRIBE_LABEL[p], usd: transcribeCostUSD(p, seconds, at) }))
   return { estimate, totalUSD: estimate.reduce((a, e) => a + e.usd, 0) }
 }
 
 /**
- * Runs the clip through both, one after the other. A provider that isn't set up, or fails, shows its error and
+ * Runs the clip through each (Scribe, Voxtral, Gladia), one after the other. A provider that isn't set up, or fails, shows its error and
  * costs nothing; the other still runs.
  */
 export async function compareTranscription(
@@ -158,11 +233,12 @@ export async function compareTranscription(
   const make = (p: TranscribeProvider): Transcriber | string => {
     if (opts.transcribers?.[p]) return opts.transcribers[p]!
     if (p === 'scribe') return keys.elevenlabs ? scribeTranscriber(keys.elevenlabs, f) : 'Scribe isn’t set up on the server (ELEVENLABS_API_KEY).'
+    if (p === 'gladia') return keys.gladia ? gladiaTranscriber(keys.gladia, f) : 'Gladia isn’t set up on the server (GLADIA_API_KEY).'
     return keys.mistral ? voxtralTranscriber(keys.mistral, f) : 'Mistral isn’t set up on the server (MISTRAL_API_KEY).'
   }
   const results: TranscribeResult[] = []
   const heard: Partial<Record<TranscribeProvider, string[]>> = {}
-  for (const p of ['scribe', 'voxtral'] as const) {
+  for (const p of TRANSCRIBE_PROVIDERS) {
     const base = { provider: p, label: TRANSCRIBE_LABEL[p], perHourUSD: transcribePerHourUSD(p) }
     const t = make(p)
     if (typeof t === 'string') {
@@ -187,9 +263,12 @@ export async function compareTranscription(
       results.push({ ...base, ok: false, error: e instanceof Error ? e.message : String(e), costUSD: 0 })
     }
   }
-  if (heard.scribe && heard.voxtral) {
-    const agreement = Math.max(0, 1 - wordErrorRate(heard.scribe, heard.voxtral))
-    for (const r of results) if (r.ok) r.agreement = Math.round(agreement * 1000) / 1000
+  const round = (n: number) => Math.round(Math.max(0, n) * 1000) / 1000
+  if (heard.scribe) {
+    const others = results.filter((r) => r.ok && r.provider !== 'scribe')
+    for (const r of others) r.agreement = round(1 - wordErrorRate(heard.scribe, heard[r.provider]!))
+    const scribe = results.find((r) => r.provider === 'scribe')
+    if (scribe && others.length === 1) scribe.agreement = others[0]!.agreement
   }
   return results
 }

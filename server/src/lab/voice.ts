@@ -42,6 +42,8 @@ export interface LabKeys {
   anthropic?: string
   /** Mistral's Voxtral voices (PC-1022-09), from MISTRAL_API_KEY. */
   mistral?: string
+  /** Gladia's Solaria-3 transcription (PC-1029-09), from GLADIA_API_KEY. */
+  gladia?: string
 }
 
 export interface VoicedTake {

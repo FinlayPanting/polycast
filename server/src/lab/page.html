@@ -292,7 +292,7 @@ audio { width: 100%; height: 40px; }
 <!-- TRANSCRIBE -->
 <section id="transcribe">
   <h2>Transcribe</h2>
-  <p class="lede">The start of one episode through Scribe (what episodes use now) and Mistral's Voxtral, side by side: how far they agree, which of the show's names each spelt right, the language each heard, and what each costs an hour. The clip is cut in memory and never kept.</p>
+  <p class="lede">The start of one episode through Scribe (what episodes use now), Mistral's Voxtral and Gladia's Solaria-3, side by side: how far each agrees with Scribe, which of the show's names each spelt right, the language each heard, and what each costs an hour. The clip is cut in memory and never kept.</p>
   <div class="row">
     <label style="flex:3 1 260px">Episode<select id="tEpisode"></select></label>
     <label style="flex:1 1 140px">How much<select id="tMinutes"><option value="2">First 2 minutes</option><option value="5" selected>First 5 minutes</option><option value="10">First 10 minutes</option><option value="15">First 15 minutes</option></select></label>
@@ -776,14 +776,14 @@ $('#tRun').addEventListener('click', async () => {
   try {
     const r = await api('/transcribe', tBody())
     const out = $('#tOut')
-    out.innerHTML = `<div class="actions" style="margin:0 0 12px"><span class="muted">Cost <b>${usd(r.costUSD)}</b> for ${clock(r.seconds)} of audio${r.results[0]?.agreement != null ? ` · the two agree on <b>${Math.round(r.results[0].agreement * 100)}%</b> of words` : ''}</span></div><div class="cols"></div>`
+    out.innerHTML = `<div class="actions" style="margin:0 0 12px"><span class="muted">Cost <b>${usd(r.costUSD)}</b> for ${clock(r.seconds)} of audio</span></div><div class="cols"></div>`
     r.results.forEach((x) => {
       const c = document.createElement('div')
       c.className = 'card result'
       const lang = x.detectedLanguage ? `heard as <b>${esc(LANG[x.detectedLanguage] || x.detectedLanguage)}</b>${x.detectedLanguage.slice(0, 2) !== r.language ? ' <span class="warnline">not the episode’s language</span>' : ''}` : ''
       c.innerHTML = `<div class="head"><span class="name">${esc(x.label)}</span><span class="meta">${usd(x.costUSD)}${x.seconds != null ? ` · ${x.seconds}s` : ''}</span></div>
         <div class="muted">About ${usd(x.perHourUSD)} an hour${lang ? ' · ' + lang : ''}</div>
-        ${x.ok ? `<div class="stats"><span class="chip"><b>${x.words}</b> words</span>${(x.names || []).map((n) => `<span class="chip">${n.found ? '✓' : '✗'} ${esc(n.name)}</span>`).join('')}</div>
+        ${x.ok ? `<div class="stats"><span class="chip"><b>${x.words}</b> words</span>${x.provider !== 'scribe' && x.agreement != null ? `<span class="chip">agrees with Scribe on <b>${Math.round(x.agreement * 100)}%</b></span>` : ''}${(x.names || []).map((n) => `<span class="chip">${n.found ? '✓' : '✗'} ${esc(n.name)}</span>`).join('')}</div>
         <div class="doc"><p>${esc(x.text)}</p></div>` : `<div class="err">${esc(x.error)}</div>`}`
       $('.cols', out).append(c)
     })

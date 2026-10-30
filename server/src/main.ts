@@ -105,7 +105,7 @@ async function main() {
     ? {
         sql,
         token: process.env.LAB_TOKEN,
-        keys: { elevenlabs: process.env.ELEVENLABS_API_KEY, googleTts: process.env.GOOGLE_TTS_API_KEY, gemini, anthropic: process.env.ANTHROPIC_API_KEY, mistral: process.env.MISTRAL_API_KEY },
+        keys: { elevenlabs: process.env.ELEVENLABS_API_KEY, googleTts: process.env.GOOGLE_TTS_API_KEY, gemini, anthropic: process.env.ANTHROPIC_API_KEY, mistral: process.env.MISTRAL_API_KEY, gladia: process.env.GLADIA_API_KEY },
         storage,
         download: downloadEpisode(),
         fingerprint: ffmpegFingerprint(),

@@ -15,7 +15,7 @@ import { cleanTake, voiceAndStore, type LabKeys, type Take } from './voice'
 import { comparePlans, compareScripts, estimatePlanUSD, estimateScriptUSD } from './writing'
 import { splitScript } from '../pipeline/voice'
 import { showNamesFor } from '../worker'
-import { compareTranscription, estimateTranscribeUSD, TRANSCRIBE_LABEL, transcribePerHourUSD, VOXTRAL_TRANSCRIBE_MODEL } from './transcribe'
+import { compareTranscription, estimateTranscribeUSD, GLADIA_TRANSCRIBE_MODEL, TRANSCRIBE_LABEL, transcribePerHourUSD, VOXTRAL_TRANSCRIBE_MODEL } from './transcribe'
 
 /**
  * The Lab (PC-1021-L1): a password-protected page on the server for testing what Mia and Leo sound
@@ -224,6 +224,7 @@ export function createLab(deps: LabDeps) {
       transcribe: {
         scribe: { label: TRANSCRIBE_LABEL.scribe, available: Boolean(deps.keys.elevenlabs), perHourUSD: transcribePerHourUSD('scribe') },
         voxtral: { label: TRANSCRIBE_LABEL.voxtral, model: VOXTRAL_TRANSCRIBE_MODEL, available: Boolean(deps.keys.mistral), perHourUSD: transcribePerHourUSD('voxtral') },
+        gladia: { label: TRANSCRIBE_LABEL.gladia, model: GLADIA_TRANSCRIBE_MODEL, available: Boolean(deps.keys.gladia), perHourUSD: transcribePerHourUSD('gladia') },
       },
       sounds: Object.entries(SOUND_PRESETS).map(([id, s]) => ({ id, label: s.label, note: s.note })),
       elevenEffects: roomSettings(catalog).filter((s) => s.effects).map((s) => ({ label: s.label, note: s.note, effects: s.effects })),
@@ -392,7 +393,7 @@ export function createLab(deps: LabDeps) {
     }
   })
 
-  // Transcription audition (PC-1026-04): the start of an episode through Scribe and Voxtral, side by side.
+  // Transcription audition (PC-1026-04, PC-1029-09): the start of an episode through Scribe, Voxtral and Gladia, side by side.
   app.post('/api/transcribe', async (c) => {
     try {
       const body = await c.req.json()
