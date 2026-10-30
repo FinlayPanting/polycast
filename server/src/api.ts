@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, isTipProduct, isVideo, knownWords, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord } from '@polycast/core'
+import { cohortAlert, GUESS_CLIPS_PER_LANGUAGE, guessClip, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -17,7 +17,7 @@ import { lessonPage, recentLessons } from './lessons'
 import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { feedTranscriptLink } from './worker'
-import { addressKey, clientAddress, rateLimiter } from './rateLimit'
+import { addressKey, blockKey, clientAddress, rateLimiter } from './rateLimit'
 import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -40,6 +40,8 @@ export interface ApiDeps {
   verify: VerifyToken
   fetch: Fetch
   podcastIndex?: { key: string; secret: string }
+  /** The commit /health reports; defaults to Railway's RAILWAY_GIT_COMMIT_SHA (PC-1029-05). */
+  commit?: string
   /** Where Finlay's alerts go (free-cohort thresholds, spending cap). */
   alert?: (kind: string, message: string) => Promise<void>
   /** Shared secret RevenueCat sends with subscription events. */
@@ -82,7 +84,8 @@ function changelogEntries(): ChangelogEntry[] {
 /** Limits on the public removal form. */
 export const REMOVAL_LIMITS = { title: 200, contact: 200, message: 2000, perAddressPerHour: 5, overallPerHour: 30 }
 /** First opens counted per internet address per day (PC-1024-03); generous enough for a shared Wi-Fi or mobile network. */
-export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10, overallPerDay: 5000 }
+/** perBlockPerDay: each IPv6 /48, so one rented block can't fill the overall ceiling (PC-1027-09). */
+export const FIRST_OPEN_LIMITS = { perAddressPerDay: 10, perBlockPerDay: 50, overallPerDay: 5000 }
 
 /**
  * Fair-use limits per signed-in learner, per minute. Each of these calls reaches outside services
@@ -167,6 +170,12 @@ export const MOOD_MESSAGES = {
   paused: 'Mood picks are resting for today. Have a look through the shelves below.',
 }
 
+/** The commit this server was built from, as Railway (or GIT_COMMIT_SHA elsewhere) reports it. */
+export function liveCommit(env: Record<string, string | undefined>): string | undefined {
+  const sha = (env.RAILWAY_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA ?? '').trim()
+  return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.toLowerCase() : undefined
+}
+
 export function createApi(deps: ApiDeps) {
   const { sql } = deps
   const app = new Hono<Env>()
@@ -181,7 +190,10 @@ export function createApi(deps: ApiDeps) {
     app.route('/lab', createLab(deps.lab))
   }
 
-  app.get('/health', (c) => c.json({ ok: true }))
+  // Which code is live (PC-1029-05): Railway sets RAILWAY_GIT_COMMIT_SHA for each deployment, so a push that
+  // failed to deploy shows up as the old commit rather than as a quiet "ok".
+  const commit = deps.commit ?? liveCommit(process.env)
+  app.get('/health', (c) => c.json({ ok: true, ...(commit ? { commit } : {}) }))
   // What's new (PC-1019-F02): the change log, public and cacheable, so it updates with every push.
   app.get('/changelog', (c) => {
     c.header('Cache-Control', 'public, max-age=300')
@@ -215,8 +227,13 @@ export function createApi(deps: ApiDeps) {
   // IPv6 callers are counted by their /64 block, and there's an overall daily ceiling, like the removal form's (PC-1025-03).
   const firstOpenLimit = rateLimiter(FIRST_OPEN_LIMITS.perAddressPerDay, 24 * 60 * 60_000)
   const firstOpenOverall = rateLimiter(FIRST_OPEN_LIMITS.overallPerDay, 24 * 60 * 60_000)
+  // Each IPv6 /48 too, in its own limiter so IPv4 callers never push a block's count out of memory (PC-1027-09).
+  const firstOpenBlock = rateLimiter(FIRST_OPEN_LIMITS.perBlockPerDay, 24 * 60 * 60_000)
   app.post('/events/first-open', async (c) => {
-    if (!firstOpenLimit.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !firstOpenOverall.hit('all')) return c.json({ error: 'Already counted today.' }, 429)
+    const address = clientAddress((n) => c.req.header(n))
+    const block = blockKey(address)
+    if (!firstOpenLimit.hit(addressKey(address)) || (block !== undefined && !firstOpenBlock.hit(block)) || !firstOpenOverall.hit('all'))
+      return c.json({ error: 'Already counted today.' }, 429)
     await countFirstOpen(sql)
     return c.json({ ok: true })
   })
@@ -605,12 +622,42 @@ export function createApi(deps: ApiDeps) {
     for (const ep of candidates) {
       const words = knownWords(ep.words, ep.glossary ?? undefined, language)
       if (words.length >= 3) {
-        body = { episodeId: ep.id, episodeTitle: ep.title, podcastTitle: ep.podcast_title, audioUrl: ep.audio_url, words }
+        body = { episodeId: ep.id, episodeTitle: ep.title, podcastTitle: ep.podcast_title, audioUrl: withoutDeadPrefixes(ep.audio_url), words }
         break
       }
     }
     knownCache.set(key, { at: Date.now(), body })
     return c.json(body)
+  })
+
+  /**
+   * Guess the language while the guide prepares (PC-1028-06): three seconds of a real host per launch language,
+   * up to five per language, each from the newest ready episode of a different Polycast pick (PC-1029-04). Cut from
+   * existing transcripts, so no AI is used and nothing is stored; the audio streams from the publisher. Kept for an
+   * hour (five minutes when empty).
+   */
+  let guessCache: { at: number; clips: GuessClip[] } | undefined
+  app.get('/v1/guess-clips', async (c) => {
+    if (guessCache && Date.now() - guessCache.at < (guessCache.clips.length ? 3600_000 : 300_000)) return c.json({ clips: guessCache.clips })
+    const rows = await sql`
+      with per_show as (
+        select distinct on (k.language, p.id) k.language, k.position, p.id as podcast_id, e.audio_url, t.words
+        from picks k join podcasts p on p.id = k.podcast_id and not p.removed
+        join episodes e on e.podcast_id = p.id and e.status = 'ready' and e.language = k.language and e.audio_url is not null
+        join transcripts t on t.episode_id = e.id
+        where k.language = any(${[...LAUNCH_LANGUAGES]})
+        order by k.language, p.id, e.published desc nulls last
+      ), ranked as (
+        select *, row_number() over (partition by language order by position, podcast_id) as n from per_show
+      )
+      select language, audio_url, words from ranked where n <= ${GUESS_CLIPS_PER_LANGUAGE} order by language, n`
+    const clips: GuessClip[] = []
+    for (const r of rows) {
+      const clip = guessClip(r.words ?? [])
+      if (clip) clips.push({ language: r.language, audioUrl: withoutDeadPrefixes(r.audio_url), ...clip })
+    }
+    guessCache = { at: Date.now(), clips }
+    return c.json({ clips })
   })
 
   app.get('/v1/episodes/:id/primer', async (c) => {
@@ -648,7 +695,7 @@ export function createApi(deps: ApiDeps) {
       ? await sql`select plan, guide_id from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
       : []
     return c.json({
-      episode: { id: episode.id, title: episode.title, podcastTitle: episode.podcast_title, audioUrl: episode.audio_url, image: episode.image ?? episode.artwork, durationSec: episode.duration_sec },
+      episode: { id: episode.id, title: episode.title, podcastTitle: episode.podcast_title, audioUrl: withoutDeadPrefixes(episode.audio_url), image: episode.image ?? episode.artwork, durationSec: episode.duration_sec },
       transcript,
       guided,
       guidanceLevel: guided ? level : null,

@@ -11,6 +11,7 @@ import { rememberHandled } from '../../lib/autoDownload'
 import { earlyPrimerUrl, jumpStart, loadEarlyPrimer, primerSource } from '../../lib/primer'
 import { config } from '../../lib/config'
 import { Primer, PrimerBuilding } from '../../components/Primer'
+import { GuessTheLanguage } from '../../components/GuessTheLanguage'
 import { TranslatedDescription, TranslatedLine } from '../../components/Translated'
 import { useTranslations } from '../../lib/translate'
 import type { Primer as PrimerData } from '@polycast/core'
@@ -301,6 +302,7 @@ export default function Episode() {
               ) : null}
             </View>
             {earlyPrimer ? <PrimerBuilding primer={earlyPrimer} guide={guideName(profile?.guide_id)} language={profile?.target_language} /> : null}
+            {offline || config.demo ? null : <GuessTheLanguage guideName={guideName(profile?.guide_id)} />}
           </View>
         ) : (
           <View style={{ gap: space.md }}>

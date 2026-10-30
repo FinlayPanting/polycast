@@ -1,4 +1,4 @@
-import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment } from '@polycast/core'
+import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment, type SeasonStamp } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -10,6 +10,7 @@ import { ShareCard, type ShareCardHandle } from '../../components/ShareCard'
 import { RecapCard, type RecapCardHandle } from '../../components/RecapCard'
 import { didYouKnow, recapLayout, recapMessage, recapWords, wordCardLayout, wordOfTheEpisode, type RecapStats } from '../../lib/recap'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
+import { StampPress } from '../../components/StampPress'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
@@ -18,7 +19,7 @@ import { isOfflineError } from '../../lib/net'
 import { plusInvite } from '../../lib/plusInvite'
 import { skipAdTarget } from '../../lib/skipAd'
 import { playerArtSize } from '../../lib/screenShape'
-import { isTwoPane } from '../../lib/sidePane'
+import { clipTextFrom, isTwoPane } from '../../lib/sidePane'
 import { SidePane } from '../../components/SidePane'
 import { hopBackLabel } from '../../lib/hopBack'
 import { playerMenu, REPORT_FAILED, REPORT_THANKS } from '../../lib/playerMenu'
@@ -27,13 +28,14 @@ import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName, guidanceLevelOr, languageName, voicedGuideId } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
+import { playTwister, twisterUrl } from '../../lib/tongueTwister'
 import { useSession } from '../../lib/session'
 import { countFinished, resumePosition, savePosition } from '../../lib/data'
 import { listWords, SAVE_WORD_FAILED } from '../../lib/words'
 import { plog } from '../../lib/playbackLog'
 import { claimFirstWordBloom } from '../../lib/firstWord'
 import { firstWordLine } from '../../lib/firstWordCore'
-import { DEFAULT_MARK } from '@polycast/core'
+import { DEFAULT_MARK, twisterOffer } from '@polycast/core'
 import { useReducedMotion } from 'react-native-reanimated'
 import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
 import { usePlayer } from '../../player/PlayerProvider'
@@ -172,7 +174,7 @@ function ShareRecap({ data, savedThisListen, stats }: { data: ListenPayload; sav
 }
 
 /** After the episode: the wrap-up questions and the words gathered on the way. */
-function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data: ListenPayload; savedThisListen: string[]; caughtAt: number[]; listenedSec: number; onDone: () => void }) {
+function WrapUp({ data, newStamp, savedThisListen, caughtAt, listenedSec, onDone }: { data: ListenPayload; newStamp?: SeasonStamp; savedThisListen: string[]; caughtAt: number[]; listenedSec: number; onDone: () => void }) {
   const p = usePalette()
   const questions = data.plan?.wrapUpQuestions ?? []
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -187,10 +189,44 @@ function WrapUp({ data, savedThisListen, caughtAt, listenedSec, onDone }: { data
   }, [data.episode.id])
   const answered = Object.keys(answers).length
   const stats = useMemo<RecapStats>(() => ({ minutes: listenedSec / 60, quiz: answered ? { right, of: questions.length } : undefined, completed }), [listenedSec, answered, right, questions.length, completed])
+  // A tongue-twister for the curious (PC-1029-08): hold the guide's mark. Voiced ahead of time, never announced.
+  const { profile } = useSession()
+  const guideId = voicedGuideId(data.guideId, profile?.guide_id)
+  const [twister, setTwister] = useState<Goodbye>()
+  const [twisting, setTwisting] = useState(false)
+  const stopTwister = useRef<() => void>(undefined)
+  useEffect(() => {
+    if (config.demo) return
+    let live = true
+    void loadGoodbye(twisterUrl(config.supabaseUrl, data.transcript.language, guideId)).then((t) => live && setTwister(t))
+    return () => {
+      live = false
+      stopTwister.current?.()
+    }
+  }, [data.transcript.language, guideId])
+  const sayTwister = () => {
+    if (!twister || twisting) return
+    setTwisting(true)
+    const run = playTwister(twister.url)
+    stopTwister.current = run.stop
+    void run.done.then(() => setTwisting(false))
+  }
   return (
     <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
-      <Mark height={44} />
+      <Pressable onLongPress={twister ? sayTwister : undefined} delayLongPress={600} accessible={false} style={{ alignSelf: 'flex-start' }}>
+        <Mark height={44} speaking={twisting} />
+      </Pressable>
+      {twister && twisting ? (
+        <View accessible accessibilityLiveRegion="polite" accessibilityLabel={`${twisterOffer(guideName(guideId))} ${twister.text}, meaning ${twister.meaning}`} style={{ gap: space.xs }}>
+          <Txt tone="quiet">{twisterOffer(guideName(guideId))}</Txt>
+          <Txt variant="heading">{twister.text}</Txt>
+          <Txt variant="small" tone="faint">
+            {twister.meaning}
+          </Txt>
+        </View>
+      ) : null}
       <Txt variant="title">You listened to {data.episode.title}</Txt>
+      {newStamp ? <StampPress stamp={newStamp} /> : null}
       {questions.map((q, i) => (
         <View key={i} style={{ gap: space.sm }}>
           <Txt variant="bodyStrong">{q.prompt}</Txt>
@@ -246,14 +282,8 @@ export default function Listen() {
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
   const [bloom, setBloom] = useState<string>()
 
-  const clipText = useCallback(
-    (c: Clip) =>
-      (data?.transcript.words ?? [])
-        .filter((w) => w.start >= c.start - 0.05 && w.end <= c.end + 0.05)
-        .map((w) => w.text)
-        .join(' '),
-    [data],
-  )
+  // Binary search on word times, not a scan of the whole transcript per clip (PC-1027-10).
+  const clipText = useMemo(() => clipTextFrom(data?.transcript.words ?? []), [data])
 
   // The listen lives above the screens (PC-1017-F04): opening the player starts it, or re-attaches
   // to the one already playing; closing the player leaves it playing in the mini-player.
@@ -303,7 +333,7 @@ export default function Listen() {
       </Screen>
     )
   }
-  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={end} /></Screen>
+  if (state.phase === 'finished') return <Screen edges={['top', 'bottom']}><WrapUp data={data} newStamp={player.newStamp} savedThisListen={saved} caughtAt={caughtAt} listenedSec={Math.min(state.position, data.episode.durationSec)} onDone={end} /></Screen>
 
   const l = player.listen
   const guideOn = state.phase === 'guide' || state.phase === 'question'

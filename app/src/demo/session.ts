@@ -19,6 +19,9 @@ export const DEMO_PROFILE: Profile = {
   interests: ['sport', 'sport/f1', 'comedy'],
 }
 
+/** A learner who has just signed in to the signed-out preview: no language, interests or level chosen yet. */
+export const DEMO_NEW_PROFILE: Profile = { ...DEMO_PROFILE, target_language: null, interests: [] }
+
 const now = new Date(Date.now() - 2 * 86400_000).toISOString()
 const word = (lemma: string, meaning: string, sentence: string, step = 0): SavedWord => ({
   lemma,

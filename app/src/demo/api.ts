@@ -23,6 +23,26 @@ export async function demoCall<T>(method: string, path: string): Promise<T> {
         { id: 'ep7', title: 'Allemansrätten', published: '2026-09-21T06:00:00Z', duration_sec: 2280, image: null, status: 'ready', difficulty: { label: 'B1–B2, natural pace' } },
       ],
     } as T
+  // "You already know these words" (PC-1022-08), so the preview's first run has the same screens as a phone's (PC-1028-07).
+  if (path.startsWith('/v1/known-words/'))
+    return {
+      episodeId: 'ep1',
+      episodeTitle: 'Tåget till Göteborg',
+      podcastTitle: 'Svenska Samtal',
+      audioUrl: LISTEN.episode.audioUrl,
+      words: [
+        { text: 'stationen', meaning: 'the station', clip: { start: 4, end: 4.6 } },
+        { text: 'perfekt', meaning: 'perfect', clip: { start: 9, end: 9.5 } },
+        { text: 'musik', meaning: 'music', clip: { start: 14, end: 14.5 } },
+      ],
+    } as T
+  if (path === '/v1/guess-clips')
+    return {
+      clips: [
+        { language: 'sv', audioUrl: LISTEN.episode.audioUrl, start: 2, end: 5 },
+        { language: 'es', audioUrl: LISTEN.episode.audioUrl, start: 10, end: 13 },
+      ],
+    } as T
   if (path.startsWith('/v1/search')) return { results: [] } as T
   if (path.endsWith('/report-line')) return { ok: true } as T
   if (path === '/v1/library/new-episodes') return { shows: [] } as T

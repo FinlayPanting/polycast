@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addressKey, clientAddress, rateLimiter } from '../src/rateLimit'
+import { addressKey, blockKey, clientAddress, rateLimiter } from '../src/rateLimit'
 
 describe('rate limiter', () => {
   it('allows up to the limit per key in a window, then resets', () => {
@@ -42,5 +42,21 @@ describe('address key (PC-1025-03)', () => {
     expect(addressKey('203.0.113.7')).toBe('203.0.113.7')
     expect(addressKey('::ffff:203.0.113.7')).toBe('203.0.113.7')
     expect(addressKey('unknown')).toBe('unknown')
+  })
+})
+
+describe('wider IPv6 blocks (PC-1027-09)', () => {
+  it('names the /48 an address sits in, however it is written', () => {
+    expect(blockKey('2001:db8:abcd:12::1')).toBe('2001:db8:abcd::/48')
+    expect(blockKey('2001:0db8:abcd:ffff:1:2:3:4')).toBe('2001:db8:abcd::/48')
+    expect(blockKey('[2001:db8:abcd::9]')).toBe('2001:db8:abcd::/48')
+    expect(blockKey('2001:db8:abce::1')).not.toBe(blockKey('2001:db8:abcd::1'))
+  })
+
+  it('leaves IPv4 (and IPv4 written as IPv6) to the per-address count', () => {
+    expect(blockKey('203.0.113.7')).toBeUndefined()
+    expect(blockKey('::ffff:203.0.113.7')).toBeUndefined()
+    expect(blockKey('unknown')).toBeUndefined()
+    expect(addressKey('::ffff:203.0.113.7')).toBe('203.0.113.7')
   })
 })

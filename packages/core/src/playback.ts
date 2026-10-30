@@ -49,7 +49,7 @@ export class GuideTimeline {
    * The learner moved the playhead. Going back a little (replaying a line, 15 seconds back) keeps the
    * moments they've just heard; going back further hears them again.
    */
-  seek(to: number): void {
+  seek(to: number, keep?: (m: GuideMoment) => boolean): void {
     if (to < this.position) {
       const far = this.position - to > REHEAR_AFTER_REWIND_SEC
       for (const m of this.moments) {
@@ -61,7 +61,9 @@ export class GuideTimeline {
         }
       }
     } else {
-      for (const m of this.moments) if (m.at < to) this.done.add(m.id)
+      // `keep` leaves a moment due though it's passed: the introduction, when a first listen starts
+      // where the talking starts rather than at 0 (PC-1027-03).
+      for (const m of this.moments) if (m.at < to && !keep?.(m)) this.done.add(m.id)
     }
     this.position = to
   }
@@ -104,4 +106,26 @@ export function replayLineStart(segments: Segment[], position: number): number {
   // Just after a line starts, "replay" means the previous line.
   if (position - current.start < 1.5 && i > 0) return segments[i - 1]!.start
   return current.start
+}
+
+/** A first guided listen starts this long before the host's first words (PC-1027-03). */
+export const TALK_LEAD_SEC = 1
+/** Talking that starts sooner than this isn't worth skipping to. */
+export const TALK_SKIP_MIN_SEC = 4
+/** Later than this, something unusual is going on (a long cold open of music?): start at 0. */
+export const TALK_SKIP_MAX_SEC = 300
+
+/**
+ * Where a learner's very first guided listen starts (PC-1027-03): a moment before the first subtitle
+ * line that isn't inside an advert, so the first 30 seconds are the host and the guide, not a jingle or
+ * a pre-roll. 0 when the talking starts straight away, or so late that skipping would be a surprise.
+ */
+export function talkStart(segments: Pick<Segment, 'start'>[], adverts?: { start: number; end: number }[]): number {
+  let first: number | undefined
+  for (const s of segments) {
+    if (adverts?.some((a) => s.start >= a.start && s.start < a.end)) continue
+    if (first === undefined || s.start < first) first = s.start
+  }
+  if (first === undefined || first < TALK_SKIP_MIN_SEC || first > TALK_SKIP_MAX_SEC) return 0
+  return Math.max(0, first - TALK_LEAD_SEC)
 }

@@ -22,7 +22,7 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: font.medium, fontSize: 11 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Discover', tabBarIcon: icon('sparkles') }} />
+      <Tabs.Screen name="index" options={{ title: 'Discover', tabBarIcon: icon('safari') }} />
       <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: icon('headphones') }} />
       <Tabs.Screen name="words" options={{ title: 'Words', tabBarIcon: icon('text.book.closed') }} />
       <Tabs.Screen name="you" options={{ title: 'You', tabBarIcon: icon('person.crop.circle') }} />

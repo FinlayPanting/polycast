@@ -18,7 +18,7 @@ import type { Storage } from './providers/types'
 import { Agent, setGlobalDispatcher } from 'undici'
 import { perMinute } from './retry'
 import { jobsInProgress, workLoop } from './worker'
-import { refreshFinishedShows, sendNudges, type Push } from './nudges'
+import { READY_PUSH_TITLE, refreshFinishedShows, sendFirstListenNudges, sendNudges, type Push } from './nudges'
 
 // Node's fetch gives up if a reply takes over 5 minutes to start. Transcribing a long episode
 // can take longer than that, so allow 20 minutes.
@@ -66,7 +66,7 @@ function expoPush(sqlLookup: (userId: string) => Promise<string | undefined>) {
     await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: token, title: 'Your episode is ready', body: title, data: { episodeId } }),
+      body: JSON.stringify({ to: token, title: READY_PUSH_TITLE, body: title, data: { episodeId } }),
     })
   }
 }
@@ -174,6 +174,9 @@ async function main() {
         await refreshFinishedShows(sql, fetch)
         const sent = await sendNudges(sql, expoSend)
         if (sent) console.log(`Sent ${sent} new-episode nudges`)
+        // One nudge, ever, for a learner who hasn't started a guided episode a day after signing up (PC-1026-09).
+        const first = await sendFirstListenNudges(sql, expoSend)
+        if (first) console.log(`Sent ${first} first-listen nudges`)
       } catch (e) {
         console.error('nudge round failed', e)
       }

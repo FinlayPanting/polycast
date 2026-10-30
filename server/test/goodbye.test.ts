@@ -1,4 +1,4 @@
-import { LAUNCH_LANGUAGES } from '@polycast/core'
+import { LAUNCH_LANGUAGES, TONGUE_TWISTERS } from '@polycast/core'
 import { describe, expect, it } from 'vitest'
 import { silentWav } from '../src/audio'
 import { memoryLedger, SpendGuard } from '../src/budget'
@@ -44,7 +44,7 @@ describe('guide goodbye', () => {
     const { s, calls } = speech()
     const storage = memoryStorage()
     const guard = new SpendGuard(memoryLedger(), 5)
-    expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toHaveLength(LAUNCH_LANGUAGES.length * GUIDES.length * 2)
+    expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toHaveLength(LAUNCH_LANGUAGES.length * GUIDES.length * 3)
     const n = calls.length
     expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toEqual([])
     expect(calls).toHaveLength(n)
@@ -64,8 +64,9 @@ describe('guide goodbye', () => {
     const { s, calls } = speech()
     const storage = memoryStorage()
     const guard = new SpendGuard(memoryLedger(), 5)
-    // The goodbyes are already there, as in production: only the twelve goodnights are voiced.
+    // The goodbyes (and tongue-twisters) are already there, as in production: only the twelve goodnights are voiced.
     for (const guide of GUIDES) for (const lang of LAUNCH_LANGUAGES) await voiceGoodbye(lang, guide, { speech: s, storage, guard })
+    for (const guide of GUIDES) for (const lang of LAUNCH_LANGUAGES) await voiceGoodbye(lang, guide, { speech: s, storage, guard }, 'twister')
     const before = calls.length
     const voiced = await ensureGoodbyeAudio({ speech: s, storage, guard })
     expect(voiced).toHaveLength(LAUNCH_LANGUAGES.length * GUIDES.length)
@@ -75,5 +76,22 @@ describe('guide goodbye', () => {
     expect(night).toMatchObject({ text: 'Schlaf gut!', meaning: 'Sleep well!', guideId: 'leo' })
     expect(night.url).toContain('goodbye/v2/de/leo-night.m4a')
     expect(goodbyeManifestPath('de', { id: 'leo' }, 'goodnight')).toBe('goodbye/v2/de/leo-night.json')
+  })
+
+  it('voices one tongue-twister per language and guide beside the goodbye, once (PC-1029-08)', async () => {
+    const { s, calls } = speech()
+    const storage = memoryStorage()
+    const guard = new SpendGuard(memoryLedger(), 5)
+    // Goodbyes and goodnights are already there: only the twelve tongue-twisters are new.
+    for (const kind of ['goodbye', 'goodnight'] as const) for (const guide of GUIDES) for (const lang of LAUNCH_LANGUAGES) await voiceGoodbye(lang, guide, { speech: s, storage, guard }, kind)
+    const before = calls.length
+    const voiced = await ensureGoodbyeAudio({ speech: s, storage, guard })
+    expect(voiced).toHaveLength(12)
+    expect(voiced).toContain('de/leo-twister')
+    expect(calls.slice(before).map((c) => c.text)).toContain('Fischers Fritz fischt frische Fische.')
+    const twister = JSON.parse(new TextDecoder().decode(storage.files.get(goodbyeManifestPath('sv', { id: 'mia' }, 'twister'))!)) as GoodbyeManifest
+    expect(twister).toMatchObject({ text: TONGUE_TWISTERS.sv.text, meaning: TONGUE_TWISTERS.sv.meaning, guideId: 'mia' })
+    expect(goodbyeManifestPath('sv', { id: 'mia' }, 'twister')).toBe('goodbye/v2/sv/mia-twister.json')
+    expect(await ensureGoodbyeAudio({ speech: s, storage, guard })).toEqual([])
   })
 })

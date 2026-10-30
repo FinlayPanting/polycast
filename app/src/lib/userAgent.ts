@@ -6,6 +6,16 @@
  */
 export const POLYCAST_USER_AGENT = 'Polycast/1.0 (+https://polycast.app)'
 
+import { withoutDeadPrefixes } from '@polycast/core'
+
+/**
+ * The address to fetch an episode from: known dead measurement prefixes (Podcorn's, from 1 Nov 2026) are taken off,
+ * so lessons and copies saved before the server did this still play (PC-1029-01).
+ */
+export function streamUrl(url: string): string {
+  return withoutDeadPrefixes(url)
+}
+
 const isRemote = (url: string) => /^https?:\/\//i.test(url)
 
 /** Headers for a request to a publisher's audio: only web addresses need them, not files on the phone. */
@@ -15,6 +25,7 @@ export function audioHeaders(url: string): Record<string, string> | undefined {
 
 /** An expo-audio source for an episode address that names Polycast when it streams. */
 export function audioSource(url: string): string | { uri: string; headers: Record<string, string> } {
-  const headers = audioHeaders(url)
-  return headers ? { uri: url, headers } : url
+  const uri = streamUrl(url)
+  const headers = audioHeaders(uri)
+  return headers ? { uri, headers } : uri
 }

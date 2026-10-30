@@ -29,6 +29,18 @@ describe('downloading an episode', () => {
     expect(seen).toEqual(['https://tracker.example.com/r/ep.mp3', 'https://cdn.example.com/ep.mp3'])
   })
 
+  it('goes straight to the file when the address carries a dead Podcorn prefix (PC-1029-01)', async () => {
+    const seen: string[] = []
+    const fetchImpl = (async (url: string) => {
+      seen.push(url)
+      if (url.includes('pdcn.co')) return new Response(null, { status: 502 })
+      return new Response(new Uint8Array([4, 5]))
+    }) as typeof fetch
+    const bytes = await downloadEpisode(fetchImpl, 1000, { lookupHost: publicHost })('https://pdcn.co/e/cdn.example.com/ep.mp3')
+    expect([...bytes]).toEqual([4, 5])
+    expect(seen).toEqual(['https://cdn.example.com/ep.mp3'])
+  })
+
   it("won't follow a redirect into Railway's private network", async () => {
     const fetchImpl = (async () => new Response(null, { status: 302, headers: { location: 'http://10.0.0.5/secret' } })) as typeof fetch
     await expect(downloadEpisode(fetchImpl, 1000, { lookupHost: publicHost })('https://feeds.example.com/ep.mp3')).rejects.toThrow(/Couldn't download/)

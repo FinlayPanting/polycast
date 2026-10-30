@@ -592,6 +592,86 @@
    "title": "Two panes on the open iPhone Duo",
    "description": "With the Duo open, the player shows subtitles on one side and your guide's notes so far, the words to listen for and the words you've saved on the other. Folded, nothing changes.",
    "tryIt": "Play a guided episode with your iPhone Duo open"
+  },
+  {
+   "id": "PC-1026-09",
+   "date": "2026-10-27",
+   "kind": "Growth",
+   "title": "A gentle hello on day two",
+   "description": "If you've signed up but haven't started an episode with your guide a day later, they'll send one notification naming a good first episode and how long it is. Just once.",
+   "tryIt": "Allow notifications, then wait a day before your first guided listen"
+  },
+  {
+   "id": "PC-1027-03",
+   "date": "2026-10-28",
+   "kind": "UX",
+   "title": "Your first episode starts with the talking",
+   "description": "On your very first guided episode, after your guide's welcome, playback starts just before the host's first words, not at theme music or an advert. Play from the very start is there if you want it.",
+   "tryIt": "Start your first guided episode"
+  },
+  {
+   "id": "PC-1027-06",
+   "date": "2026-10-28",
+   "kind": "Bug",
+   "title": "Older video episodes show once",
+   "description": "A few video shows listed some older episodes twice. They now show once, with your progress and saved words from both kept together.",
+   "tryIt": "Open a video show you follow and look through its older episodes"
+  },
+  {
+   "id": "PC-1027-07",
+   "date": "2026-10-28",
+   "kind": "Bug",
+   "title": "Allhelgona when Sweden keeps it",
+   "description": "If you're learning Swedish, the All Saints' pick on Discover and the Allhelgona stamp now last until Alla helgons dag, the Saturday Sweden keeps it, in years when that's after 2 November.",
+   "tryIt": "Learning Swedish: look for the All Saints' pick on Discover"
+  },
+  {
+   "id": "PC-1027-08",
+   "date": "2026-10-28",
+   "kind": "UX",
+   "title": "Stamps land with a soft press",
+   "description": "The first time you earn a seasonal stamp, it's pressed onto the wrap-up in Polycast's colours with a gentle tap, then kept in You. It's still if Reduce Motion is on.",
+   "tryIt": "Finish a guided episode between 28 Oct and 2 Nov"
+  },
+  {
+   "id": "PC-1028-03",
+   "date": "2026-10-29",
+   "kind": "UX",
+   "title": "Ask Mia, not a sparkle",
+   "description": "The button in Discover’s search bar now shows your guide’s mark and says “Ask Mia” (or Leo), and Discover has its own compass icon.",
+   "tryIt": "Type a mood in Discover’s search bar and tap Ask Mia"
+  },
+  {
+   "id": "PC-1028-06",
+   "date": "2026-10-29",
+   "kind": "Feature",
+   "title": "Guess the language while Mia prepares",
+   "description": "While an episode is being prepared, play three seconds of a real host and guess which language it is. Mia tells you what gave it away; nobody keeps score.",
+   "tryIt": "Prepare an episode and look under the progress card"
+  },
+  {
+   "id": "PC-1028-10",
+   "date": "2026-10-29",
+   "kind": "UX",
+   "title": "Empty screens with one thing to do",
+   "description": "Before your first listen, the Words and Library screens offer one button that starts a good first listen in your language, straight in with your guide.",
+   "tryIt": "Open Words or Library before you’ve listened to anything"
+  },
+  {
+   "id": "PC-1029-03",
+   "date": "2026-10-30",
+   "kind": "Bug",
+   "title": "Host clips play in full on a slow connection",
+   "description": "When you tap to hear the host say a word, or play the guessing game's clip, it now plays to the end even if the audio takes a moment to load.",
+   "tryIt": "Tap a word's play button in Review or on an episode's word list"
+  },
+  {
+   "id": "PC-1029-04",
+   "date": "2026-10-30",
+   "kind": "Refinement",
+   "title": "More clips in the guessing game",
+   "description": "While an episode prepares, the guessing game now has up to five hosts per language from different shows, and won't play you the same clip twice.",
+   "tryIt": "Prepare a new episode and tap 'Another one' a few times"
   }
  ]
 }

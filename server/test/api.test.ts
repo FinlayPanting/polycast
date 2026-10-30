@@ -41,9 +41,9 @@ run('API and worker', () => {
   })
   afterAll(async () => drop?.())
 
-  /** The token is just the user id here; production verifies a Supabase token. */
+  /** The token is just the user id here; production verifies a Supabase token. Only the literal 'bad' is refused (a random id can start with 'bad'). */
   const api = () =>
-    createApi({ sql, verify: async (t) => (t.startsWith('bad') ? undefined : t), fetch: fakeFetch, lookupHost: publicHost, alert: async (k, m) => void alerts.push(`${k}: ${m}`) })
+    createApi({ sql, verify: async (t) => (t === 'bad' ? undefined : t), fetch: fakeFetch, lookupHost: publicHost, alert: async (k, m) => void alerts.push(`${k}: ${m}`) })
 
   async function learner(): Promise<string> {
     const id = randomUUID()
@@ -442,11 +442,14 @@ run('API and worker', () => {
         body: JSON.stringify({ event: { app_user_id: max, ...event } }),
       })
     const used = async () => (await sql`select plus_used_sec, plus_period_start from profiles where id = ${max}`)[0]!
-    const sept = Date.parse('2026-09-01T10:00:00Z')
-    const oct = Date.parse('2026-10-01T10:00:00Z')
+    // Relative to today: the 'no purchase time' fallback resets a month older than 27 days,
+    // so fixed calendar dates would start failing as the real date moves on.
+    const day = 24 * 3600 * 1000
+    const oct = Math.floor(Date.now() / 1000) * 1000 - 2 * day
+    const sept = oct - 30 * day
 
     await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
-    expect((await used()).plus_period_start.toISOString()).toBe('2026-09-01T10:00:00.000Z')
+    expect((await used()).plus_period_start.toISOString()).toBe(new Date(sept).toISOString())
     await sql`update profiles set plus_used_sec = 3600 where id = ${max}`
     // The same purchase delivered again: hours stay used.
     await hook({ type: 'INITIAL_PURCHASE', id: 'e1', purchased_at_ms: sept })
@@ -460,7 +463,7 @@ run('API and worker', () => {
     // An event without a purchase time can't reset a month that's still running.
     await hook({ type: 'RENEWAL', id: 'e3' })
     expect((await used()).plus_used_sec).toBe(1800)
-    expect((await used()).plus_period_start.toISOString()).toBe('2026-10-01T10:00:00.000Z')
+    expect((await used()).plus_period_start.toISOString()).toBe(new Date(oct).toISOString())
   })
 
   it("sends Polycast's own re-preparations through the batch service quietly, and never a learner's request", async () => {
@@ -668,7 +671,7 @@ run('API and worker', () => {
     const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/it-pick.xml', 'Caffè Italiano', 'it') returning id`
     await sql`insert into picks (language, podcast_id, position) values ('it', ${p!.id}, 1)`
     const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
-      values (${p!.id}, 'it-1', 'Puntata 1', now(), 900, 'https://a.example/it1.mp3', 'it', 'ready') returning id`
+      values (${p!.id}, 'it-1', 'Puntata 1', now(), 900, 'https://pdcn.co/e/a.example/it1.mp3', 'it', 'ready') returning id`
     const text = 'è importante la musica per la famiglia al ristorante con il telefono'
     const words = text.split(' ').map((t, i) => ({ text: t, start: i, end: i + 0.8 }))
     const glossary = {
@@ -683,10 +686,54 @@ run('API and worker', () => {
       values (${e!.id}, 'it', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])}, ${sql.json(glossary)})`
     const other = await learner() // a fresh learner: the empty answer above is cached for an hour per language
     const body = await (await api().request('/v1/known-words/it', { headers: { Authorization: `Bearer ${other}` } })).json()
+    // Saved with Podcorn's prefix, which dies on 1 Nov 2026: handed out without it (PC-1029-01).
     expect(body).toMatchObject({ episodeId: e!.id, podcastTitle: 'Caffè Italiano', audioUrl: 'https://a.example/it1.mp3' })
     expect(body.words.map((w: any) => w.text).sort()).toEqual(['famiglia', 'importante', 'musica', 'ristorante', 'telefono'])
     expect(body.words.find((w: any) => w.text === 'importante')).toEqual({ text: 'importante', meaning: 'important', clip: { start: 0.88, end: 1.92 } })
     expect((await call(other, 'GET', '/v1/known-words/../x')).status).toBe(404)
+  })
+
+  it('hands out three seconds of a real host per launch language for the guessing game, with no AI (PC-1028-06)', async () => {
+    const [p] = await sql`insert into podcasts (feed_url, title, language) values ('https://feeds.example.com/sv-guess.xml', 'Gissa', 'sv') returning id`
+    await sql`insert into picks (language, podcast_id, position) values ('sv', ${p!.id}, 0) on conflict do nothing`
+    const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+      values (${p!.id}, 'sv-guess-1', 'Avsnitt 1', now(), 900, 'https://a.example/sv-guess.mp3', 'sv', 'ready') returning id`
+    // Thirty words, 0.4 s apart: talk throughout, so the clip comes from after the opening fifth.
+    const words = Array.from({ length: 30 }, (_, i) => ({ text: `ord${i}`, start: i * 0.4, end: i * 0.4 + 0.3 }))
+    await sql`insert into transcripts (episode_id, language, native_language, source, words, segments)
+      values (${e!.id}, 'sv', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])})`
+    const lea = await learner()
+    const res = await call(lea, 'GET', '/v1/guess-clips')
+    expect(res.status).toBe(200)
+    const { clips } = await res.json()
+    const sv = clips.find((c: any) => c.language === 'sv')
+    expect(sv).toMatchObject({ language: 'sv', audioUrl: expect.stringMatching(/^https:\/\/a\.example\//) })
+    expect(sv.end - sv.start).toBeCloseTo(3)
+    for (const c of clips) expect(['es', 'fr', 'de', 'it', 'pt', 'sv']).toContain(c.language)
+    expect(new Set(clips.map((c: any) => c.audioUrl)).size).toBe(clips.length)
+    expect((await api().request('/v1/guess-clips')).status).toBe(401)
+  })
+
+  it('offers up to five clips per language, each from a different show (PC-1029-04)', async () => {
+    const words = Array.from({ length: 30 }, (_, i) => ({ text: `palabra${i}`, start: i * 0.4, end: i * 0.4 + 0.3 }))
+    for (let n = 0; n < 7; n++) {
+      const [p] = await sql`insert into podcasts (feed_url, title, language) values (${`https://feeds.example.com/es-guess-${n}.xml`}, ${`Show ${n}`}, 'es') returning id`
+      await sql`insert into picks (language, podcast_id, position) values ('es', ${p!.id}, ${10 + n})`
+      // Two ready episodes per show: only the newest is used, so no show is heard twice.
+      for (const [guid, days] of [[`es-guess-${n}-old`, 7], [`es-guess-${n}-new`, 0]] as const) {
+        const [e] = await sql`insert into episodes (podcast_id, guid, title, published, duration_sec, audio_url, language, status)
+          values (${p!.id}, ${guid}, ${guid}, now() - make_interval(days => ${days}), 900, ${`https://a.example/${guid}.mp3`}, 'es', 'ready') returning id`
+        await sql`insert into transcripts (episode_id, language, native_language, source, words, segments)
+          values (${e!.id}, 'es', 'en', 'scribe', ${sql.json(words)}, ${sql.json([])})`
+      }
+    }
+    const { clips } = await (await call(await learner(), 'GET', '/v1/guess-clips')).json()
+    const es = clips.filter((c: any) => c.language === 'es')
+    expect(es).toHaveLength(5)
+    expect(es.every((c: any) => c.audioUrl.endsWith('-new.mp3'))).toBe(true)
+    expect(new Set(es.map((c: any) => c.audioUrl)).size).toBe(5)
+    // The first five picks, in Finlay's order.
+    expect(es.map((c: any) => c.audioUrl.match(/es-guess-(\d)/)[1]).sort()).toEqual(['0', '1', '2', '3', '4'])
   })
 
   it('keeps an empty "You already know" answer for five minutes, not an hour (PC-1023-01)', async () => {

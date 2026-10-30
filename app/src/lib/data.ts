@@ -42,7 +42,7 @@ export async function getEpisode(id: string): Promise<{ episode: EpisodeDetail; 
 }
 
 export async function listListens(): Promise<ListenRow[]> {
-  if (config.demo) return demo.listListens()
+  if (config.demo) return config.demoSignedOut ? [] : demo.listListens() // a brand-new learner in the signed-out preview (PC-1028-10)
   const { data, error } = await supabase
     .from('listens')
     .select('episode_id, position_sec, finished_at, updated_at, episodes(title, duration_sec, image, podcast_id, podcasts(title, artwork))')
@@ -84,6 +84,16 @@ export async function savePosition(userId: string, episodeId: string, sec: numbe
   const patch: Record<string, unknown> = { position_sec: sec, updated_at: new Date().toISOString() }
   if (finished) patch.finished_at = new Date().toISOString()
   await supabase.from('listens').update(patch).eq('user_id', userId).eq('episode_id', episodeId)
+}
+
+/**
+ * Whether this is the learner's very first guided episode (PC-1027-03): no guided listen of any other
+ * episode, started or finished. Unsure (offline, demo) counts as no, so nothing surprising happens.
+ */
+export async function isFirstGuidedListen(episodeId: string): Promise<boolean> {
+  if (config.demo) return false
+  const { count, error } = await supabase.from('listens').select('episode_id', { count: 'exact', head: true }).eq('guided', true).neq('episode_id', episodeId)
+  return !error && count === 0
 }
 
 /** Guided listens finished, any language (the Plus screen's opening line, PC-1023-03). */

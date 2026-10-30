@@ -17,15 +17,15 @@ describe("Mia's mood picks", () => {
 })
 
 describe('one search bar, with an AI button', () => {
-  it('searches podcasts from the keyboard and asks the guide from the sparkle', () => {
+  it('searches podcasts from the keyboard and asks the guide from the Ask Mia button', () => {
     expect(searchOrMood('  Kaffe ', 'keyboard')).toEqual({ kind: 'search', q: 'Kaffe' })
-    expect(searchOrMood('something calm for a rainy day', 'sparkle')).toEqual({ kind: 'mood', mood: 'something calm for a rainy day' })
+    expect(searchOrMood('something calm for a rainy day', 'guide')).toEqual({ kind: 'mood', mood: 'something calm for a rainy day' })
   })
 
   it('does nothing with an empty field, or a one-letter search', () => {
-    expect(searchOrMood('   ', 'sparkle')).toBeNull()
+    expect(searchOrMood('   ', 'guide')).toBeNull()
     expect(searchOrMood('k', 'keyboard')).toBeNull()
-    expect(searchOrMood('k', 'sparkle')).toEqual({ kind: 'mood', mood: 'k' })
+    expect(searchOrMood('k', 'guide')).toEqual({ kind: 'mood', mood: 'k' })
   })
 
   it('says both things the bar can do', () => {

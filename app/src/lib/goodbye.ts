@@ -1,3 +1,5 @@
+import { NIGHT_OWL } from '@polycast/core'
+
 /**
  * The guide's goodbye in the language being learnt (board item PC-1015-09). The server voices it
  * once per language and guide ahead of time (server/src/goodbye.ts) and stores it publicly; the app
@@ -18,7 +20,7 @@ export function goodbyeUrl(supabaseUrl: string, target: string, guideId = 'mia',
 /** Night owl (PC-1025-06): from 11 pm until 4 am on the phone's clock, the goodbye becomes a goodnight. */
 export function isNightOwl(now: Date): boolean {
   const h = now.getHours()
-  return h >= 23 || h < 4
+  return h >= NIGHT_OWL.fromHour || h < NIGHT_OWL.untilHour
 }
 
 /** The sign-off for the moment it plays: the goodnight late at night if it's voiced, otherwise the goodbye. */

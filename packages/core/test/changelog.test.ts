@@ -61,7 +61,8 @@ describe('Notes for App Review from the change log (PC-1022-06)', () => {
     expect(text).toContain('New and changed:\n- Title C: What C does.')
     expect(text).toContain('Fixes and refinements:\n- Title B: What B does.')
     expect(reviewNotes(log)).toContain('- Title A: What A does. (Try it: Open Discover.)')
-    expect(reviewNotes(log, '2026-10-23')).toBe('No changes since the last approved version.')
+    expect(reviewNotes(log, '2026-10-23')).toMatch(/^No changes since the last approved version./)
+    expect(reviewNotes(log, '2026-10-23', undefined, '')).toBe('No changes since the last approved version.')
   })
 
   it('always fits the box and never leaves a change out', () => {
@@ -69,6 +70,15 @@ describe('Notes for App Review from the change log (PC-1022-06)', () => {
     const text = reviewNotes(many)
     expect(text.length).toBeLessThanOrEqual(REVIEW_NOTES_MAX)
     for (const m of many) expect(text).toContain(`- Title ${m.id}`)
+  })
+
+  it('runs titles together, then counts the rest, once even titles alone overflow (PC-1028-06)', () => {
+    const lots = Array.from({ length: 150 }, (_, i) => e(`Y${i}`, '2026-10-21', i % 2 ? 'Bug' : 'Feature', { title: `A fairly long change title number ${i}` }))
+    const text = reviewNotes(lots)
+    expect(text.length).toBeLessThanOrEqual(REVIEW_NOTES_MAX)
+    expect(text).toContain('New and changed: A fairly long change title number 0; ')
+    expect(text).toMatch(/And \d+ more, each listed in the app under You, then What’s new\./)
+    expect(reviewNotes(lots.slice(0, 100), undefined, 10_000)).not.toContain('more, each listed')
   })
 
   it('reads the real change log within the limit', async () => {

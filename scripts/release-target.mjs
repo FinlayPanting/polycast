@@ -58,11 +58,20 @@ export function dependenciesChanged(before, after) {
   return false
 }
 
-/** True when the root package.json differs in anything but its scripts (or can't be read). */
+/**
+ * True when the root package.json differs in anything but its scripts (or can't be read).
+ * The install-script allowlist (pnpm.onlyBuiltDependencies, PC-1028-04) is left out too: it decides
+ * which already-installed packages may run a setup script on this machine, not what the app installs or
+ * bundles, and any new package it would name arrives with a lock file change, which is native anyway.
+ */
 export function rootPackageChanged(before, after) {
   const strip = (text) => {
     try {
       const { scripts: _scripts, ...rest } = JSON.parse(text ?? '{}')
+      if (rest.pnpm && typeof rest.pnpm === 'object') {
+        const { onlyBuiltDependencies: _allow, ...pnpm } = rest.pnpm
+        rest.pnpm = Object.keys(pnpm).length ? pnpm : undefined
+      }
       return JSON.stringify(rest)
     } catch {
       return undefined

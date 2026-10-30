@@ -12,3 +12,6 @@
 2026-10-24 build 9: iPhone Duo (Xcode 26.6 pinned, player fits short screens, PC-1019-05); patched link decoder (PC-1023-07); Plus screen opens with your progress (PC-1023-03); New Year lines (PC-1023-04); video-first feeds as audio (PC-1023-09)
 2026-10-25 build 10: VoiceOver reads each line in its own language (PC-1024-04); All Saints' stamp in You (PC-1024-07)
 2026-10-26 build 11: Mia says goodnight after 11 pm (PC-1025-06)
+2026-10-27 build 12: Plus screen fits the iPhone Duo (PC-1026-02); two panes on the open Duo (PC-1026-03); seasons come round every year (PC-1026-06)
+2026-10-28 build 13: first guided listen starts where the talking starts (PC-1027-03); Allhelgona until Sweden's Saturday (PC-1027-07); stamp lands with a soft press (PC-1027-08); Duo notes pane does less work (PC-1027-10)
+2026-10-29 build 14: Ask Mia button, guess the language while preparing, first-listen button on empty Words and Library (PC-1028-03, -06, -10)

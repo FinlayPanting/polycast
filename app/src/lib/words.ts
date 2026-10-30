@@ -99,7 +99,7 @@ export async function saveWord(
 export type WordWithClip = SavedWord & { audioUrl?: string; clipGone?: boolean }
 
 export async function listWords(language: string): Promise<WordWithClip[]> {
-  if (config.demo) return DEMO_WORDS
+  if (config.demo) return config.demoSignedOut ? [] : DEMO_WORDS // the signed-out preview is a brand-new learner (PC-1028-10)
   const { data } = await supabase
     .from('saved_words')
     .select('language, lemma, forms, meaning, episode_id, clip, sentence, review, created_at, episodes(audio_url)')

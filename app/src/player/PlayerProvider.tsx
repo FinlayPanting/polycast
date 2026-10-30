@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { findOldFriends, guideVolume, selectMoments, type Clip, type GuideMoment } from '@polycast/core'
+import { findOldFriends, guideVolume, selectMoments, type Clip, type GuideMoment, type SeasonStamp } from '@polycast/core'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppState } from 'react-native'
 import { demoAudio, demoVoice } from '../demo/audio'
 import { api, type ListenPayload } from '../lib/api'
 import { config } from '../lib/config'
-import { resumePosition, savePosition } from '../lib/data'
+import { isFirstGuidedListen, resumePosition, savePosition } from '../lib/data'
+import { firstTalkStart, veryStartOffer } from '../lib/firstTalk'
 import { getEpisodeReady, type GetReadyStep } from '../lib/episodeAudio'
 import { goodbyeUrl, loadGoodbye, pickFarewell, type Goodbye } from '../lib/goodbye'
 import { voicedGuideId } from '../lib/languages'
@@ -53,6 +54,8 @@ export interface Player {
   hopBack?: HopBack
   /** Goes back to that place. */
   takeHopBack: () => void
+  /** A seasonal stamp this listen earned for the first time, pressed onto the wrap-up once (PC-1027-08). */
+  newStamp?: SeasonStamp
 }
 
 const LOADING: ListenState = { phase: 'loading', position: 0, rate: 1 }
@@ -76,6 +79,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [oldFriends, setOldFriends] = useState<Set<number>>(new Set())
   const [last, setLast] = useState<LastPlayed>()
   const [hopBack, setHopBack] = useState<HopBack>()
+  const [newStamp, setNewStamp] = useState<SeasonStamp>()
   const stateRef = useRef(state)
   stateRef.current = state
   const listen = useRef<GuidedListen | undefined>(undefined)
@@ -126,6 +130,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setSaved([])
       setCaughtAt([])
       setOldFriends(new Set())
+      setNewStamp(undefined)
       const { id, guide, level: chosenLevel, from } = p
       ;(async () => {
         try {
@@ -161,7 +166,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           const moments: GuideMoment[] = d.guided && d.plan ? selectMoments(d.plan.moments, level) : []
           // A jump from the episode map starts there; otherwise carry on where the learner left off.
           const resumeAt = await resumePosition(id)
-          const startAt = from !== undefined ? from : resumeAt
+          // A learner's very first guided episode starts where the host starts talking (PC-1027-03).
+          const firstGuided = moments.length > 0 && from === undefined && resumeAt === 0 ? await isFirstGuidedListen(id).catch(() => false) : false
+          const talkAt = firstTalkStart({ guided: moments.length > 0, from, resumeAt, firstGuided, segments: d.transcript.segments, adverts: d.adverts })
+          const startAt = from !== undefined ? from : (talkAt ?? resumeAt)
           if (r.disposed) return
           // The guide's sign-off, voiced ahead of time; fetched alongside, and simply skipped if it isn't there.
           // Late at night it's a goodnight instead (PC-1025-06), picked when it plays: both are fetched now.
@@ -191,8 +199,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           plog(`listen: ${d.episode.title} (${synced ? 'lined up with this copy' : 'lesson times as prepared'}, ${moments.length} guide moments, from ${startAt.toFixed(0)}s)`)
           if (!config.demo) await prepareGuideAudio()
           if (r.disposed) return
-          await l.start(nowPlayingTrack(d.episode), startAt)
+          await l.start(nowPlayingTrack(d.episode), startAt, { keepIntro: talkAt !== undefined })
           if (!r.disposed && from !== undefined) setHopBack(hopBackOffer(resumeAt, from, Date.now()))
+          if (!r.disposed && talkAt !== undefined) setHopBack(veryStartOffer(Date.now()))
           const known = await listWords(d.transcript.language).catch(() => [])
           if (!r.disposed) setOldFriends(new Set(findOldFriends(d.transcript.words, known, d.episode.id, d.transcript.language).map((f) => f.wordIndex)))
         } catch (e) {
@@ -278,7 +287,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (s) void savePosition(s.user.id, params.id, state.position, true)
     if (last?.id === params.id) remember(undefined)
     // A seasonal stamp for a guided episode finished while a season is on (PC-1024-07).
-    if (data) keepStampFor({ guided: data.guided, language: data.transcript.language })
+    if (data) void keepStampFor({ guided: data.guided, language: data.transcript.language }).then((s) => s && setNewStamp(s), () => {})
   }, [state.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mini = useMemo(
@@ -298,6 +307,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     void (mini.playing ? l.pause() : l.resume())
   }, [mini, last, open])
 
-  const value: Player = { params, data, state, error, getReady, listen: listen.current, saved, caughtAt, oldFriends, mini, open, stop, toggle, keepWord, hopBack, takeHopBack }
+  const value: Player = { params, data, state, error, getReady, listen: listen.current, saved, caughtAt, oldFriends, mini, open, stop, toggle, keepWord, hopBack, takeHopBack, newStamp }
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
 }

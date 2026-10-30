@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router'
 import { useCallback } from 'react'
 import { FlatList, View } from 'react-native'
 import { Button, Screen, Tag, Txt } from '../../components/ui'
+import { FirstListenStart } from '../../components/FirstListenStart'
 import { languageName } from '../../lib/languages'
 import { useSession } from '../../lib/session'
 import { useAsync } from '../../lib/useAsync'
@@ -64,7 +65,14 @@ export default function Words() {
             {isKnown(item.review) ? <Tag label="Known" tone="level" /> : null}
           </View>
         )}
-        ListEmptyComponent={data ? <Txt tone="quiet">Words your guide teaches, and any you tap and save, collect here with the host’s voice saying them.</Txt> : null}
+        ListEmptyComponent={
+          data ? (
+            <View style={{ gap: space.md }}>
+              <Txt tone="quiet">Words your guide teaches, and any you tap and save, collect here with the host’s voice saying them.</Txt>
+              <FirstListenStart />
+            </View>
+          ) : null
+        }
       />
     </Screen>
   )
