@@ -16,4 +16,8 @@ describe('the server image Railway builds', () => {
     for (const f of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) expect(copied).toContain(f)
     expect(docker).toContain('pnpm install --frozen-lockfile')
   })
+
+  it('has a font for the Lab’s moment videos (PC-1029-10)', () => {
+    expect(docker).toMatch(/apt-get install[^\n]*fonts-dejavu-core/)
+  })
 })

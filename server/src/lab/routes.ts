@@ -7,6 +7,7 @@ import type { Storage } from '../providers/types'
 import { fetchEffectsCatalog, roomSettings } from '../roomAudition'
 import { GUIDES, guideById } from '../voices'
 import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, type MomentVariant } from './moment'
+import { momentCaptions, renderMomentVideo, VIDEO_MAX_SEC } from './video'
 import { estimateVoiceUSD, GEMINI_TTS, TEXT_MODELS, voicePerHourUSD } from './prices'
 import { getRun, labSpend, listRuns, pickRun, saveRun, type RunKind } from './runs'
 import { clientAddress, rateLimiter } from '../rateLimit'
@@ -34,6 +35,8 @@ export interface LabDeps {
   elevenModel?: string
   /** How long a wrong password waits before its answer (PC-1022-02); tests set 0. */
   wrongPasswordDelayMs?: number
+  /** Makes a moment video (PC-1029-10); tests swap in a fake so they don't need ffmpeg. */
+  renderVideo?: typeof renderMomentVideo
 }
 
 /**
@@ -110,6 +113,8 @@ interface Render {
 }
 const RENDER_TTL_MS = 30 * 60_000
 const MAX_RENDERS = 40
+/** Moment videos (PC-1029-10) are a few megabytes each, so fewer are kept. */
+const MAX_VIDEOS = 6
 
 let pageCache: string | undefined
 function page(): string {
@@ -121,6 +126,7 @@ export function createLab(deps: LabDeps) {
   const app = new Hono()
   const f = deps.fetch ?? fetch
   const renders = new Map<string, Render>()
+  const videos = new Map<string, { mp4: Uint8Array; name: string; expires: number }>()
   let voiceList: { at: number; voices: { id: string; name: string; labels?: Record<string, string>; category?: string }[]; models: { id: string; name: string }[] } | undefined
 
   const wrongTries = rateLimiter(LAB_WRONG_TRIES.perAddress, LAB_WRONG_TRIES.windowMs)
@@ -131,7 +137,7 @@ export function createLab(deps: LabDeps) {
    */
   const authorised = (c: Context) => {
     const header = c.req.header('Authorization')?.replace(/^Bearer /, '')
-    const given = header ?? (c.req.method === 'GET' && /\/api\/render\/[^/]+$/.test(c.req.path) ? c.req.query('token') : undefined)
+    const given = header ?? (c.req.method === 'GET' && /\/api\/(render|video)\/[^/]+$/.test(c.req.path) ? c.req.query('token') : undefined)
     return Boolean(given && safeEqual(given, deps.token))
   }
   const by = (c: Context): 'finlay' | 'claude' => (c.req.header('X-Lab-By') === 'claude' ? 'claude' : 'finlay')
@@ -306,6 +312,51 @@ export function createLab(deps: LabDeps) {
     } catch (e) {
       return fail(c, e)
     }
+  })
+
+  // "Mia steps in" as a vertical video (PC-1029-10): the stored moment with the show's artwork, the host's
+  // subtitles and Mia's card. Stored lines only, so it costs nothing. Kept in memory like previews, never stored.
+  app.post('/api/moment/video', async (c) => {
+    try {
+      const body = await c.req.json()
+      const ep = await episodeFor(body)
+      const momentId = String(body.momentId ?? '')
+      const m = ep.plan.moments.find((x) => x.id === momentId)
+      if (!m) throw new Error('Pick a moment')
+      const episode = await episodeAudio(ep, { download: deps.download, fingerprint: deps.fingerprint, fetchImpl: f })
+      const r = await renderMoment(ep, episode, momentId, { label: 'Stored' }, { keys: deps.keys, storage: deps.storage, fetchImpl: f, elevenModel: deps.elevenModel }, { leadSec: Number(body.leadSec ?? 5), tailSec: Number(body.tailSec ?? 4) })
+      const [row] = await deps.sql`select coalesce(e.image, p.artwork) as image from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${ep.id}`
+      let artwork: Uint8Array | undefined
+      if (typeof row?.image === 'string' && /^https:\/\//.test(row.image)) {
+        try {
+          const res = await f(row.image, { signal: AbortSignal.timeout(10_000) })
+          if (res.ok) artwork = new Uint8Array(await res.arrayBuffer())
+        } catch {
+          artwork = undefined // the video still works without the artwork
+        }
+      }
+      const mp4 = await (deps.renderVideo ?? renderMomentVideo)({
+        mp3: r.mp3,
+        durationSec: r.durationSec,
+        captions: momentCaptions(r.pieces, ep.transcript.segments, m.script),
+        showTitle: ep.podcastTitle,
+        guideName: guideById(ep.guideId).name,
+        artwork,
+      })
+      const videoId = randomUUID()
+      for (const [k, x] of videos) if (x.expires < Date.now()) videos.delete(k)
+      while (videos.size >= MAX_VIDEOS) videos.delete(videos.keys().next().value!)
+      const name = `polycast-${ep.podcastTitle}-${Math.floor(m.at / 60)}m${String(Math.floor(m.at % 60)).padStart(2, '0')}s`.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 80)
+      videos.set(videoId, { mp4, name, expires: Date.now() + RENDER_TTL_MS })
+      return c.json({ videoId, durationSec: Math.min(VIDEO_MAX_SEC, r.durationSec), bytes: mp4.byteLength, warnings: r.warnings })
+    } catch (e) {
+      return fail(c, e)
+    }
+  })
+  app.get('/api/video/:id', (c) => {
+    const v = videos.get(c.req.param('id'))
+    if (!v || v.expires < Date.now()) return c.json({ error: 'That video has expired; make it again.' }, 404)
+    return c.body(Buffer.from(v.mp4), 200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'Content-Length': String(v.mp4.byteLength), 'Content-Disposition': `inline; filename="${v.name}.mp4"` })
   })
 
   // Previews hold episode audio, so they're kept in memory for half an hour and never stored.

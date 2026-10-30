@@ -217,6 +217,42 @@ describe('Guide moment preview', () => {
   }, FFMPEG_TEST_MS)
 })
 
+describe("'Mia steps in' video route (PC-1029-10)", () => {
+  it('makes the stored moment into a video with the artwork, subtitles and Mia’s card, serves it with the password in the address, and spends nothing', async () => {
+    const storage = memoryStorage()
+    storage.files.set('guide/a.m4a', await toneMp3(1, 660))
+    storage.files.set('guide/b.m4a', await toneMp3(1, 660))
+    const base = fakeFetch(storage, await toneMp3(0.5))
+    const fetched: string[] = []
+    const f = (async (url: string, init?: RequestInit) => {
+      fetched.push(String(url))
+      return String(url) === 'https://art.test/show.jpg' ? new Response(new Uint8Array([9, 9, 9])) : base(url, init)
+    }) as unknown as typeof fetch
+    const ep = fakeEpisode()
+    const row = { id: ep.id, title: ep.title, podcast_title: ep.podcastTitle, audio_url: ep.audioUrl, language: 'sv', native_language: 'en', source: 'scribe', words: ep.transcript.words, segments: ep.transcript.segments, plan: ep.plan, guide_id: 'mia', image: 'https://art.test/show.jpg' }
+    const sql = (async () => [row]) as unknown as Sql
+    let made: any
+    const app = createLab({ sql, token: 'secret', keys: {}, storage, download: async () => toneMp3(120, 220), fetch: f, wrongPasswordDelayMs: 0, renderVideo: async (input) => ((made = input), new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112])) })
+    const res = await app.request('/api/moment/video', { method: 'POST', headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' }, body: JSON.stringify({ episodeId: ep.id, momentId: 'spotlight-1' }) })
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.videoId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(made.showTitle).toBe('Podd')
+    expect(made.guideName).toBe('Mia')
+    expect([...made.artwork]).toEqual([9, 9, 9])
+    expect(made.captions.filter((c: any) => c.who === 'guide').map((c: any) => c.text)).toEqual(['That was Anna:', 'försenad means late.'])
+    expect(made.captions.some((c: any) => c.who === 'host')).toBe(true)
+    // Stored lines only: no voice was asked for.
+    expect(fetched.some((u) => u.includes('text-to-speech'))).toBe(false)
+    const video = await app.request(`/api/video/${json.videoId}?token=secret`)
+    expect(video.status).toBe(200)
+    expect(video.headers.get('Content-Type')).toBe('video/mp4')
+    expect(video.headers.get('Content-Disposition')).toContain('polycast-podd-1m00s.mp4')
+    expect((await app.request(`/api/video/${json.videoId}`)).status).toBe(401)
+    expect((await app.request('/api/video/nope?token=secret')).status).toBe(404)
+  }, FFMPEG_TEST_MS)
+})
+
 describe('Writing tests', () => {
   it('cuts a transcript to its first minutes', () => {
     const ep = fakeEpisode()

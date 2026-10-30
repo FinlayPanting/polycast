@@ -1,6 +1,6 @@
-# Polycast server: API + preparation worker. Needs ffmpeg for guide audio.
+# Polycast server: API + preparation worker. Needs ffmpeg for guide audio, and a font for the Lab's moment videos (PC-1029-10).
 FROM node:22-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./

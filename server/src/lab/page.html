@@ -232,6 +232,12 @@ audio { width: 100%; height: 40px; }
     <span class="estimate" id="mEst"></span>
   </div>
   <div id="mOut" style="margin-top:20px"></div>
+  <h3>As a video</h3>
+  <p class="lede">The stored moment as a vertical video (1080×1920) with the show's artwork, the host's subtitles and the guide's card, for posts and pitches. Free (stored lines only); uses the seconds before and after above, up to 45 seconds in all. Share it only with the show's permission.</p>
+  <div class="actions">
+    <button class="btn" id="mVideo" type="button">Make the video</button>
+  </div>
+  <div id="mVideoOut" style="margin-top:12px"></div>
 </section>
 
 <!-- ROOM -->
@@ -623,6 +629,19 @@ $('#mRun').addEventListener('click', async () => {
     const r = await api('/moment', { ...momentBase(), variants, leadSec: Number($('#mLead').value), tailSec: Number($('#mTail').value) })
     showPreviews($('#mOut'), r, $('#mBlind').checked, 'moment')
     refreshSpend()
+  } catch (e) { toast(e.message) } finally { busy(btn, false) }
+})
+
+$('#mVideo').addEventListener('click', async () => {
+  if (!picker.moment) return toast('Pick a moment first')
+  const btn = $('#mVideo')
+  busy(btn, true, 'Making the video (the first one downloads the episode)…')
+  try {
+    const r = await api('/moment/video', { ...momentBase(), leadSec: Number($('#mLead').value), tailSec: Number($('#mTail').value) })
+    const url = `/lab/api/video/${r.videoId}?token=${encodeURIComponent(token)}`
+    $('#mVideoOut').innerHTML = `<video controls playsinline src="${url}" style="max-width:270px;width:100%;border-radius:12px;background:#000"></video>
+      <div class="actions"><a class="btn small" href="${url}" download>Download</a><span class="muted">${clock(r.durationSec)} · ${(r.bytes / 1e6).toFixed(1)} MB · kept here for half an hour</span></div>
+      ${(r.warnings || []).map((w) => `<div class="warnline">${esc(w)}</div>`).join('')}`
   } catch (e) { toast(e.message) } finally { busy(btn, false) }
 })
 
