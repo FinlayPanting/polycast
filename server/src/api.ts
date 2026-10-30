@@ -40,6 +40,8 @@ export interface ApiDeps {
   verify: VerifyToken
   fetch: Fetch
   podcastIndex?: { key: string; secret: string }
+  /** The commit /health reports; defaults to Railway's RAILWAY_GIT_COMMIT_SHA (PC-1029-05). */
+  commit?: string
   /** Where Finlay's alerts go (free-cohort thresholds, spending cap). */
   alert?: (kind: string, message: string) => Promise<void>
   /** Shared secret RevenueCat sends with subscription events. */
@@ -168,6 +170,12 @@ export const MOOD_MESSAGES = {
   paused: 'Mood picks are resting for today. Have a look through the shelves below.',
 }
 
+/** The commit this server was built from, as Railway (or GIT_COMMIT_SHA elsewhere) reports it. */
+export function liveCommit(env: Record<string, string | undefined>): string | undefined {
+  const sha = (env.RAILWAY_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA ?? '').trim()
+  return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.toLowerCase() : undefined
+}
+
 export function createApi(deps: ApiDeps) {
   const { sql } = deps
   const app = new Hono<Env>()
@@ -182,7 +190,10 @@ export function createApi(deps: ApiDeps) {
     app.route('/lab', createLab(deps.lab))
   }
 
-  app.get('/health', (c) => c.json({ ok: true }))
+  // Which code is live (PC-1029-05): Railway sets RAILWAY_GIT_COMMIT_SHA for each deployment, so a push that
+  // failed to deploy shows up as the old commit rather than as a quiet "ok".
+  const commit = deps.commit ?? liveCommit(process.env)
+  app.get('/health', (c) => c.json({ ok: true, ...(commit ? { commit } : {}) }))
   // What's new (PC-1019-F02): the change log, public and cacheable, so it updates with every push.
   app.get('/changelog', (c) => {
     c.header('Cache-Control', 'public, max-age=300')
