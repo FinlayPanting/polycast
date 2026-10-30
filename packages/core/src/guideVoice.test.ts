@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { GUESS_TELLS, guessReply } from './guessLanguage'
 import { GUIDE_VOICE, voiceIssues } from './guideVoice'
 import { SEASONAL_LINES, SEASONS } from './seasonal'
+import { TONGUE_TWISTERS, twisterOffer } from './tongueTwister'
 import { LAUNCH_LANGUAGES } from './types'
 
 describe('Mia’s voice, written down and checked (PC-1028-09)', () => {
@@ -35,5 +36,15 @@ describe('Mia’s voice, written down and checked (PC-1028-09)', () => {
     expect(Object.keys(GUESS_TELLS)).toHaveLength(6)
     expect(lines.length).toBeGreaterThan(20)
     for (const l of lines) expect(voiceIssues(l), l).toEqual([])
+  })
+
+  it('the tongue-twisters and their offer sound like the guides too (PC-1029-08)', () => {
+    expect(Object.keys(TONGUE_TWISTERS).sort()).toEqual([...LAUNCH_LANGUAGES].sort())
+    for (const name of ['Mia', 'Leo']) expect(voiceIssues(twisterOffer(name))).toEqual([])
+    for (const t of Object.values(TONGUE_TWISTERS)) {
+      expect(voiceIssues(t.meaning), t.meaning).toEqual([])
+      // Short enough to say in one breath at full speed.
+      expect(t.text.length).toBeLessThanOrEqual(80)
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { costUSD, LAUNCH_LANGUAGES, ZERO_USAGE } from '@polycast/core'
+import { costUSD, LAUNCH_LANGUAGES, TONGUE_TWISTERS, ZERO_USAGE } from '@polycast/core'
 import type { SpendGuard } from './budget'
 import { UsageMeter } from './budget'
 import { TARGET_SPEAKING_RATE } from './providers/googleTts'
@@ -38,9 +38,15 @@ export const GOODNIGHT_LINES: Record<(typeof LAUNCH_LANGUAGES)[number], { text: 
   sv: { text: 'Sov gott!', meaning: 'Sleep well!' },
 }
 
-export type Farewell = 'goodbye' | 'goodnight'
+/**
+ * The tongue-twister (PC-1029-08) is voiced the same way, once per language and guide, under `<guide>-twister`.
+ * The app plays it slowed down and then as voiced, so one clip each is enough.
+ */
+export type Farewell = 'goodbye' | 'goodnight' | 'twister'
 
-const fileStem = (guide: Pick<Guide, 'id'>, kind: Farewell) => (kind === 'goodnight' ? `${guide.id}-night` : guide.id)
+const SUFFIX: Record<Farewell, string> = { goodbye: '', goodnight: '-night', twister: '-twister' }
+const fileStem = (guide: Pick<Guide, 'id'>, kind: Farewell) => `${guide.id}${SUFFIX[kind]}`
+const LINES: Record<Farewell, Record<(typeof LAUNCH_LANGUAGES)[number], { text: string; meaning: string }>> = { goodbye: GOODBYE_LINES, goodnight: GOODNIGHT_LINES, twister: TONGUE_TWISTERS }
 
 export interface GoodbyeManifest {
   version: number
@@ -58,7 +64,7 @@ export function goodbyeManifestPath(target: string, guide: Pick<Guide, 'id'>, ki
 
 /** Voices one goodbye in the target language, a touch slower, and stores it with its manifest. */
 export async function voiceGoodbye(target: (typeof LAUNCH_LANGUAGES)[number], guide: Guide, deps: { speech: SpeechSynth; storage: Storage; guard: SpendGuard }, kind: Farewell = 'goodbye'): Promise<GoodbyeManifest> {
-  const line = (kind === 'goodnight' ? GOODNIGHT_LINES : GOODBYE_LINES)[target]
+  const line = LINES[kind][target]
   const ledgerId = `goodbye-v${GOODBYE_VERSION}-${target}-${fileStem(guide, kind)}`
   // Every character as if voiced by a per-character voice, doubled for safety; at least a cent.
   await deps.guard.reserve(ledgerId, Math.max(0.01, costUSD({ ...ZERO_USAGE, ttsAudioSec: line.text.length / 15, ttsChars: line.text.length, elevenTtsChars: line.text.length }) * 2))
@@ -77,11 +83,11 @@ export async function voiceGoodbye(target: (typeof LAUNCH_LANGUAGES)[number], gu
   }
 }
 
-/** Voices any goodbye or goodnight not yet stored for this version, for every guide. Runs on start-up. Returns what it voiced. */
+/** Voices any goodbye, goodnight or tongue-twister not yet stored for this version, for every guide. Runs on start-up. Returns what it voiced. */
 export async function ensureGoodbyeAudio(deps: { speech: SpeechSynth; storage: Storage; guard: SpendGuard; log?: (m: string) => void }): Promise<string[]> {
   const voiced: string[] = []
   if (!deps.storage.exists) return voiced
-  for (const kind of ['goodbye', 'goodnight'] as const) {
+  for (const kind of ['goodbye', 'goodnight', 'twister'] as const) {
     for (const guide of GUIDES) {
       for (const target of LAUNCH_LANGUAGES) {
         if (await deps.storage.exists(goodbyeManifestPath(target, guide, kind))) continue

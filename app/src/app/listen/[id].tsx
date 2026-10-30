@@ -28,13 +28,14 @@ import { config } from '../../lib/config'
 import { demoAudio, demoVoice } from '../../demo/audio'
 import { guideName, guidanceLevelOr, languageName, voicedGuideId } from '../../lib/languages'
 import { goodbyeUrl, loadGoodbye, type Goodbye } from '../../lib/goodbye'
+import { playTwister, twisterUrl } from '../../lib/tongueTwister'
 import { useSession } from '../../lib/session'
 import { countFinished, resumePosition, savePosition } from '../../lib/data'
 import { listWords, SAVE_WORD_FAILED } from '../../lib/words'
 import { plog } from '../../lib/playbackLog'
 import { claimFirstWordBloom } from '../../lib/firstWord'
 import { firstWordLine } from '../../lib/firstWordCore'
-import { DEFAULT_MARK } from '@polycast/core'
+import { DEFAULT_MARK, twisterOffer } from '@polycast/core'
 import { useReducedMotion } from 'react-native-reanimated'
 import { expoGuideVoice, prepareGuideAudio } from '../../player/expoGuideVoice'
 import { usePlayer } from '../../player/PlayerProvider'
@@ -188,9 +189,42 @@ function WrapUp({ data, newStamp, savedThisListen, caughtAt, listenedSec, onDone
   }, [data.episode.id])
   const answered = Object.keys(answers).length
   const stats = useMemo<RecapStats>(() => ({ minutes: listenedSec / 60, quiz: answered ? { right, of: questions.length } : undefined, completed }), [listenedSec, answered, right, questions.length, completed])
+  // A tongue-twister for the curious (PC-1029-08): hold the guide's mark. Voiced ahead of time, never announced.
+  const { profile } = useSession()
+  const guideId = voicedGuideId(data.guideId, profile?.guide_id)
+  const [twister, setTwister] = useState<Goodbye>()
+  const [twisting, setTwisting] = useState(false)
+  const stopTwister = useRef<() => void>(undefined)
+  useEffect(() => {
+    if (config.demo) return
+    let live = true
+    void loadGoodbye(twisterUrl(config.supabaseUrl, data.transcript.language, guideId)).then((t) => live && setTwister(t))
+    return () => {
+      live = false
+      stopTwister.current?.()
+    }
+  }, [data.transcript.language, guideId])
+  const sayTwister = () => {
+    if (!twister || twisting) return
+    setTwisting(true)
+    const run = playTwister(twister.url)
+    stopTwister.current = run.stop
+    void run.done.then(() => setTwisting(false))
+  }
   return (
     <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.lg }}>
-      <Mark height={44} />
+      <Pressable onLongPress={twister ? sayTwister : undefined} delayLongPress={600} accessible={false} style={{ alignSelf: 'flex-start' }}>
+        <Mark height={44} speaking={twisting} />
+      </Pressable>
+      {twister && twisting ? (
+        <View accessible accessibilityLiveRegion="polite" accessibilityLabel={`${twisterOffer(guideName(guideId))} ${twister.text}, meaning ${twister.meaning}`} style={{ gap: space.xs }}>
+          <Txt tone="quiet">{twisterOffer(guideName(guideId))}</Txt>
+          <Txt variant="heading">{twister.text}</Txt>
+          <Txt variant="small" tone="faint">
+            {twister.meaning}
+          </Txt>
+        </View>
+      ) : null}
       <Txt variant="title">You listened to {data.episode.title}</Txt>
       {newStamp ? <StampPress stamp={newStamp} /> : null}
       {questions.map((q, i) => (
