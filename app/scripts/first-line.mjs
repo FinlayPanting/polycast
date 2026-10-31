@@ -46,7 +46,10 @@ export function compareToBudget(counts, budget) {
   return { ok: grew.length === 0, grew, shrank }
 }
 
-/** A screen is its path; the email screen's two steps (address, then code) count as two. */
+/**
+ * A screen is its path; on the email screen a change of heading counts as a new screen too, so if the address
+ * and the code are ever split onto two steps again, both are counted (since PC-1030-04 they share one).
+ */
 export function screenKey(pathname, heading) {
   return pathname === '/email' ? `${pathname}#${heading ?? ''}` : pathname
 }
@@ -138,7 +141,9 @@ async function walk(playwright, url) {
         if ((await input.inputValue()) !== '') continue
         const kind = `${(await input.getAttribute('type')) ?? ''} ${(await input.getAttribute('placeholder')) ?? ''} ${(await input.getAttribute('aria-label')) ?? ''}`
         if (/search/i.test(kind)) continue
-        await input.fill(/mail|@/i.test(kind) || pathname === '/email' && !heading?.startsWith('Check') ? 'new.learner@example.com' : '123456')
+        // The code field sits under the address on the same screen (PC-1030-04), so it's told apart by its own label.
+        const isCode = /code|one-time|000000/i.test(kind)
+        await input.fill(!isCode && (/mail|@/i.test(kind) || (pathname === '/email' && !heading?.startsWith('Check'))) ? 'new.learner@example.com' : '123456')
         counts.typed++
         path.push('type')
         typed = true

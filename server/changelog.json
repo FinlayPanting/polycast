@@ -680,6 +680,14 @@
    "title": "Read the whole episode",
    "description": "A full transcript from the player: every line with its translation underneath, the line being spoken picked out, your saved words underlined, and a tap on any line to listen from there.",
    "tryIt": "In the player, tap More, then 'Read the whole episode'"
+  },
+  {
+   "id": "PC-1030-04",
+   "date": "2026-10-31",
+   "kind": "UX",
+   "title": "Two screens fewer to the first listen",
+   "description": "Signing in with email now happens on one screen (the code box appears under your address), and the words you already know show up as soon as you tap a language.",
+   "tryIt": "Sign out and sign in with email, then pick a language"
   }
  ]
 }

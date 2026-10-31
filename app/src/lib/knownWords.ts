@@ -1,9 +1,9 @@
 import type { KnownWordsAnswer } from './api'
 
 /**
- * "You already know these words" (PC-1022-08): the step between picking a language and the rest of
- * onboarding. Shown only when the server found at least three words; otherwise onboarding carries
- * straight on, so a slow or empty answer never holds anyone up.
+ * "You already know these words" (PC-1022-08): shown under the language as soon as it is tapped
+ * (PC-1030-04). Shown only when the server found at least three words; Continue never waits for it,
+ * so a slow or empty answer never holds anyone up.
  */
 export const KNOWN_WORDS_MIN = 3
 

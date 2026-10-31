@@ -80,7 +80,6 @@ function Routes() {
       </Stack.Protected>
       <Stack.Protected guard={signedIn && !onboarded}>
         <Stack.Screen name="onboarding/language" />
-        <Stack.Screen name="onboarding/known" />
         <Stack.Screen name="onboarding/interests" />
         <Stack.Screen name="onboarding/guidance" />
       </Stack.Protected>

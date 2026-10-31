@@ -28,6 +28,15 @@ describe('counting the steps to Mia’s first line (PC-1028-07)', () => {
     expect(FORWARD.indexOf('Skip for now')).toBeLessThan(FORWARD.indexOf('Continue'))
   })
 
+  it('keeps the address and code on one screen, and You already know on the language screen (PC-1030-04)', () => {
+    expect(budget.screens).toBeLessThanOrEqual(8)
+    const src = (f: string) => readFileSync(join(__dirname, '..', f), 'utf8')
+    expect(() => src('app/onboarding/known.tsx')).toThrow()
+    expect(src('app/onboarding/language.tsx')).toContain("pathname: '/onboarding/interests'")
+    expect(src('app/onboarding/language.tsx')).toContain('<KnownWordsPanel')
+    expect(src('app/email.tsx')).not.toContain('Check your email')
+  })
+
   it('runs in pnpm check', () => {
     const root = JSON.parse(readFileSync(join(__dirname, '../../../package.json'), 'utf8'))
     expect(root.scripts.check).toContain('node app/scripts/first-line.mjs')

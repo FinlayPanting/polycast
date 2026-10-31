@@ -1,13 +1,15 @@
 import { router } from 'expo-router'
 import { useState } from 'react'
 import { KeyboardAvoidingView, Platform, TextInput, View } from 'react-native'
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated'
 import { Button, Screen, Txt } from '../components/ui'
 import { isReviewEmail } from '../lib/reviewAccount'
 import { useSession } from '../lib/session'
-import { space, type, usePalette } from '../theme'
+import { motion, space, type, usePalette } from '../theme'
 
 export default function EmailSignIn() {
   const p = usePalette()
+  const reduceMotion = useReducedMotion()
   const { sendEmailCode, verifyEmailCode, signInWithPassword } = useSession()
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -36,37 +38,44 @@ export default function EmailSignIn() {
     <Screen edges={['top', 'bottom']} style={{ paddingHorizontal: space.lg }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, gap: space.lg, paddingTop: space.xl }}>
         <Button kind="quiet" label="Back" onPress={() => router.back()} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
-        <Txt variant="title">{sent ? 'Check your email' : 'Sign in with email'}</Txt>
-        <Txt tone="quiet">{sent ? `We sent a 6-digit code to ${email}. It works for an hour.` : 'We’ll email you a code. No password needed.'}</Txt>
+        {/* One screen for the address and the code (PC-1030-04): the code field slides in under the address. */}
+        <Txt variant="title">Sign in with email</Txt>
+        <Txt tone="quiet">We’ll email you a code. No password needed.</Txt>
 
-        {!sent ? (
-          <TextInput
-            style={input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            placeholderTextColor={p.faint}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            accessibilityLabel="Email address"
-            autoFocus
-          />
-        ) : (
-          <TextInput
-            style={[input, { letterSpacing: 6, fontSize: 24 }]}
-            value={code}
-            onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-            placeholder="000000"
-            placeholderTextColor={p.faint}
-            keyboardType="number-pad"
-            textContentType="oneTimeCode"
-            autoComplete="one-time-code"
-            accessibilityLabel="6-digit code"
-            autoFocus
-          />
-        )}
+        <TextInput
+          style={input}
+          value={email}
+          onChangeText={(t) => {
+            setEmail(t)
+            // A different address needs a new code.
+            if (sent) (setSent(false), setCode(''))
+          }}
+          placeholder="you@example.com"
+          placeholderTextColor={p.faint}
+          autoCapitalize="none"
+          autoComplete="email"
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          accessibilityLabel="Email address"
+          autoFocus={!sent}
+        />
+        {sent ? (
+          <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(motion.standard)} style={{ gap: space.sm }}>
+            <Txt tone="quiet" accessibilityLiveRegion="polite">{`We sent a 6-digit code to ${email.trim()}. It works for an hour.`}</Txt>
+            <TextInput
+              style={[input, { letterSpacing: 6, fontSize: 24 }]}
+              value={code}
+              onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              placeholderTextColor={p.faint}
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              accessibilityLabel="6-digit code"
+              autoFocus
+            />
+          </Animated.View>
+        ) : null}
         {!sent && review ? (
           <TextInput
             style={input}
