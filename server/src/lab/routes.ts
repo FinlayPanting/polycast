@@ -7,7 +7,8 @@ import type { Storage } from '../providers/types'
 import { fetchEffectsCatalog, roomSettings } from '../roomAudition'
 import { GUIDES, guideById } from '../voices'
 import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, type MomentVariant } from './moment'
-import { momentCaptions, renderMomentVideo, VIDEO_MAX_SEC } from './video'
+import { fetchArtwork, momentCaptions, renderMomentVideo, VIDEO_MAX_SEC } from './video'
+import type { LookupHost } from '../safeFetch'
 import { estimateVoiceUSD, GEMINI_TTS, TEXT_MODELS, voicePerHourUSD } from './prices'
 import { getRun, labSpend, listRuns, pickRun, saveRun, type RunKind } from './runs'
 import { clientAddress, rateLimiter } from '../rateLimit'
@@ -31,6 +32,8 @@ export interface LabDeps {
   download: (url: string) => Promise<Uint8Array>
   fingerprint?: (audio: Uint8Array) => Promise<Uint8Array>
   fetch?: typeof fetch
+  /** Resolves host names for safeFetch; tests swap in a fake (PC-1030-01). */
+  lookupHost?: LookupHost
   /** The ElevenLabs model the guide uses now (resolved at start-up). */
   elevenModel?: string
   /** How long a wrong password waits before its answer (PC-1022-02); tests set 0. */
@@ -326,15 +329,7 @@ export function createLab(deps: LabDeps) {
       const episode = await episodeAudio(ep, { download: deps.download, fingerprint: deps.fingerprint, fetchImpl: f })
       const r = await renderMoment(ep, episode, momentId, { label: 'Stored' }, { keys: deps.keys, storage: deps.storage, fetchImpl: f, elevenModel: deps.elevenModel }, { leadSec: Number(body.leadSec ?? 5), tailSec: Number(body.tailSec ?? 4) })
       const [row] = await deps.sql`select coalesce(e.image, p.artwork) as image from episodes e join podcasts p on p.id = e.podcast_id where e.id = ${ep.id}`
-      let artwork: Uint8Array | undefined
-      if (typeof row?.image === 'string' && /^https:\/\//.test(row.image)) {
-        try {
-          const res = await f(row.image, { signal: AbortSignal.timeout(10_000) })
-          if (res.ok) artwork = new Uint8Array(await res.arrayBuffer())
-        } catch {
-          artwork = undefined // the video still works without the artwork
-        }
-      }
+      const artwork = await fetchArtwork(row?.image, { fetch: f, lookupHost: deps.lookupHost })
       const mp4 = await (deps.renderVideo ?? renderMomentVideo)({
         mp3: r.mp3,
         durationSec: r.durationSec,

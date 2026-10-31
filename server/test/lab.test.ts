@@ -7,6 +7,7 @@ import { cleanTake, takeHash, voiceAndStore, voiceLine } from '../src/lab/voice'
 import { episodeAudio, renderMoment, type EpisodeForLab } from '../src/lab/moment'
 import { compareScripts, firstMinutes, scriptPrompt } from '../src/lab/writing'
 import { createLab, LAB_WRONG_TRIES } from '../src/lab/routes'
+import { ARTWORK_MAX_BYTES, fetchArtwork } from '../src/lab/video'
 import { labSpend, listRuns, pickRun, saveRun } from '../src/lab/runs'
 import { wavDurationSec } from '../src/audio'
 import type { Storage } from '../src/providers/types'
@@ -217,6 +218,40 @@ describe('Guide moment preview', () => {
   }, FFMPEG_TEST_MS)
 })
 
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70])
+const publicHost = async () => ['93.184.216.34']
+
+describe('Moment video artwork is fetched the safe way (PC-1030-01)', () => {
+  const answering = (body: Uint8Array, headers: Record<string, string> = {}, seen: string[] = []) =>
+    (async (url: string) => (seen.push(String(url)), new Response(body, { headers }))) as unknown as typeof fetch
+
+  it('keeps real artwork from a public address', async () => {
+    expect([...(await fetchArtwork('https://art.test/a.jpg', { fetch: answering(JPEG), lookupHost: publicHost }))!]).toEqual([...JPEG])
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    expect(await fetchArtwork('https://art.test/a.png', { fetch: answering(png), lookupHost: publicHost })).toBeDefined()
+  })
+
+  it('never asks an internal address, even by redirect', async () => {
+    const seen: string[] = []
+    expect(await fetchArtwork('https://art.test/a.jpg', { fetch: answering(JPEG, {}, seen), lookupHost: async () => ['10.0.0.5'] })).toBeUndefined()
+    expect(await fetchArtwork('https://169.254.169.254/latest/meta-data', { fetch: answering(JPEG, {}, seen) })).toBeUndefined()
+    expect(seen).toEqual([])
+    const redirecting = (async (url: string) => (seen.push(String(url)), new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/x.jpg' } }))) as unknown as typeof fetch
+    expect(await fetchArtwork('https://art.test/a.jpg', { fetch: redirecting, lookupHost: publicHost })).toBeUndefined()
+    expect(seen).toEqual(['https://art.test/a.jpg'])
+  })
+
+  it('gives up on anything over 5 MB, and on anything that isn’t an image', async () => {
+    const huge = new Uint8Array(ARTWORK_MAX_BYTES + 1)
+    huge.set(JPEG)
+    expect(await fetchArtwork('https://art.test/a.jpg', { fetch: answering(huge), lookupHost: publicHost })).toBeUndefined()
+    expect(await fetchArtwork('https://art.test/a.jpg', { fetch: answering(new Uint8Array(1), { 'content-length': String(ARTWORK_MAX_BYTES + 1) }), lookupHost: publicHost })).toBeUndefined()
+    expect(await fetchArtwork('https://art.test/a.jpg', { fetch: answering(new TextEncoder().encode('<html>not art</html>')), lookupHost: publicHost })).toBeUndefined()
+    expect(await fetchArtwork('http://art.test/a.jpg', { fetch: answering(JPEG), lookupHost: publicHost })).toBeUndefined()
+    expect(await fetchArtwork(undefined)).toBeUndefined()
+  })
+})
+
 describe("'Mia steps in' video route (PC-1029-10)", () => {
   it('makes the stored moment into a video with the artwork, subtitles and Mia’s card, serves it with the password in the address, and spends nothing', async () => {
     const storage = memoryStorage()
@@ -226,20 +261,20 @@ describe("'Mia steps in' video route (PC-1029-10)", () => {
     const fetched: string[] = []
     const f = (async (url: string, init?: RequestInit) => {
       fetched.push(String(url))
-      return String(url) === 'https://art.test/show.jpg' ? new Response(new Uint8Array([9, 9, 9])) : base(url, init)
+      return String(url) === 'https://art.test/show.jpg' ? new Response(JPEG, { headers: { 'Content-Type': 'image/jpeg' } }) : base(url, init)
     }) as unknown as typeof fetch
     const ep = fakeEpisode()
     const row = { id: ep.id, title: ep.title, podcast_title: ep.podcastTitle, audio_url: ep.audioUrl, language: 'sv', native_language: 'en', source: 'scribe', words: ep.transcript.words, segments: ep.transcript.segments, plan: ep.plan, guide_id: 'mia', image: 'https://art.test/show.jpg' }
     const sql = (async () => [row]) as unknown as Sql
     let made: any
-    const app = createLab({ sql, token: 'secret', keys: {}, storage, download: async () => toneMp3(120, 220), fetch: f, wrongPasswordDelayMs: 0, renderVideo: async (input) => ((made = input), new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112])) })
+    const app = createLab({ sql, token: 'secret', keys: {}, storage, download: async () => toneMp3(120, 220), fetch: f, lookupHost: publicHost, wrongPasswordDelayMs: 0, renderVideo: async (input) => ((made = input), new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112])) })
     const res = await app.request('/api/moment/video', { method: 'POST', headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' }, body: JSON.stringify({ episodeId: ep.id, momentId: 'spotlight-1' }) })
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.videoId).toMatch(/^[0-9a-f-]{36}$/)
     expect(made.showTitle).toBe('Podd')
     expect(made.guideName).toBe('Mia')
-    expect([...made.artwork]).toEqual([9, 9, 9])
+    expect([...made.artwork]).toEqual([...JPEG])
     expect(made.captions.filter((c: any) => c.who === 'guide').map((c: any) => c.text)).toEqual(['That was Anna:', 'försenad means late.'])
     expect(made.captions.some((c: any) => c.who === 'host')).toBe(true)
     // Stored lines only: no voice was asked for.

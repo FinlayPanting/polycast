@@ -5,6 +5,7 @@ import type { Segment } from '@polycast/core'
 import { splitScript } from '../pipeline/voice'
 import type { PreviewPiece } from './moment'
 import { runFfmpeg } from './sound'
+import { POLYCAST_UA, safeFetch, type LookupHost } from '../safeFetch'
 
 /**
  * "Mia steps in" as a short vertical video (PC-1029-10): the Lab's moment preview (the host, Mia's moment, the
@@ -18,6 +19,35 @@ export const VIDEO_W = 1080
 export const VIDEO_H = 1920
 /** Long enough for a moment with a little of the show either side; short enough for a post. */
 export const VIDEO_MAX_SEC = 45
+
+/** Show artwork is a few hundred kilobytes; anything past this isn't artwork (PC-1030-01). */
+export const ARTWORK_MAX_BYTES = 5 * 1024 * 1024
+
+/** JPEG, PNG, WebP or GIF, by the file's first bytes, whatever the reply claims. */
+export function looksLikeImage(b: Uint8Array): boolean {
+  const at = (i: number, ...xs: number[]) => xs.every((x, j) => b[i + j] === x)
+  return (
+    at(0, 0xff, 0xd8, 0xff) ||
+    at(0, 0x89, 0x50, 0x4e, 0x47) ||
+    (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) ||
+    at(0, 0x47, 0x49, 0x46, 0x38)
+  )
+}
+
+/**
+ * The show's artwork for a moment video, fetched the safe way (PC-1030-01): the address comes from a feed, so it
+ * goes through safeFetch like every other feed address (public addresses only, checked redirects, a time limit),
+ * capped at 5 MB, and kept only if it is an image. Anything else gives undefined and the video goes without it.
+ */
+export async function fetchArtwork(url: unknown, opts: { fetch?: typeof fetch; lookupHost?: LookupHost } = {}): Promise<Uint8Array | undefined> {
+  if (typeof url !== 'string' || !/^https:\/\//.test(url)) return undefined
+  try {
+    const r = await safeFetch(url, { fetch: opts.fetch, lookupHost: opts.lookupHost, timeoutMs: 10_000, maxBytes: ARTWORK_MAX_BYTES, headers: POLYCAST_UA })
+    return r.ok && looksLikeImage(r.body) ? r.body : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export interface Caption {
   start: number
