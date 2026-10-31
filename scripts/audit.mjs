@@ -93,6 +93,9 @@ const BLOCKING = new Set(['high', 'critical'])
 export const PATCHED = {
   // PC-1023-07: 0.3 and later are ES modules only, and expo-router's query-string 7 require()s it.
   'GHSA-vcc3-ghjq-m6fr': { module: 'decode-uri-component', version: '0.2.2', patch: 'patches/decode-uri-component@0.2.2.patch' },
+  // PC-1030-02: the quadratic %XX-run slowdown fixed in 0.5.1, whose decoder the same patch ports
+  // (app/src/lib/oddLinks.test.ts times a 100,000-character run).
+  'GHSA-qr28-fpjm-wq7f': { module: 'decode-uri-component', version: '0.2.2', patch: 'patches/decode-uri-component@0.2.2.patch' },
 }
 
 /**

@@ -69,6 +69,10 @@ describe('the dependency audit in pnpm check', () => {
     const duc = (version: string) => ({ module_name: 'decode-uri-component', severity: 'moderate', vulnerable_versions: '<=0.4.2', title: 't', url: 'https://github.com/advisories/GHSA-vcc3-ghjq-m6fr', findings: [{ version, paths: [] }] })
     expect(triage({ advisories: { 1: duc('0.2.2') } })).toMatchObject({ reported: [], patched: [expect.stringContaining('patches/decode-uri-component@0.2.2.patch')] })
     expect(triage({ advisories: { 1: duc('0.4.1') } }).reported).toHaveLength(1)
+    // PC-1030-02: the newer, high advisory is covered by the same patch, and still only for 0.2.2.
+    const qr28 = (version: string) => ({ ...duc(version), severity: 'high', vulnerable_versions: '<=0.5.0', url: 'https://github.com/advisories/GHSA-qr28-fpjm-wq7f' })
+    expect(triage({ advisories: { 1: qr28('0.2.2') } })).toMatchObject({ blocking: [], reported: [], patched: [expect.stringContaining('GHSA-qr28-fpjm-wq7f')] })
+    expect(triage({ advisories: { 1: qr28('0.5.0') } }).patched).toHaveLength(0)
     for (const fix of Object.values(PATCHED) as { patch: string }[]) expect(existsSync(new URL(`../../${fix.patch}`, import.meta.url))).toBe(true)
   })
 })
