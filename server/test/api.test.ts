@@ -118,6 +118,8 @@ run('API and worker', () => {
     expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`, { level: 'handsOn' })).json()).guidanceLevel).toBe('handsOn')
     expect((await (await call(anna, 'POST', `/v1/episodes/${episodeId}/lesson`, { level: 'loud' })).json()).guidanceLevel).toBe('standard')
     expect(listen.episode.audioUrl).toBe('https://cdn.example.com/1.mp3')
+    // When it came out, for the Fresh stamp (PC-1030-08): the feed's pubDate.
+    expect(new Date(listen.episode.published).toISOString()).toBe('2026-10-05T06:00:00.000Z')
     expect(listen.transcript.segments.length).toBeGreaterThan(10)
     expect(listen.plan.moments.length).toBeGreaterThan(5)
     // It was her free episode, so its wrap-up can mention Plus; once she has Plus, it doesn't.

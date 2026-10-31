@@ -12,6 +12,7 @@ import { didYouKnow, recapLayout, recapMessage, recapWords, wordCardLayout, word
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
 import { TranscriptSheet } from '../../components/TranscriptSheet'
 import { StampPress } from '../../components/StampPress'
+import { freshLine, isFreshStamp } from '../../lib/stampsCore'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
 import { getEpisodeReady, type GetReadyStep } from '../../lib/episodeAudio'
@@ -227,7 +228,7 @@ function WrapUp({ data, newStamp, savedThisListen, caughtAt, listenedSec, onDone
         </View>
       ) : null}
       <Txt variant="title">You listened to {data.episode.title}</Txt>
-      {newStamp ? <StampPress stamp={newStamp} /> : null}
+      {newStamp ? <StampPress stamp={newStamp} line={isFreshStamp(newStamp) ? freshLine(guideName(guideId)) : undefined} /> : null}
       {questions.map((q, i) => (
         <View key={i} style={{ gap: space.sm }}>
           <Txt variant="bodyStrong">{q.prompt}</Txt>

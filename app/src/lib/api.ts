@@ -75,7 +75,8 @@ export type PrepareResult =
   | { status: 'queued'; jobId: string; charge: 'none' | 'freeEpisode' | 'plus' | 'ownKeys' }
 
 export interface ListenPayload {
-  episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number }
+  /** `published` (PC-1030-08) is missing on lessons saved to the phone before 31 Oct 2026. */
+  episode: { id: string; title: string; podcastTitle: string; audioUrl: string; image: string | null; durationSec: number; published?: string | null }
   transcript: { language: string; segments: Segment[]; words: Word[]; glossary?: Record<string, GlossEntry> }
   guided: boolean
   /** Set on the phone, not by the server: the advert breaks in the learner's own copy. */

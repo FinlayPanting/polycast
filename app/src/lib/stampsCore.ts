@@ -1,4 +1,4 @@
-import { seasonalStamp, type SeasonStamp } from '@polycast/core'
+import { localDay, seasonalStamp, type SeasonStamp } from '@polycast/core'
 
 /**
  * Seasonal stamps (PC-1024-07): a guided episode finished while a season is on earns its stamp.
@@ -9,6 +9,37 @@ export function stampForFinish(listen: { guided: boolean; language: string }, no
 }
 
 export const stampId = (s: SeasonStamp) => s.seasonId
+
+/**
+ * Fresh off the press (PC-1030-08): a guided episode finished on the (learner's local) day it came out presses
+ * a small 'Fresh' stamp into You, at most once a week. Never announced; the guide says one line on the wrap-up.
+ */
+export const FRESH_STAMP_NAME = 'Fresh'
+export const FRESH_LINE = 'Heard the day it aired. Very up to date.'
+
+/** The ISO week of a local day, "2026-W44", so a week's Fresh stamp has one id. */
+export function isoWeek(d: Date): string {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const day = (t.getDay() + 6) % 7 // Monday 0
+  t.setDate(t.getDate() - day + 3) // that week's Thursday
+  const firstThursday = new Date(t.getFullYear(), 0, 4)
+  const week = 1 + Math.round(((t.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getDay() + 6) % 7)) / 7)
+  return `${t.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+export function freshStamp(listen: { guided: boolean; language: string; published?: string | null }, now: Date): SeasonStamp | undefined {
+  if (!listen.guided || !listen.published) return undefined
+  const published = new Date(listen.published)
+  if (Number.isNaN(published.getTime()) || published.getTime() > now.getTime() + 60_000 || localDay(published) !== localDay(now)) return undefined
+  return { seasonId: `fresh-${isoWeek(now)}`, language: listen.language, name: FRESH_STAMP_NAME, earnedOn: localDay(now) }
+}
+
+export const isFreshStamp = (s: SeasonStamp) => s.seasonId.startsWith('fresh-')
+
+/** What the guide says under a newly pressed Fresh stamp. */
+export function freshLine(guideName: string): string {
+  return `${guideName}: “${FRESH_LINE}”`
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 

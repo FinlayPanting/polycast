@@ -286,8 +286,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const s = sessionRef.current
     if (s) void savePosition(s.user.id, params.id, state.position, true)
     if (last?.id === params.id) remember(undefined)
-    // A seasonal stamp for a guided episode finished while a season is on (PC-1024-07).
-    if (data) void keepStampFor({ guided: data.guided, language: data.transcript.language }).then((s) => s && setNewStamp(s), () => {})
+    // A seasonal stamp for a guided episode finished while a season is on (PC-1024-07), and Fresh for one
+    // finished the day it came out (PC-1030-08).
+    if (data) void keepStampFor({ guided: data.guided, language: data.transcript.language, published: data.episode.published }).then((s) => s && setNewStamp(s), () => {})
   }, [state.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mini = useMemo(

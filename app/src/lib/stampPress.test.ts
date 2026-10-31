@@ -29,6 +29,6 @@ describe('the stamp lands with a soft press (PC-1027-08)', () => {
     const src = readFileSync(new URL('../components/StampPress.tsx', import.meta.url), 'utf8')
     for (const c of ['BRAND.coral', 'BRAND.magenta', 'BRAND.violet', 'ImpactFeedbackStyle.Soft', 'useReducedMotion()']) expect(src).toContain(c)
     const wrap = readFileSync(new URL('../app/listen/[id].tsx', import.meta.url), 'utf8')
-    expect(wrap).toContain('<StampPress stamp={newStamp} />')
+    expect(wrap).toContain('<StampPress stamp={newStamp} line={isFreshStamp(newStamp) ? freshLine(guideName(guideId)) : undefined} />')
   })
 })

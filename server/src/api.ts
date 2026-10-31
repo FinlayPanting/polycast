@@ -713,7 +713,7 @@ export function createApi(deps: ApiDeps) {
       ? await sql`select plan, guide_id from lesson_plans where episode_id = ${episodeId} order by (guide_id = ${guideById(profile?.guide_id).id}) desc limit 1`
       : []
     return c.json({
-      episode: { id: episode.id, title: episode.title, podcastTitle: episode.podcast_title, audioUrl: withoutDeadPrefixes(episode.audio_url), image: episode.image ?? episode.artwork, durationSec: episode.duration_sec },
+      episode: { id: episode.id, title: episode.title, podcastTitle: episode.podcast_title, audioUrl: withoutDeadPrefixes(episode.audio_url), image: episode.image ?? episode.artwork, durationSec: episode.duration_sec, published: episode.published ?? null },
       transcript,
       guided,
       guidanceLevel: guided ? level : null,

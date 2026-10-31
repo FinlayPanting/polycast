@@ -12,7 +12,7 @@ import { Txt } from './ui'
  * A newly earned seasonal stamp, pressed onto the wrap-up in the logo's coral, magenta and violet with one
  * gentle haptic tap (PC-1027-08). Shown once per stamp; still when Reduce Motion is on.
  */
-export function StampPress({ stamp }: { stamp: SeasonStamp }) {
+export function StampPress({ stamp, line }: { stamp: SeasonStamp; /** The guide's line under it (PC-1030-08). */ line?: string }) {
   const reduceMotion = useReducedMotion()
   const plan = stampPress(reduceMotion)
   const scale = useSharedValue(plan.animate ? STAMP_PRESS.fromScale : 1)
@@ -33,7 +33,7 @@ export function StampPress({ stamp }: { stamp: SeasonStamp }) {
   const style = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scale: scale.value }, { rotate: `${rotate.value}deg` }] }))
 
   return (
-    <View accessible accessibilityRole="text" accessibilityLabel={stampEarnedLabel(stamp)} style={{ alignItems: 'center', paddingVertical: space.sm }}>
+    <View accessible accessibilityRole="text" accessibilityLabel={line ? `${stampEarnedLabel(stamp)} ${line}` : stampEarnedLabel(stamp)} style={{ alignItems: 'center', paddingVertical: space.sm, gap: space.sm }}>
       <Animated.View style={[{ borderRadius: 22, borderWidth: 2.5, borderColor: BRAND.coral, padding: 4 }, style]}>
         <View style={{ borderRadius: 18, borderWidth: 2, borderColor: BRAND.magenta, padding: 4 }}>
           <View style={{ borderRadius: 14, borderWidth: 1.5, borderColor: BRAND.violet, borderStyle: 'dashed', paddingHorizontal: space.lg, paddingVertical: space.md, alignItems: 'center', gap: 2 }}>
@@ -47,6 +47,11 @@ export function StampPress({ stamp }: { stamp: SeasonStamp }) {
           </View>
         </View>
       </Animated.View>
+      {line ? (
+        <Txt variant="small" tone="quiet" style={{ textAlign: 'center' }}>
+          {line}
+        </Txt>
+      ) : null}
     </View>
   )
 }
