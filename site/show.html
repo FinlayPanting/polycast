@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn with this show · Polycast</title>
+<meta name="description" content="Hear this podcast with subtitles and a guide on Polycast.">
+<meta name="theme-color" content="#1a1a30">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/"><img src="/icon.png" alt="">Polycast</a>
+</div></header>
+
+<main><div class="wrap hero">
+  <img src="/icon.png" alt="">
+  <h1>Learn with this show</h1>
+  <p class="lede">Hear it in Polycast with subtitles in your language and a guide who steps in when the host pauses. The episodes still come from the show's own feed.</p>
+  <p><a class="button" id="open" href="/">Open in Polycast</a></p>
+  <p id="get"><a href="/" id="store">Don’t have Polycast yet? It’s coming soon to the App Store: hear when it’s out.</a></p>
+</div></main>
+
+<footer><div class="wrap">
+  <a href="/">Home</a><a href="/creators">For podcast creators</a><a href="/privacy">Privacy</a>
+</div></footer>
+
+<script>
+  // 'Learn with this show' links (PC-1030-07): https://polycast.app/show?apple=<Apple show id>.
+  // With the app installed, "Open in Polycast" opens the show's page there. Without it, the App Store
+  // (until Polycast is listed, the home page's launch list).
+  const APP_STORE_URL = null
+  const apple = new URLSearchParams(location.search).get('apple') || ''
+  const open = document.getElementById('open')
+  const store = document.getElementById('store')
+  if (APP_STORE_URL) {
+    store.href = APP_STORE_URL
+    store.textContent = 'Don’t have Polycast yet? Get it on the App Store.'
+  }
+  if (/^\d{1,15}$/.test(apple)) {
+    open.href = `polycast://show?appleId=${apple}`
+  } else {
+    open.textContent = 'Find shows in Polycast'
+    open.href = APP_STORE_URL || '/'
+  }
+</script>
+</body>
+</html>

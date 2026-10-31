@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, GUESS_CLIPS_PER_LANGUAGE, guessClip, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
+import { cohortAlert, GUESS_CLIPS_PER_LANGUAGE, guessClip, isLaunchLanguage, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -18,6 +18,7 @@ import { LINE_REPORT_LIMITS, reportLine } from './lineReports'
 import { guideById } from './voices'
 import { feedTranscriptLink } from './worker'
 import { addressKey, blockKey, clientAddress, rateLimiter } from './rateLimit'
+import { CREATOR_LINK_LIMITS, findShowsForLinks } from './creatorLinks'
 import { createLab, type LabDeps } from './lab/routes'
 
 export type VerifyToken = (token: string) => Promise<string | undefined>
@@ -219,6 +220,23 @@ export function createApi(deps: ApiDeps) {
     await sql`insert into removal_requests (podcast_title, contact, message) values (${podcastTitle}, ${contact}, ${message})`
     await deps.alert?.('removal', `Removal request for "${podcastTitle}" from ${contact}`)
     return c.json({ ok: true })
+  })
+
+  // 'Learn with this show' (PC-1030-07): the creators page finds a host's show and hands back its link and
+  // show-notes line. No account; free (Apple's search and the feed's first bytes), so paced per address.
+  const linkPerAddress = rateLimiter(CREATOR_LINK_LIMITS.perAddressPerHour, 60 * 60_000)
+  const linkOverall = rateLimiter(CREATOR_LINK_LIMITS.overallPerHour, 60 * 60_000)
+  app.get('/creators/shows', async (c) => {
+    const q = (c.req.query('q') ?? '').trim().slice(0, CREATOR_LINK_LIMITS.maxChars)
+    const language = c.req.query('language')
+    if (!q || !isLaunchLanguage(language)) return c.json({ error: 'Please give your show’s name and pick its language.' }, 400)
+    if (!linkPerAddress.hit(addressKey(clientAddress((n) => c.req.header(n)))) || !linkOverall.hit('all'))
+      return c.json({ error: 'That’s a lot of searches. Please try again in an hour.' }, 429)
+    try {
+      return c.json({ results: await findShowsForLinks(sql, deps.fetch, q, language, { lookupHost: deps.lookupHost }) })
+    } catch {
+      return c.json({ error: 'The search didn’t work just now. Please try again in a moment.' }, 502)
+    }
   })
 
   // The app says this once per install, before sign-in. Nothing identifies the phone.

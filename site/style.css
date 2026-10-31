@@ -62,6 +62,14 @@ li { margin-bottom: 6px; }
 form label { display: block; font-weight: 600; margin: 16px 0 6px; }
 form input, form textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 form textarea { min-height: 120px; resize: vertical; }
+form select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+form select:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+.shows { list-style: none; padding: 0; margin: 8px 0 0; }
+.shows li { border-top: 1px solid var(--line); padding: 16px 0 4px; }
+.shows .line { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 10px 0; font-size: 15px; word-break: break-word; user-select: all; }
+.shows .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button.copy { font: inherit; font-size: 15px; font-weight: 600; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+button.copy:hover { border-color: var(--orange); }
 form input:focus, form textarea:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
 form button { margin-top: 20px; font: inherit; font-weight: 700; color: #1a1a30; background: var(--orange); border: 0; border-radius: 999px; padding: 12px 24px; cursor: pointer; }
 form button:disabled { opacity: 0.6; cursor: default; }

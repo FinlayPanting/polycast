@@ -2,7 +2,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/api/removal-requests", "destination": "https://polycast-production.up.railway.app/removal-requests" }
+    { "source": "/api/removal-requests", "destination": "https://polycast-production.up.railway.app/removal-requests" },
+    { "source": "/api/creators/shows", "destination": "https://polycast-production.up.railway.app/creators/shows" }
   ],
   "headers": [
     {

@@ -31,6 +31,30 @@
     <li><strong>New listeners.</strong> People learning your language find shows they'd never have come across, and often keep listening once they can follow along.</li>
   </ul>
 
+  <h2>Learn with this show: a link for your show notes</h2>
+  <p>Put one line in your show notes and every episode carries it. Listeners learning your language get your show with subtitles and a guide, and every listen still comes from your feed.</p>
+
+  <div class="card">
+    <form id="showlink" novalidate>
+      <label for="showName">Your show's name</label>
+      <input id="showName" name="q" maxlength="100" required autocomplete="off">
+
+      <label for="showLanguage">Its language</label>
+      <select id="showLanguage" name="language" required>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="it">Italian</option>
+        <option value="pt">Portuguese</option>
+        <option value="sv">Swedish</option>
+      </select>
+
+      <button type="submit">Find my show</button>
+      <p class="status" id="linkStatus" role="status" aria-live="polite"></p>
+    </form>
+    <ul class="shows" id="shows"></ul>
+  </div>
+
   <h2>Ask for your show to be removed</h2>
   <p>If you'd rather your show wasn't on Polycast, tell us here. It'll be taken off within a few days, and you'll get a reply to confirm.</p>
 
@@ -80,6 +104,72 @@
       }
     } catch {
       status.textContent = 'That didn’t go through. Please try again, or email hello@polycast.app.'
+    } finally {
+      button.disabled = false
+    }
+  })
+</script>
+<script>
+  // 'Learn with this show' (PC-1030-07): find the show, then copy its link or its show-notes line.
+  const linkForm = document.getElementById('showlink')
+  const linkStatus = document.getElementById('linkStatus')
+  const shows = document.getElementById('shows')
+  const copyButton = (label, text) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'copy'
+    b.textContent = label
+    b.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text)
+        b.textContent = 'Copied'
+      } catch {
+        b.textContent = 'Select and copy it above'
+      }
+      setTimeout(() => (b.textContent = label), 2000)
+    })
+    return b
+  }
+  linkForm.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const q = linkForm.q.value.trim()
+    if (!q) {
+      linkStatus.textContent = 'Please type your show’s name.'
+      return
+    }
+    const button = linkForm.querySelector('button')
+    button.disabled = true
+    shows.replaceChildren()
+    linkStatus.textContent = 'Looking…'
+    try {
+      const res = await fetch(`/api/creators/shows?q=${encodeURIComponent(q)}&language=${encodeURIComponent(linkForm.language.value)}`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        linkStatus.textContent = body.error || 'That didn’t work. Please try again, or email hello@polycast.app.'
+        return
+      }
+      const results = body.results || []
+      linkStatus.textContent = results.length
+        ? 'Here’s what we found. Copy the line into your show notes, or just the link.'
+        : 'We couldn’t find it in that language. Check the name as it appears in Apple Podcasts, or email hello@polycast.app and we’ll make your link by hand.'
+      for (const r of results) {
+        const li = document.createElement('li')
+        const title = document.createElement('strong')
+        title.textContent = r.title
+        const author = document.createElement('span')
+        author.className = 'hint'
+        author.textContent = r.author ? ` by ${r.author}` : ''
+        const line = document.createElement('p')
+        line.className = 'line'
+        line.textContent = r.line
+        const actions = document.createElement('div')
+        actions.className = 'actions'
+        actions.append(copyButton('Copy the line', r.line), copyButton('Copy the link', r.link))
+        li.append(title, author, line, actions)
+        shows.append(li)
+      }
+    } catch {
+      linkStatus.textContent = 'That didn’t work. Please try again, or email hello@polycast.app.'
     } finally {
       button.disabled = false
     }

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApi, KNOWN_WORDS_EMPTY_TTL_MS, KNOWN_WORDS_TTL_MS, knownWordsFresh, LEARNER_LIMITS, MOOD_LIMITS, MOOD_MESSAGES, showIsFresh, SLOW_DOWN, withDeadline } from '../src/api'
 import { runJob, showNamesFor, type WorkerDeps } from '../src/worker'
+import { CREATOR_LINK_LIMITS } from '../src/creatorLinks'
 import { ProviderError, type TextModel } from '../src/providers/types'
 import { OWN_KEYS_LIMITS } from '../src/ownKeys'
 import { claimNextJob, queueSyncUpgrades, type Sql } from '../src/db'
@@ -369,6 +370,38 @@ run('API and worker', () => {
     // Someone else can still reach Finlay.
     expect((await send({ podcastTitle: 'Show', contact: 'c@d.e' }, '198.51.100.9')).status).toBe(200)
     expect(alerts.filter((a) => a.startsWith('removal:')).length - before).toBe(6)
+  })
+
+  it('finds a host’s show for a Learn with this show link, only in its language, without an account (PC-1030-07)', async () => {
+    const searched: string[] = []
+    const withSearch: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.includes('itunes.apple.com/search')) {
+        searched.push(url)
+        return Response.json({ results: [
+          { collectionId: 555, collectionName: 'Svenska Samtal', artistName: 'Anna', feedUrl: FEED_URL, artworkUrl600: 'https://img/a.jpg', genres: [] },
+          { collectionId: 556, collectionName: 'Swedish in English', artistName: 'Bo', feedUrl: 'https://feeds.example.com/english.xml', genres: [] },
+        ] })
+      }
+      if (url === 'https://feeds.example.com/english.xml') return new Response(RSS.replace('<language>sv</language>', '<language>en</language>'))
+      return fakeFetch(input, init)
+    }
+    const app = createApi({ sql, verify: async (t) => t, fetch: withSearch, lookupHost: publicHost })
+    const find = (q: string, language: string, ip = '203.0.113.20') => app.request(`/creators/shows?q=${encodeURIComponent(q)}&language=${language}`, { headers: { 'X-Real-IP': ip } })
+    const res = await find('Svenska Samtal', 'sv')
+    expect(res.status).toBe(200)
+    const { results } = await res.json()
+    expect(results).toEqual([
+      { appleId: '555', title: 'Svenska Samtal', author: 'Anna', artwork: expect.any(String), link: 'https://polycast.app/show?apple=555', line: 'Learning Swedish? Hear this show with a guide on Polycast: https://polycast.app/show?apple=555' },
+    ])
+    expect(searched.every((u) => new URL(u).searchParams.get('country') === 'se')).toBe(true)
+    expect((await find('', 'sv')).status).toBe(400)
+    expect((await find('Show', 'en')).status).toBe(400)
+    for (let i = 1; i < CREATOR_LINK_LIMITS.perAddressPerHour; i++) await find('Svenska', 'sv', '203.0.113.21')
+    expect((await find('Svenska', 'sv', '203.0.113.21')).status).toBe(200)
+    const limited = await find('Svenska', 'sv', '203.0.113.21')
+    expect(limited.status).toBe(429)
+    expect((await find('Svenska', 'sv', '198.51.100.21')).status).toBe(200)
   })
 
   it('keeps each learner to a fair pace on search, show pages and preparing', async () => {
