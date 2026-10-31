@@ -374,6 +374,26 @@ run('API and worker', () => {
     expect(alerts.filter((a) => a.startsWith('removal:')).length - before).toBe(6)
   })
 
+  it("says how many other learners finished an episode this week, only from ten up (PC-1030-09)", async () => {
+    const [ep] = await sql`select id from episodes limit 1`
+    const me = await learner()
+    const company = async () => (await (await call(me, 'GET', `/v1/episodes/${ep!.id}/company`)).json()).others
+    await sql`delete from listens where episode_id = ${ep!.id}`
+    const others: string[] = []
+    for (let i = 0; i < 10; i++) others.push(await learner())
+    // Nine finished this week, one a fortnight ago, and she herself: not yet ten others.
+    for (const [i, id] of others.entries()) await sql`insert into listens (user_id, episode_id, finished_at) values (${id}, ${ep!.id}, now() - ${i === 9 ? '14 days' : '1 day'}::interval)`
+    await sql`insert into listens (user_id, episode_id, finished_at) values (${me}, ${ep!.id}, now())`
+    expect(await company()).toBeNull()
+    // Started but not finished doesn't count either.
+    const halfway = await learner()
+    await sql`insert into listens (user_id, episode_id) values (${halfway}, ${ep!.id})`
+    expect(await company()).toBeNull()
+    await sql`update listens set finished_at = now() where user_id = ${others[9]!}`
+    expect(await company()).toBe(10)
+    expect(await (await call(me, 'GET', '/v1/episodes/nope/company')).json()).toEqual({ others: null })
+  })
+
   it('finds a host’s show for a Learn with this show link, only in its language, without an account (PC-1030-07)', async () => {
     const searched: string[] = []
     const withSearch: typeof fetch = async (input, init) => {

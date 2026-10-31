@@ -1,4 +1,4 @@
-import { advertAt, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment, type SeasonStamp } from '@polycast/core'
+import { advertAt, companyLine, findOldFriends, normalizeToken, segmentAt, selectMoments, wordClip, type Clip, type GuideMoment, type SeasonStamp } from '@polycast/core'
 import { router, useLocalSearchParams } from 'expo-router'
 import { SymbolView, type SFSymbol } from 'expo-symbols'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -189,6 +189,15 @@ function WrapUp({ data, newStamp, savedThisListen, caughtAt, listenedSec, onDone
   useEffect(() => {
     void countFinished(data.episode.id).then(setCompleted, () => {})
   }, [data.episode.id])
+  // You're not listening alone (PC-1030-09): one quiet line when ten or more others heard it this week.
+  const [company, setCompany] = useState<string>()
+  useEffect(() => {
+    let live = true
+    void api.company(data.episode.id).then((r) => live && setCompany(companyLine(r.others)), () => {})
+    return () => {
+      live = false
+    }
+  }, [data.episode.id])
   const answered = Object.keys(answers).length
   const stats = useMemo<RecapStats>(() => ({ minutes: listenedSec / 60, quiz: answered ? { right, of: questions.length } : undefined, completed }), [listenedSec, answered, right, questions.length, completed])
   // A tongue-twister for the curious (PC-1029-08): hold the guide's mark. Voiced ahead of time, never announced.
@@ -228,6 +237,11 @@ function WrapUp({ data, newStamp, savedThisListen, caughtAt, listenedSec, onDone
         </View>
       ) : null}
       <Txt variant="title">You listened to {data.episode.title}</Txt>
+      {company ? (
+        <Txt tone="quiet" style={{ marginTop: -space.sm }}>
+          {company}
+        </Txt>
+      ) : null}
       {newStamp ? <StampPress stamp={newStamp} line={isFreshStamp(newStamp) ? freshLine(guideName(guideId)) : undefined} /> : null}
       {questions.map((q, i) => (
         <View key={i} style={{ gap: space.sm }}>

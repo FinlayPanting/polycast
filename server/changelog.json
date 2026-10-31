@@ -696,6 +696,14 @@
    "title": "Eurowaves' picks on Discover",
    "description": "Fresh voices now includes shows recommended by the Eurowaves newsletter, in Spanish, French, Italian and European Portuguese, each marked 'Recommended by Eurowaves'.",
    "tryIt": "Open Discover in Italian or Portuguese and look at Fresh voices"
+  },
+  {
+   "id": "PC-1030-09",
+   "date": "2026-10-31",
+   "kind": "Feature",
+   "title": "You're not listening alone",
+   "description": "When at least ten other learners finished the same episode this week, the wrap-up says so in one quiet line. Counts only, never names.",
+   "tryIt": "Finish a popular episode and look under its title on the wrap-up"
   }
  ]
 }

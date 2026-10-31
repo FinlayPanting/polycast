@@ -13,6 +13,7 @@ export async function demoCall<T>(method: string, path: string): Promise<T> {
     } as T
   if (path.startsWith('/v1/discover/')) return { shelves: SHELVES } as T
   if (path.startsWith('/v1/episodes/') && path.endsWith('/listen')) return LISTEN as T
+  if (path.startsWith('/v1/episodes/') && path.endsWith('/company')) return { others: 23 } as T
   if (path.startsWith('/v1/episodes/') && path.endsWith('/primer')) return { primer: path.includes('/ep1/') ? PRIMER : null } as T
   if (path === '/v1/podcasts/open')
     return {

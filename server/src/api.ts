@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose'
 import { readFileSync } from 'node:fs'
-import { cohortAlert, GUESS_CLIPS_PER_LANGUAGE, guessClip, isLaunchLanguage, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
+import { cohortAlert, GUESS_CLIPS_PER_LANGUAGE, guessClip, companyCount, COMPANY_DAYS, isLaunchLanguage, isTipProduct, isVideo, knownWords, LAUNCH_LANGUAGES, type GuessClip, normaliseMood, ownKeysEstimate, parseChangelog, REFUSAL_MESSAGES, type ChangelogEntry, type KnownWord, withoutDeadPrefixes } from '@polycast/core'
 import { lookupApple, searchPodcasts, syncFeed, type Fetch } from './catalogue'
 import { FEED_TIMEOUT_MS, type LookupHost } from './safeFetch'
 import { freeEpisodesClaimed, guideAllowed, requestOwnKeysPreparation, requestPreparation, startListen, type Sql } from './db'
@@ -676,6 +676,18 @@ export function createApi(deps: ApiDeps) {
     }
     guessCache = { at: Date.now(), clips }
     return c.json({ clips })
+  })
+
+  // You're not listening alone (PC-1030-09): how many other learners finished this episode in the last week,
+  // or null below ten. A count only; nobody's name or listen is ever sent.
+  app.get('/v1/episodes/:id/company', async (c) => {
+    const episodeId = c.req.param('id')
+    if (!/^[0-9a-f-]{36}$/i.test(episodeId)) return c.json({ others: null })
+    const [row] = await sql`
+      select count(*)::int as n from listens
+      where episode_id = ${episodeId} and user_id <> ${c.get('userId')}
+        and finished_at > now() - make_interval(days => ${COMPANY_DAYS})`
+    return c.json({ others: companyCount(row?.n ?? 0) })
   })
 
   app.get('/v1/episodes/:id/primer', async (c) => {

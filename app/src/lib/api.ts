@@ -145,6 +145,8 @@ export const api = {
   guessClips: () => call<{ clips: GuessClip[] }>('GET', '/v1/guess-clips', undefined, 8_000),
   /** The Episode Primer shown before pressing play; null for episodes prepared before primers. */
   primer: (episodeId: string) => call<{ primer: Primer | null; guideId?: string | null }>('GET', `/v1/episodes/${episodeId}/primer`),
+  /** You're not listening alone (PC-1030-09): other learners who finished it this week, null below ten. */
+  company: (episodeId: string) => call<{ others: number | null }>('GET', `/v1/episodes/${episodeId}/company`, undefined, 5_000),
   deleteAccount: () => call<{ ok: true }>('DELETE', '/v1/account'),
 }
 
