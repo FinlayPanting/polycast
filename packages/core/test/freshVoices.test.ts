@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FRESH_VOICES, freshVoiceWhy, LAUNCH_LANGUAGES, sameShowTitle } from '../src'
+import { EUROWAVES, FRESH_VOICES, freshVoiceWhy, LAUNCH_LANGUAGES, sameShowTitle } from '../src'
 
 describe('Fresh voices (PC-1023-05)', () => {
   it('lists shows only for launch languages, each once', () => {
@@ -7,11 +7,18 @@ describe('Fresh voices (PC-1023-05)', () => {
       expect(LAUNCH_LANGUAGES).toContain(lang)
       const titles = shows.map((s) => s.title.toLowerCase())
       expect(new Set(titles).size).toBe(titles.length)
-      for (const s of shows) expect(freshVoiceWhy(s.country)).toMatch(/^New voice from /)
+      for (const s of shows) expect(freshVoiceWhy(s.country, s.credit)).toMatch(/^(New voice from |Recommended by )/)
     }
     expect(FRESH_VOICES.es!.map((s) => s.title)).toContain('Ahora me entero')
     expect(FRESH_VOICES.fr!.map((s) => s.title)).toContain('STONKS! avec Arthur Perticoz')
     expect(FRESH_VOICES.pt!.map((s) => s.title)).toContain('Café Frio Show com Victor Vaz')
+  })
+
+  it('adds Eurowaves #50’s picks with a small credit (PC-1030-06)', () => {
+    const picks = Object.entries(FRESH_VOICES).flatMap(([lang, shows]) => shows.filter((s) => s.credit === EUROWAVES).map((s) => `${lang}:${s.country}:${s.title}`))
+    expect(picks.sort()).toEqual(['es:es:Número Mágico', 'fr:fr:Night Confessions', 'it:it:DigitMondo', 'pt:pt:Fumaça', 'pt:pt:Lar Doce Livro'])
+    expect(freshVoiceWhy('it', EUROWAVES)).toBe('Recommended by Eurowaves')
+    expect(freshVoiceWhy('pt')).toBe('New voice from Portugal')
   })
 
   it('matches titles despite case, accents and punctuation, and nothing else', () => {

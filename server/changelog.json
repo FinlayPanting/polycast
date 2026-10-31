@@ -688,6 +688,14 @@
    "title": "Two screens fewer to the first listen",
    "description": "Signing in with email now happens on one screen (the code box appears under your address), and the words you already know show up as soon as you tap a language.",
    "tryIt": "Sign out and sign in with email, then pick a language"
+  },
+  {
+   "id": "PC-1030-06",
+   "date": "2026-10-31",
+   "kind": "Content",
+   "title": "Eurowaves' picks on Discover",
+   "description": "Fresh voices now includes shows recommended by the Eurowaves newsletter, in Spanish, French, Italian and European Portuguese, each marked 'Recommended by Eurowaves'.",
+   "tryIt": "Open Discover in Italian or Portuguese and look at Fresh voices"
   }
  ]
 }

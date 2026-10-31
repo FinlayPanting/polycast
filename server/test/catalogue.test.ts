@@ -65,6 +65,34 @@ run('Top charts only show the target language', () => {
     expect(calls).toContain('https://feeds.example.com/redir-1.xml')
   })
 
+  it('adds Eurowaves’ picks that pass the language check, credited on the tile (PC-1030-06)', async () => {
+    const calls: string[] = []
+    const byTitle: Record<string, { collectionId: string; collectionName: string }[]> = {
+      'Fumaça': [{ collectionId: 'pt-81', collectionName: 'Fumaça' }],
+      'Lar Doce Livro': [{ collectionId: 'en-82', collectionName: 'Lar Doce Livro' }], // feed not in Portuguese: left out
+      'Café Frio Show com Victor Vaz': [{ collectionId: 'pt-83', collectionName: 'Café Frio Show com Victor Vaz' }],
+      'DigitMondo': [{ collectionId: 'it-84', collectionName: 'DigitMondo' }],
+    }
+    const base = fakeApple({}, calls)
+    const f: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.includes('itunes.apple.com/search')) {
+        calls.push(url)
+        const u = new URL(url)
+        const term = u.searchParams.get('term')!
+        return Response.json({ results: (byTitle[term] ?? []).map((r) => ({ ...r, artistName: 'Host', feedUrl: `https://feeds.example.com/${r.collectionId}.xml` })) })
+      }
+      return base(input, init)
+    }
+    const pt = await freshVoices(sql, f, 'pt', NET)
+    expect(pt.map((s) => [s.appleId, s.why])).toEqual([
+      ['pt-83', 'New voice from Brazil'],
+      ['pt-81', 'Recommended by Eurowaves'],
+    ])
+    expect(calls.some((u) => u.includes('term=Fuma%C3%A7a') && u.includes('country=pt'))).toBe(true)
+    expect((await freshVoices(sql, f, 'it', NET)).map((s) => [s.appleId, s.why])).toEqual([['it-84', 'Recommended by Eurowaves']])
+  })
+
   it('finds Fresh voices by exact title in their country and keeps only feeds in the language (PC-1023-05)', async () => {
     const calls: string[] = []
     const byTitle: Record<string, { collectionId: string; collectionName: string }[]> = {
@@ -90,7 +118,7 @@ run('Top charts only show the target language', () => {
     const before = calls.length
     expect((await freshVoices(sql, f, 'fr', NET)).map((s) => s.appleId)).toEqual(['fr-71'])
     expect(calls.length).toBe(before)
-    // Spotify named no Swedish shows.
+    // Spotify named no Swedish shows, and neither did Eurowaves.
     expect(await freshVoices(sql, f, 'sv', NET)).toEqual([])
     const shelves = await discoverShelves(sql, f, 'fr', undefined, [], NET)
     const ids = shelves.map((s) => s.id)

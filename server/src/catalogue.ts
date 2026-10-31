@@ -5,6 +5,7 @@ import {
   CHART_COUNTRY,
   feedLanguageFromHead,
   FRESH_VOICES,
+  FRESH_VOICES_CACHE_KEY,
   freshVoiceWhy,
   interestQueries,
   interleaveCharts,
@@ -247,19 +248,19 @@ export function topChart(sql: Sql, f: Fetch, language: string, net: NetOpts = {}
 }
 
 /**
- * Fresh voices (PC-1023-05): Spotify's RADAR 2026 shows for the language, each found in Apple's catalogue
+ * Fresh voices (PC-1023-05): Spotify's RADAR 2026 shows and Eurowaves #50's picks (PC-1030-06) for the language, each found in Apple's catalogue
  * by its exact title in its own country, then kept only when its public feed is in the language. Refreshed
  * once a day like the charts; a show that can't be found is simply left out.
  */
 export function freshVoices(sql: Sql, f: Fetch, language: string, net: NetOpts = {}): Promise<(PodcastSummary & { why: string })[]> {
   const list = FRESH_VOICES[language]
   if (!list?.length) return Promise.resolve([])
-  return cachedChart(sql, language, 'fresh-voices:radar-2026', async () => {
+  return cachedChart(sql, language, FRESH_VOICES_CACHE_KEY, async () => {
     const found = await mapLimit(list, 4, async (v) => {
       const res = await f(itunesSearchUrl(v.title, v.country, 10)).catch(() => undefined)
       if (!res?.ok) return undefined
       const hit = parseItunesResults(await res.json()).find((r) => sameShowTitle(r.title, v.title))
-      return hit ? { ...hit, why: freshVoiceWhy(v.country) } : undefined
+      return hit ? { ...hit, why: freshVoiceWhy(v.country, v.credit) } : undefined
     })
     const shows = found.filter((s): s is PodcastSummary & { why: string } => Boolean(s))
     const kept = await keepShowsInLanguage(sql, f, shows, language, net)
