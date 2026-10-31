@@ -7,6 +7,7 @@ import type { Storage } from '../providers/types'
 import { fetchEffectsCatalog, roomSettings } from '../roomAudition'
 import { GUIDES, guideById } from '../voices'
 import { labEpisodes, loadEpisode, episodeAudio, momentSummary, renderMoment, type MomentVariant } from './moment'
+import { bestMoments } from './bestMoments'
 import { fetchArtwork, momentCaptions, renderMomentVideo, VIDEO_MAX_SEC } from './video'
 import type { LookupHost } from '../safeFetch'
 import { estimateVoiceUSD, GEMINI_TTS, TEXT_MODELS, voicePerHourUSD } from './prices'
@@ -264,6 +265,8 @@ export function createLab(deps: LabDeps) {
       durationSec: ep.transcript.segments.at(-1)?.end ?? 0,
       synced: Boolean(ep.plan.syncUrl),
       moments: [...ep.plan.moments].sort((a, b) => a.at - b.at).map(momentSummary),
+      // The best moments for a video, best first (PC-1030-10).
+      best: bestMoments(ep.plan.moments, ep.transcript),
     })
   })
 

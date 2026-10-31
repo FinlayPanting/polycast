@@ -85,6 +85,7 @@ input[type=range] { width: 100%; accent-color: var(--orange); }
 .speedv { font-family: var(--mono); color: var(--text); }
 
 /* Moments */
+.moment .best { color: var(--orange); font-weight: 600; }
 .moments { display: grid; gap: 6px; max-height: 360px; overflow: auto; padding-right: 4px; }
 .moment { text-align: left; background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px; cursor: pointer; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
 .moment[aria-pressed="true"] { border-color: var(--orange); background: color-mix(in srgb, var(--orange) 8%, var(--sunken)); }
@@ -544,7 +545,9 @@ async function loadEpisode() {
   $('.pInfo', picker.el).textContent = 'Loading…'
   try {
     picker.ep = await api(`/episodes/${id}?guide=${$('.pGuide', picker.el).value}`)
-    picker.moment = picker.ep.moments.find((m) => m.kind === 'listenFor') || picker.ep.moments[0] || null
+    // The best moment for a video comes first and is picked already (PC-1030-10).
+    const top = picker.ep.best?.[0] && picker.ep.moments.find((m) => m.id === picker.ep.best[0].id)
+    picker.moment = top || picker.ep.moments.find((m) => m.kind === 'listenFor') || picker.ep.moments[0] || null
     $('.pInfo', picker.el).textContent = `${LANG[picker.ep.language] || picker.ep.language} for ${LANG[picker.ep.nativeLanguage] || picker.ep.nativeLanguage} speakers · ${clock(picker.ep.durationSec)} · ${picker.ep.moments.length} moments · ${picker.ep.guide === $('.pGuide', picker.el).value ? '' : `only ${picker.ep.guide}’s plan exists · `}${picker.ep.synced ? 'adverts lined up automatically' : 'no sync fingerprint (older episode)'}`
     drawMoments()
   } catch (e) { $('.pInfo', picker.el).textContent = e.message }
@@ -552,14 +555,18 @@ async function loadEpisode() {
 function drawMoments() {
   const box = $('.pMoments', picker.el)
   const kind = $('.pKind', picker.el).value
+  // Best for a video first (PC-1030-10), then the rest in time order.
+  const best = new Map((picker.ep?.best || []).map((b, i) => [b.id, { ...b, rank: i + 1 }]))
   const ms = (picker.ep?.moments || []).filter((m) => !kind || m.kind === kind)
+  ms.sort((a, b) => (best.get(a.id)?.rank ?? 99) - (best.get(b.id)?.rank ?? 99) || a.at - b.at)
   box.innerHTML = ms.length ? '' : '<div class="empty">No moments of that kind.</div>'
   ms.forEach((m) => {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'moment'
     b.setAttribute('aria-pressed', String(picker.moment?.id === m.id))
-    b.innerHTML = `<span class="t">${clock(m.at)}</span><span class="k"><span class="kind">${esc(KIND[m.kind] || m.kind)}</span>${m.term ? ` · ${esc(m.term.text)}` : ''}${m.stored ? '' : ' <span class="muted">(not voiced)</span>'}</span><span class="s">${esc(m.script.replace(/\[\[|\]\]/g, '').replace(/\{clip:\d+\}/g, '▸'))}</span>`
+    const pick = best.get(m.id)
+    b.innerHTML = `<span class="t">${clock(m.at)}</span><span class="k">${pick ? `<span class="best">Best for a video #${pick.rank}</span> ` : ''}<span class="kind">${esc(KIND[m.kind] || m.kind)}</span>${m.term ? ` · ${esc(m.term.text)}` : ''}${m.stored ? '' : ' <span class="muted">(not voiced)</span>'}${pick ? ` <span class="muted">· ${esc(pick.reasons.join(', '))}</span>` : ''}</span><span class="s">${esc(m.script.replace(/\[\[|\]\]/g, '').replace(/\{clip:\d+\}/g, '▸'))}</span>`
     b.addEventListener('click', () => { picker.moment = m; drawMoments() })
     box.append(b)
   })
