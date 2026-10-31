@@ -672,6 +672,14 @@
    "title": "More clips in the guessing game",
    "description": "While an episode prepares, the guessing game now has up to five hosts per language from different shows, and won't play you the same clip twice.",
    "tryIt": "Prepare a new episode and tap 'Another one' a few times"
+  },
+  {
+   "id": "PC-1030-03",
+   "date": "2026-10-31",
+   "kind": "Feature",
+   "title": "Read the whole episode",
+   "description": "A full transcript from the player: every line with its translation underneath, the line being spoken picked out, your saved words underlined, and a tap on any line to listen from there.",
+   "tryIt": "In the player, tap More, then 'Read the whole episode'"
   }
  ]
 }

@@ -10,6 +10,7 @@ import { ShareCard, type ShareCardHandle } from '../../components/ShareCard'
 import { RecapCard, type RecapCardHandle } from '../../components/RecapCard'
 import { didYouKnow, recapLayout, recapMessage, recapWords, wordCardLayout, wordOfTheEpisode, type RecapStats } from '../../lib/recap'
 import { Subtitles, type SubtitleMode } from '../../components/Subtitles'
+import { TranscriptSheet } from '../../components/TranscriptSheet'
 import { StampPress } from '../../components/StampPress'
 import { Artwork, Button, Screen, Txt, clock } from '../../components/ui'
 import { api, type ListenPayload } from '../../lib/api'
@@ -281,6 +282,8 @@ export default function Listen() {
   const [mode, setMode] = useState<SubtitleMode>(profile?.subtitle_mode ?? 'both')
   const [tapped, setTapped] = useState<{ index: number; form: string; lemma: string; meaning?: string }>()
   const [bloom, setBloom] = useState<string>()
+  // Read the whole episode (PC-1030-03), from the More menu.
+  const [reading, setReading] = useState(false)
 
   // Binary search on word times, not a scan of the whole transcript per clip (PC-1027-10).
   const clipText = useMemo(() => clipTextFrom(data?.transcript.words ?? []), [data])
@@ -342,7 +345,7 @@ export default function Listen() {
   const skipAd = skipAdTarget(data.adverts, state.position)
   // Quieter actions live in the More menu, not among the main controls (PC-1017-F06).
   const lineNow = data.transcript.segments[segmentAt(data.transcript.segments, state.position)]
-  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn, lineByLine: Boolean(state.lineByLine), lineOnScreen: Boolean(lineNow) && mode !== 'none' })
+  const menu = playerMenu({ hasIntro: Boolean(intro), guideSpeaking: guideOn, lineByLine: Boolean(state.lineByLine), lineOnScreen: Boolean(lineNow) && mode !== 'none', hasTranscript: data.transcript.segments.length > 0 })
   // 'That looks wrong' (PC-1018-04): only the episode and the line go to the server.
   const reportLine = (segmentId: string) =>
     api.reportLine(data.episode.id, segmentId).then(
@@ -350,6 +353,7 @@ export default function Listen() {
       () => Alert.alert(REPORT_FAILED),
     )
   const runMenu = (i: number) => {
+    if (menu.actions[i] === 'transcript') setReading(true)
     if (menu.actions[i] === 'replayIntro' && intro) void l?.replayMoment(intro)
     if (menu.actions[i] === 'lineByLine') l?.setLineByLine(!state.lineByLine)
     if (menu.actions[i] === 'reportLine' && lineNow) void reportLine(lineNow.id)
@@ -491,6 +495,22 @@ export default function Listen() {
           </Pressable>
         </View>
       </View>
+
+      <TranscriptSheet
+        visible={reading}
+        segments={data.transcript.segments}
+        words={data.transcript.words}
+        position={state.position}
+        saved={saved}
+        glossary={data.transcript.glossary}
+        language={data.transcript.language}
+        withTranslation={mode !== 'target'}
+        onJump={(sec) => {
+          setReading(false)
+          void l?.seek(sec)
+        }}
+        onClose={() => setReading(false)}
+      />
 
       <WordSheet
         word={tapped}
